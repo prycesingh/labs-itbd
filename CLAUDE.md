@@ -60,41 +60,62 @@ Copy `.env.example` to `.env.local`. Key vars: `DATABASE_URL`, `AUTH_SECRET`, `A
 
 # ITBD Design Standards
 
-**MANDATORY.** All UI must use only the official ITBD brand palette. Do not introduce other accent or brand colors.
+**MANDATORY.** All UI must use only the official ITBD brand palette from the *IT By Design Brand Guidelines 2026*. Do not introduce other accent or brand colors.
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| ITBD Green | `#bed62f` | Primary brand accent, primary CTAs, active/success emphasis |
-| ITBD Blue | `#00afdd` | Secondary accent, links, informational highlights |
-| White | `#ffffff` | Backgrounds, surfaces, on-dark text |
-| Black | `#000000` | Text, on-light foreground, high-contrast surfaces |
+| Token | Value | Role (per 2026 guidelines) |
+|-------|-------|-----------------------------|
+| ITBD Blue | `#00ADDA` | **Primary accent** — CTAs, links, active/informational highlights |
+| Black | `#000000` | **Primary background** — dark foundation, high-contrast surfaces |
+| White | `#FFFFFF` | **Primary text** on dark; light surfaces |
+| Light Gray | `#BFBFBF` | Secondary text, muted labels |
+| Neutral Gray | `#252525` | Elevated dark surfaces, cards, dividers on the dark foundation |
+| ITBD Green | `#bed62f` | Sparing use as a *solid* accent (success/active); **freely usable inside blue↔green gradient blends** |
+| ITBD Orange | `#ff8b17` | **Emergency use only** — avoid in product UI unless explicitly requested |
 
 ## Rules
 
-1. **Palette is closed.** Use white, black, ITBD green (`#bed62f`), and ITBD blue (`#00afdd`) only. Neutral grays already present via shadcn tokens (`muted`, `border`, `input`) are permitted for structure, but no additional hues, gradients, or third-party brand colors.
-2. **Green is primary, blue is secondary.** Lead with green for the main action on a screen; use blue for secondary/informational emphasis and links. Don't put green and blue in equal competition on the same element.
-3. **Contrast.** ITBD green is a light-lime — it needs **black text on top**, never white. ITBD blue works with white or black text depending on weight; verify WCAG AA (4.5:1 for body text) before shipping.
-4. **Use tokens, not hardcoded hex.** Reference colors through the theme layer, not literal `#bed62f` scattered in JSX. See "Applying the palette" below.
-5. **Dark mode.** The app supports light/dark via `next-themes`. Any new color must be defined for both `:root` and `.dark` in [app/globals.css](app/globals.css) so both themes stay on-brand.
-6. **Both modules share these standards.** Interview and Email Assessment UI must look like one product.
+1. **Blue is the primary accent, on a dark foundation.** The brand foundation is black / dark-gray backgrounds with white and ITBD Blue highlights. Lead with **blue** for the main action on a screen (`"The button/CTA should be in blue and white"`). Blue also carries links and informational emphasis.
+2. **Green and orange are emergency-only as *solid* accents.** Per the guidelines, green (`#bed62f`) and orange (`#ff8b17`) are "use only in an emergency." Don't use green as a primary CTA fill or general solid brand color, and avoid orange in product UI unless explicitly asked. **Exception — gradient blends:** ITBD marketing sites commonly blend blue↔green in gradients (progress bars, glows, hero washes), so a blue→green gradient is on-brand and encouraged where it reads as a single energetic accent. The restriction is on green as a *standalone solid* primary, not on green *within* a blue-led gradient.
+3. **Palette is closed.** Use only the tokens above. Neutral grays via shadcn tokens (`muted`, `border`, `input`) are permitted for structure. No additional hues, no third-party brand colors. Gradients are welcome — favor blue-led blue↔green (and subtle blue light) washes; keep them purposeful, not loud rainbow fills.
+4. **Contrast.** ITBD Blue `#00ADDA` works with white or black text depending on weight — verify WCAG AA (4.5:1 body). ITBD Green is a light-lime — if ever used it needs **black text on top, never white**. On the dark foundation, body text is white/`#BFBFBF`.
+5. **Use tokens, not hardcoded hex.** Reference colors through the theme layer, not literal hex in JSX. See "Applying the palette."
+6. **Dark is the brand foundation.** The app supports light/dark via `next-themes`; the dark theme is the on-brand default direction. Any new color must be defined for both `:root` and `.dark` in [app/globals.css](app/globals.css) so both stay on-brand. (Design new surfaces to look correct on the dark foundation first.)
+7. **Both modules share these standards.** Interview and Email Assessment UI must look like one product.
+8. **Typography.** Primary typeface is **Inter** (high x-height, wide weight range). Display/hero headings may use **Italian Plate No2 Expanded** where available; otherwise fall back to Inter. Don't introduce other typefaces.
+
+## Motion & imagery (brand)
+
+- **Subtle, purposeful motion only.** The guidelines call for motion, glowing lines, and particle depth that suggest "intelligent systems at work" — used sparingly. Avoid chaotic or gimmicky animation that distracts from clarity. Favor calm confidence: small reveals, depth, blue light accents, forward momentum.
+- **No clichés / no clutter.** No robots, circuit boards, binary, "glowing brains," heavy textures, or decorative filler. Every element serves a purpose.
+- Animation work should follow these standards and the `/ui-ux-animation-designer` skill, which is aligned to them.
 
 ## Applying the palette
 
-Theme colors are defined as CSS variables in [app/globals.css](app/globals.css) and exposed to Tailwind via `@theme inline`. To brand the app, set the semantic tokens to the ITBD palette rather than editing every component. Suggested mapping (add to the `:root` / `.dark` blocks):
+Theme colors are defined as CSS variables in [app/globals.css](app/globals.css) and exposed to Tailwind via `@theme inline`. Brand at the token layer, not per component. Suggested mapping (add to the `:root` / `.dark` blocks):
 
 ```css
 :root {
-  /* ITBD brand */
-  --itbd-green: #bed62f;
-  --itbd-blue: #00afdd;
+  /* ITBD brand — 2026 */
+  --itbd-blue: #00ADDA;
+  --itbd-green: #bed62f;   /* emergency/sparing use only */
 
-  --primary: var(--itbd-green);
-  --primary-foreground: #000000;  /* black text on the light-lime green */
+  --primary: var(--itbd-blue);
+  --primary-foreground: #ffffff; /* white on blue; verify AA per weight */
   --ring: var(--itbd-blue);
+}
+
+.dark {
+  /* dark foundation: black bg, neutral-gray surfaces, white text */
+  --background: #000000;
+  --card: #252525;
+  --foreground: #ffffff;
+  --muted-foreground: #BFBFBF;
+  --primary: var(--itbd-blue);
+  --primary-foreground: #ffffff;
 }
 ```
 
-Then in components, use the semantic Tailwind classes (`bg-primary`, `text-primary-foreground`, `ring-ring`, etc.) and the `Button` variants — never inline hex. For one-off brand accents, add a dedicated token (e.g. `--color-itbd-blue`) to the `@theme inline` block and reference it as `text-itbd-blue` / `bg-itbd-blue`.
+Then in components use semantic Tailwind classes (`bg-primary`, `text-primary-foreground`, `ring-ring`) and the `Button` variants — never inline hex. For a one-off blue accent, add a dedicated token (e.g. `--color-itbd-blue`) to the `@theme inline` block and reference it as `text-itbd-blue` / `bg-itbd-blue`. If you genuinely need the emergency green, add `--color-itbd-green` and use it deliberately for a single success accent.
 
-- Prefer the existing `Button` / `customButtons` variants for actions.
+- Prefer the existing `Button` / `customButtons` variants for actions (blue primary).
 - New shadcn components inherit the tokens automatically — brand once at the token layer.
