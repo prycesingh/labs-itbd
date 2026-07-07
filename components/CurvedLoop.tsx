@@ -54,9 +54,21 @@ const CurvedLoop: FC<CurvedLoopProps> = ({
   const dirRef = useRef<"left" | "right">(direction);
   const velRef = useRef(0);
 
+  // Width of the visible path (the arc the text rides). The marquee only
+  // renders glyphs that fall within this length — anything positioned past the
+  // path end is clipped, so tiling/wrap math must be anchored to it, not to the
+  // raw text width.
+  const pathSpan = 1640;
+
   const textLength = spacing;
+  // One "tile" is the measured phrase (`text`) width. Repeat it enough times to
+  // cover the visible path PLUS one extra tile of scroll headroom, so a copy is
+  // always present across the whole path no matter where the offset sits within
+  // the wrap window. (Previously this covered a fixed 1800px assuming `spacing`
+  // was a single short phrase; when a long pre-repeated string is passed in,
+  // one copy exceeds the path length and the tail permanently scrolls off.)
   const totalText = textLength
-    ? Array(Math.ceil(1800 / textLength) + 2)
+    ? Array(Math.ceil((pathSpan + textLength) / textLength) + 1)
         .fill(text)
         .join("")
     : text;

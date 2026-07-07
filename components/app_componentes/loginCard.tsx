@@ -275,7 +275,9 @@ function FrontContent({
         ))}
       </ul>
 
-      {/* Admin login flip trigger — pinned to the bottom of the shared height */}
+      {/* Admin login flip trigger — pinned to the bottom of the shared height;
+          the back face's "User login" mirrors this with the same `mt-auto` so
+          both flip buttons sit at the identical position across the flip. */}
       <button
         type="button"
         onClick={onFlip}
@@ -404,13 +406,16 @@ function AdminContent({
         </button>
       </form>
 
-      {/* User login — re-flips to the front. Mirrors the front's "Admin login". */}
+      {/* User login — re-flips to the front. Mirrors the front's "Admin login"
+          and shares its `mt-auto` so both flip triggers dock to the same
+          bottom position on the shared card height, regardless of how much
+          content sits above them on either face. */}
       <button
         type="button"
         onClick={onBack}
         tabIndex={active ? 0 : -1}
         className={cn(
-          "mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-transparent py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white/70 transition",
+          "mt-auto flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-transparent py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white/70 transition",
           "hover:border-itbd-blue hover:text-itbd-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-itbd-blue",
         )}
       >

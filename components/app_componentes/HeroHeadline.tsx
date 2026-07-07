@@ -27,9 +27,9 @@ const HOLD_AFTER_LAST = 2200; // ms the full headline stays before replaying
 type Line = { text: string; color: string };
 
 const LINES: Line[] = [
-  { text: "PRACTICE.", color: "#ffffff" },
-  { text: "PERFORM.", color: "var(--itbd-blue)" },
-  { text: "EXCEL.", color: "var(--itbd-green)" },
+  { text: "PRACTICE", color: "#ffffff" },
+  { text: "PERFORM", color: "var(--itbd-blue)" },
+  { text: "EXCEL", color: "var(--itbd-green)" },
 ];
 
 // When each line should START typing = sum of prior lines' typing time + gaps.

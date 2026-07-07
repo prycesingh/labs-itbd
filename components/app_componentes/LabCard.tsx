@@ -105,7 +105,7 @@ export function LabCard({
         />
       )}
 
-      <div className="relative z-10 flex flex-col">
+      <div className="relative z-10 flex h-full flex-col">
         {/* Icon + title */}
         <div className="flex items-center gap-3">
           <span
@@ -126,8 +126,9 @@ export function LabCard({
           {description}
         </p>
 
-        {/* CTA — styled placeholder (no destination yet). Blue per brand. */}
-        <div className="mt-4">
+        {/* CTA pinned to the bottom so both cards read the same regardless of
+            blurb length. Styled placeholder (no destination yet). Blue per brand. */}
+        <div className="mt-auto pt-4">
           <DefaultButton size="sm" className="gap-2">
             Explore
             <ArrowRight className="h-4 w-4" />
