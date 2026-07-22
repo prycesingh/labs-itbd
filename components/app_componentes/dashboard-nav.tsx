@@ -11,15 +11,21 @@ import {
 } from "motion/react";
 import { signOut } from "next-auth/react";
 import {
+  AlertTriangle,
   BarChart3,
   BookMarked,
   BookOpen,
   CalendarClock,
+  CheckSquare,
   ClipboardCheck,
+  Cloud,
   DatabaseZap,
+  FileText,
+  GitBranch,
   GraduationCap,
   Home,
   Inbox,
+  LayoutDashboard,
   LayoutGrid,
   ListChecks,
   LogOut,
@@ -30,6 +36,7 @@ import {
   PanelLeftOpen,
   ShieldCheck,
   Sparkles,
+  TerminalSquare,
   type LucideIcon,
 } from "lucide-react";
 import Image from "next/image";
@@ -113,6 +120,11 @@ const NAV: NavGroup[] = [
     section: "Technical Lab",
     links: [
       {
+        href: "/dashboard/labs",
+        label: "Labs Home",
+        icon: LayoutDashboard,
+      },
+      {
         href: "/dashboard/labs/glossary",
         label: "Glossary",
         icon: BookOpen,
@@ -126,6 +138,46 @@ const NAV: NavGroup[] = [
         href: "/dashboard/labs/simulators",
         label: "Simulators",
         icon: MonitorPlay,
+      },
+      {
+        href: "/dashboard/labs/services-catalog",
+        label: "Services Catalog",
+        icon: DatabaseZap,
+      },
+      {
+        href: "/dashboard/labs/cloud-comparison",
+        label: "Cloud Comparison",
+        icon: Cloud,
+      },
+      {
+        href: "/dashboard/labs/gotchas",
+        label: "Common Gotchas",
+        icon: AlertTriangle,
+      },
+      {
+        href: "/dashboard/labs/cert-roadmap",
+        label: "Certification Roadmap",
+        icon: GraduationCap,
+      },
+      {
+        href: "/dashboard/labs/production-checklists",
+        label: "Production Checklists",
+        icon: CheckSquare,
+      },
+      {
+        href: "/dashboard/labs/kql-playground",
+        label: "KQL Playground",
+        icon: TerminalSquare,
+      },
+      {
+        href: "/dashboard/labs/troubleshoot-flowcharts",
+        label: "Troubleshooting Flowcharts",
+        icon: GitBranch,
+      },
+      {
+        href: "/dashboard/labs/articles",
+        label: "Articles",
+        icon: FileText,
       },
       {
         href: "/dashboard/labs/admin/glossary",

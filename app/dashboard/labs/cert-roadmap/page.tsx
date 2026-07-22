@@ -4,14 +4,21 @@ import { db } from "@/DB/drizzle";
 import { labsCertRoadmapEntries as certRoadmapEntries } from "@/DB/labsSchema";
 import { CertRoadmapBrowser } from "@/components/labs/cert-roadmap-browser";
 import { requireUser } from "@/lib/labs/auth";
+import { parseJsonColumn } from "@/lib/labs/jsonColumn";
 
 export default async function LabsCertRoadmapPage() {
   await requireUser();
 
-  const certs = await db
+  const rows = await db
     .select()
     .from(certRoadmapEntries)
     .orderBy(asc(certRoadmapEntries.sortOrder), asc(certRoadmapEntries.certCode));
+
+  const certs = rows.map((c) => ({
+    ...c,
+    skills: parseJsonColumn<string[]>(c.skills),
+    relatedSimulatorKeys: parseJsonColumn<string[]>(c.relatedSimulatorKeys),
+  }));
 
   return (
     <div className="space-y-6">
