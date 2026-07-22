@@ -38,6 +38,7 @@ import {
   Unlink,
   X,
 } from "lucide-react";
+import { isAdminRole, type Role } from "@/lib/rbac";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -112,11 +113,17 @@ export default function ModuleManagementPage() {
   >(null);
 
   useEffect(() => {
-    if (status === "loading") return;
-
-    if (session?.user?.role !== "devAdmin") {
+    // Only act once the session is fully resolved. `authenticated` with a role
+    // present avoids a race where `role` is briefly undefined right after the
+    // status flips (which used to fire a false "access denied"). The page is
+    // also protected server-side by the proxy + requireAdminPage(); this client
+    // check is just UX. Uses isAdminRole so executive (and future admin roles)
+    // are allowed, not only devAdmin.
+    if (status !== "authenticated") return;
+    const role = session?.user?.role;
+    if (role && !isAdminRole(role as Role)) {
       router.push("/dashboard");
-      toast.error("Access denied. devAdmin role required.");
+      toast.error("Access denied. Administrator role required.");
     }
   }, [session, status, router]);
 

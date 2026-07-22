@@ -1,0 +1,1047 @@
+/* Microsoft Intune admin center simulator — deliberately bypasses ITBD brand
+   tokens: this content must look like the real endpoint.microsoft.com, not
+   the app shell around it. Base structure adapted from the M365 console
+   module (same left-nav + top-bar Fluent shell shape) with the Intune blue
+   accent (#0078d4) and Intune-specific additions: a sub-rail nav for
+   Devices/Endpoint security, and a two-pane "blade" layout for device/app
+   detail views (Intune's real product uses a blade, not a flyout, there). */
+
+.root {
+  font-family: "Segoe UI", "Segoe UI Web", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
+  color: #323130;
+  background: #faf9f8;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  height: 48px;
+  background: #1b1b1b;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  position: relative;
+  z-index: 100;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  flex: 0 0 auto;
+}
+.tbLeft,
+.tbRight {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.tbCenter {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+.tbIconBtn {
+  background: transparent;
+  border: 0;
+  color: #fff;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tbIconBtn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.wordmark {
+  font-size: 14px;
+  font-weight: 600;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+.tbSearch {
+  width: 480px;
+  height: 32px;
+  background: #2b2b2b;
+  border: 1px solid #3b3b3b;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 6px;
+}
+.tbSearch input {
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: #fff;
+  flex: 1;
+  font-size: 13px;
+}
+.tbAvatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #0078d4;
+  color: #fff;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-left: 6px;
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.sidebar {
+  width: 260px;
+  background: #fff;
+  border-right: 1px solid #edebe9;
+  overflow-y: auto;
+  flex-shrink: 0;
+  padding: 8px 0 80px 0;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  color: #323130;
+  font-size: 14px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  white-space: nowrap;
+}
+.navItem:hover {
+  background: #f3f2f1;
+}
+.navItemActive {
+  background: #f3f2f1;
+  border-left-color: #0078d4;
+  color: #0078d4;
+  font-weight: 600;
+}
+.navChev {
+  margin-left: auto;
+  font-size: 10px;
+  color: #605e5c;
+  transition: transform 0.15s;
+}
+.navChevOpen {
+  transform: rotate(90deg);
+}
+.navSub {
+  background: #faf9f8;
+  border-bottom: 1px solid #edebe9;
+}
+.navSub .navItem {
+  padding-left: 44px;
+  font-size: 13px;
+  border-left: 0;
+}
+.navSub .navItemActive {
+  background: #e6e6e6;
+  color: #0078d4;
+  font-weight: 600;
+}
+.navSection {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #605e5c;
+  padding: 12px 14px 4px 14px;
+  letter-spacing: 0.4px;
+}
+.navDivider {
+  border-top: 1px solid #edebe9;
+  margin: 8px 0;
+}
+
+.content {
+  flex: 1;
+  background: #faf9f8;
+  overflow-y: auto;
+  padding: 20px 28px 100px 28px;
+}
+
+.pageH1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: #201f1e;
+  margin-bottom: 4px;
+}
+.pageSub {
+  color: #605e5c;
+  font-size: 13px;
+  margin-bottom: 18px;
+}
+.h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #201f1e;
+  margin: 18px 0 12px 0;
+}
+.h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #201f1e;
+  margin: 14px 0 8px 0;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  background: #fff;
+  border: 1px solid #edebe9;
+  border-radius: 4px;
+  padding: 6px 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.tbBtn {
+  background: transparent;
+  border: 0;
+  color: #323130;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tbBtn:hover {
+  background: #f3f2f1;
+}
+.tbBtn:disabled {
+  color: #c8c6c4;
+  cursor: default;
+}
+.tbSep {
+  width: 1px;
+  height: 22px;
+  background: #edebe9;
+  margin: 0 4px;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #edebe9;
+  margin-bottom: 14px;
+  gap: 4px;
+}
+.tab {
+  background: transparent;
+  border: 0;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #323130;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.tab:hover {
+  background: #f3f2f1;
+}
+.tabActive {
+  border-bottom-color: #0078d4;
+  color: #0078d4;
+  font-weight: 600;
+}
+
+.filterRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+.filterChip {
+  background: #fff;
+  border: 1px solid #d2d0ce;
+  border-radius: 14px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #323130;
+}
+.filterChip:hover {
+  background: #f3f2f1;
+}
+.filterChipActive {
+  background: #ebf2fb;
+  border-color: #0078d4;
+  color: #0078d4;
+  font-weight: 600;
+}
+
+.btn {
+  background: #0078d4;
+  color: #fff;
+  border: 1px solid #0078d4;
+  padding: 6px 14px;
+  font-size: 13px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn:hover {
+  background: #005a9e;
+  border-color: #005a9e;
+}
+.btn:disabled {
+  background: #c8c6c4;
+  border-color: #c8c6c4;
+  cursor: not-allowed;
+}
+.btnOutline {
+  background: #fff;
+  color: #323130;
+  border: 1px solid #8a8886;
+}
+.btnOutline:hover {
+  background: #f3f2f1;
+}
+.btnSubtle {
+  background: transparent;
+  color: #0078d4;
+  border: 0;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+}
+.btnSubtle:hover {
+  text-decoration: underline;
+}
+.btnDanger {
+  background: #d83b01;
+  border-color: #d83b01;
+  color: #fff;
+}
+.btnDanger:hover {
+  background: #a82c00;
+  border-color: #a82c00;
+}
+
+.tableWrap {
+  background: #fff;
+  border: 1px solid #edebe9;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.table thead th {
+  text-align: left;
+  background: #faf9f8;
+  color: #605e5c;
+  font-weight: 600;
+  border-bottom: 1px solid #edebe9;
+  padding: 10px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.table tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f3f2f1;
+  color: #323130;
+  vertical-align: middle;
+}
+.table tbody tr {
+  cursor: pointer;
+}
+.table tbody tr:hover {
+  background: #f3f2f1;
+}
+.tableRowSelected {
+  background: #ebf2fb;
+}
+.cbCol {
+  width: 28px;
+}
+.rowLink {
+  color: #0078d4;
+  cursor: pointer;
+  font-weight: 500;
+}
+.rowLink:hover {
+  text-decoration: underline;
+}
+
+.pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  background: #e1f4d4;
+  color: #107c10;
+  border: 1px solid #bce5a3;
+}
+.pillWarn {
+  background: #fff4ce;
+  color: #797673;
+  border-color: #f5e0a3;
+}
+.pillErr {
+  background: #fde7e9;
+  color: #a4262c;
+  border-color: #f5b8bd;
+}
+.pillInfo {
+  background: #ebf2fb;
+  color: #0078d4;
+  border-color: #b9d2f1;
+}
+.pillMuted {
+  background: #f3f2f1;
+  color: #605e5c;
+  border-color: #d2d0ce;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #edebe9;
+  border-radius: 4px;
+  padding: 18px;
+  margin-bottom: 14px;
+}
+.cardTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #201f1e;
+  margin-bottom: 10px;
+}
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+.tile {
+  background: #fff;
+  border: 1px solid #edebe9;
+  border-radius: 4px;
+  padding: 16px;
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+}
+.tile:hover {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+}
+.tileTitle {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #201f1e;
+}
+.tileSub {
+  font-size: 12px;
+  color: #605e5c;
+}
+
+.statRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.stat {
+  background: #fff;
+  border: 1px solid #edebe9;
+  border-radius: 4px;
+  padding: 12px 14px;
+}
+.statVal {
+  font-size: 22px;
+  font-weight: 600;
+  color: #0078d4;
+}
+.statLabel {
+  font-size: 12px;
+  color: #605e5c;
+}
+
+.flyoutMask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  z-index: 1000;
+}
+.flyout {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 760px;
+  max-width: 96vw;
+  height: 100vh;
+  background: #fff;
+  box-shadow: -2px 0 12px rgba(0, 0, 0, 0.16);
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+}
+.flyoutHeader {
+  padding: 14px 18px;
+  border-bottom: 1px solid #edebe9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+}
+.flyoutHeader h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #201f1e;
+}
+.flyoutClose {
+  background: transparent;
+  border: 0;
+  color: #605e5c;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px 8px;
+}
+.flyoutTabs {
+  display: flex;
+  border-bottom: 1px solid #edebe9;
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+.flyoutBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px;
+}
+.flyoutFooter {
+  border-top: 1px solid #edebe9;
+  padding: 12px 18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.modalMask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal {
+  background: #fff;
+  width: 760px;
+  max-width: 96vw;
+  max-height: 92vh;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modalHeader {
+  padding: 14px 18px;
+  border-bottom: 1px solid #edebe9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+}
+.modalHeader h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #201f1e;
+}
+.modalBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px;
+}
+.modalFooter {
+  border-top: 1px solid #edebe9;
+  padding: 12px 18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  background: #faf9f8;
+  flex: 0 0 auto;
+}
+
+.wizSteps {
+  display: flex;
+  border-bottom: 1px solid #edebe9;
+  background: #faf9f8;
+  overflow-x: auto;
+  flex: 0 0 auto;
+}
+.wizStep {
+  padding: 10px 16px;
+  font-size: 13px;
+  color: #605e5c;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  background: transparent;
+}
+.wizStepActive {
+  color: #0078d4;
+  border-bottom-color: #0078d4;
+  font-weight: 600;
+}
+.wizStepDone {
+  color: #107c10;
+}
+
+.formGroup {
+  margin-bottom: 14px;
+}
+.formLabel {
+  display: block;
+  font-size: 13px;
+  color: #323130;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+.formHelp {
+  font-size: 12px;
+  color: #605e5c;
+  margin-top: 3px;
+}
+.input,
+.select,
+.textarea {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #8a8886;
+  border-radius: 2px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+  color: #323130;
+}
+.input:focus,
+.select:focus,
+.textarea:focus {
+  border-color: #0078d4;
+  outline: 1px solid #0078d4;
+  outline-offset: -1px;
+}
+.formRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.checkboxRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 6px 0;
+  font-size: 13px;
+}
+.radioRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 6px 0;
+  font-size: 13px;
+}
+
+.reviewGrid {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 6px 14px;
+  font-size: 13px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f3f2f1;
+}
+.reviewGrid .lbl {
+  color: #605e5c;
+}
+
+.muted {
+  color: #605e5c;
+}
+.right {
+  text-align: right;
+}
+.center {
+  text-align: center;
+}
+.nowrap {
+  white-space: nowrap;
+}
+.spacer {
+  flex: 1;
+}
+.emptyState {
+  padding: 40px;
+  text-align: center;
+  color: #605e5c;
+  background: #fff;
+  border: 1px dashed #d2d0ce;
+  border-radius: 4px;
+}
+
+.bar {
+  background: #edebe9;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.bar .fill {
+  height: 100%;
+  background: #0078d4;
+}
+.barHigh .fill {
+  background: #d83b01;
+}
+.barMed .fill {
+  background: #ffaa44;
+}
+
+.avatarSm {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #0078d4;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.launchRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.launchTile {
+  background: #fff;
+  border: 1px solid #edebe9;
+  border-radius: 4px;
+  padding: 14px 16px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.launchTile:hover {
+  background: #f3f2f1;
+}
+.sq {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  background: #0078d4;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.sqExchange { background: #0078d4; }
+.sqSharepoint { background: #038387; }
+.sqTeams { background: #6264a7; }
+.sqDefender { background: #0b6a0b; }
+.sqCompliance { background: #5c2d91; }
+.sqEndpoint { background: #b6473b; }
+.sqEntra { background: #0078d4; }
+.sqUsers { background: #2b88d8; }
+.sqBilling { background: #038387; }
+
+.twoCol {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 14px;
+}
+
+.licUsageCell {
+  min-width: 160px;
+}
+.licUsageNums {
+  font-size: 12px;
+  color: #605e5c;
+}
+
+.subtabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  background: #fff;
+  border: 1px solid #edebe9;
+  border-radius: 4px;
+  padding: 4px;
+}
+.subtab {
+  background: transparent;
+  border: 0;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: #323130;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.subtab:hover {
+  background: #f3f2f1;
+}
+.subtabActive {
+  background: #ebf2fb;
+  color: #0078d4;
+  font-weight: 600;
+}
+
+/* ===== Chart primitives (Reports) ===== */
+.chartCard {
+  background: #fff;
+  border: 1px solid #edebe9;
+  border-radius: 4px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.chartBars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 100px;
+  margin-top: 8px;
+}
+.chartBar {
+  flex: 1;
+  background: #0078d4;
+  border-radius: 1px 1px 0 0;
+  min-height: 1px;
+}
+.chartBarSecondary {
+  background: #b9d2f1;
+}
+.barListRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+.barListLabel {
+  width: 140px;
+  flex-shrink: 0;
+  color: #605e5c;
+}
+.barListTrack {
+  flex: 1;
+  background: #edebe9;
+  height: 10px;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.barListFill {
+  height: 100%;
+  background: #0078d4;
+}
+.gaugeWrap {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+/* ===== Message trace delivery timeline (Exchange) ===== */
+.traceTimeline {
+  display: flex;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding: 12px 4px 6px 4px;
+}
+.traceStep {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 92px;
+  flex: 1;
+  text-align: center;
+  padding: 0 4px;
+}
+.traceStepLine {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.traceStepDot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #107c10;
+  flex-shrink: 0;
+  margin: 0 auto;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #edebe9;
+}
+.traceStepDotFail {
+  background: #a4262c;
+}
+.traceStepDotSkip {
+  background: #c8c6c4;
+}
+.traceStepTrack {
+  flex: 1;
+  height: 2px;
+  background: #edebe9;
+}
+.traceStepLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: #201f1e;
+  margin-top: 6px;
+}
+.traceStepDesc {
+  font-size: 11px;
+  color: #605e5c;
+  margin-top: 2px;
+}
+
+/* ===== Code block (Apps deploy — generated XML / commands) ===== */
+.codeBlock {
+  background: #faf9f8;
+  border: 1px solid #edebe9;
+  padding: 12px;
+  font-family: Consolas, Monaco, Menlo, monospace;
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre;
+  border-radius: 4px;
+}
+
+/* ===== Sub-rail (Devices / Endpoint security second-level nav) ===== */
+.withSub {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+.subrail {
+  width: 220px;
+  flex-shrink: 0;
+  background: #fff;
+  border: 1px solid #edebe9;
+  border-radius: 4px;
+  padding: 8px 0;
+}
+.subrailSection {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #605e5c;
+  padding: 10px 14px 4px 14px;
+  letter-spacing: 0.4px;
+}
+.subrailItem {
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #323130;
+}
+.subrailItem:hover {
+  background: #f3f2f1;
+}
+.subrailItemActive {
+  background: #ebf2fb;
+  color: #0078d4;
+  font-weight: 600;
+}
+.subrailContent {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ===== Blade (device/app detail — two-pane frame with section nav) ===== */
+.bladeFrame {
+  background: #fff;
+  border: 1px solid #edebe9;
+  border-radius: 4px;
+  display: flex;
+  min-height: 520px;
+}
+.bladeNav {
+  width: 200px;
+  flex-shrink: 0;
+  border-right: 1px solid #edebe9;
+  padding: 8px 0;
+}
+.bladeNavItem {
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #323130;
+  border-left: 3px solid transparent;
+}
+.bladeNavItem:hover {
+  background: #f3f2f1;
+}
+.bladeNavItemActive {
+  background: #ebf2fb;
+  color: #0078d4;
+  font-weight: 600;
+  border-left-color: #0078d4;
+}
+.bladeBody {
+  flex: 1;
+  min-width: 0;
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+.bladeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.bladeTitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: #201f1e;
+}
+.bladeToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #edebe9;
+}
+.bladeActionBtn {
+  background: transparent;
+  border: 0;
+  color: #323130;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.bladeActionBtn:hover {
+  background: #f3f2f1;
+}
+.bladeActionBtnDanger:hover {
+  background: #fde7e9;
+  color: #a4262c;
+}

@@ -1,0 +1,994 @@
+/* Windows Server Admin simulator — Windows Server / MMC visual style.
+   Deliberately bypasses ITBD brand tokens: this content must look like the
+   real MMC console being simulated, not the app shell around it. Shares the
+   same visual language as the ADDS simulator's console module (same MMC
+   chrome, same #1d6dad accent) since both simulate the same Windows Server
+   admin-console family — kept as a separate module (not imported cross-
+   simulator) so each suite can evolve independently. */
+
+.consoleRoot {
+  font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+  font-size: 12px;
+  color: #1f1f1f;
+  background: #f0f0f0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== Window titlebar ===== */
+.winTitle {
+  height: 32px;
+  background: #1d6dad;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  user-select: none;
+  border-bottom: 1px solid #0c4878;
+  flex: 0 0 auto;
+}
+.wtIcon {
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  font-size: 9px;
+  font-weight: 700;
+}
+.wtTitleText {
+  flex: 1;
+}
+.wtControls {
+  display: flex;
+  gap: 0;
+}
+.wtControls button {
+  width: 36px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+.wtControls button:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+.wtControls .wtClose:hover {
+  background: #c42b1c;
+}
+
+/* ===== Menu bar ===== */
+.menuBar {
+  height: 22px;
+  background: #f0f0f0;
+  border-bottom: 1px solid #d4d4d4;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  flex: 0 0 auto;
+}
+.menuItem {
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.menuItem:hover {
+  background: #e5f1fb;
+  border-color: #cfdef0;
+}
+
+/* ===== Toolbar ===== */
+.toolbar {
+  height: 30px;
+  background: #f5f5f5;
+  border-bottom: 1px solid #d4d4d4;
+  display: flex;
+  align-items: center;
+  padding: 2px 4px;
+  gap: 1px;
+  flex: 0 0 auto;
+  position: relative;
+}
+.toolbar button {
+  height: 26px;
+  min-width: 28px;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 0 6px;
+  cursor: pointer;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #1f1f1f;
+}
+.toolbar button:hover {
+  background: #e5f1fb;
+  border-color: #cfdef0;
+}
+.toolbar button:disabled {
+  color: #888;
+  cursor: default;
+}
+.toolbar button:disabled:hover {
+  background: transparent;
+  border-color: transparent;
+}
+.toolbarSep {
+  width: 1px;
+  height: 18px;
+  background: #ccc;
+  margin: 0 4px;
+}
+
+/* ===== Tools dropdown ===== */
+.toolsMenu {
+  position: absolute;
+  top: 30px;
+  right: 4px;
+  background: #fff;
+  border: 1px solid #c4c4c4;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  z-index: 2000;
+  min-width: 320px;
+  max-height: 70vh;
+  overflow: auto;
+}
+.toolItem {
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.toolItem:hover {
+  background: #cfe2f3;
+}
+
+/* ===== Status bar ===== */
+.statusBar {
+  height: 22px;
+  background: #f5f5f5;
+  border-top: 1px solid #d4d4d4;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 11px;
+  color: #444;
+  flex: 0 0 auto;
+}
+.sbSection {
+  padding: 0 8px;
+  border-right: 1px solid #d4d4d4;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+.sbSection:last-child {
+  border-right: 0;
+}
+
+.body {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+  display: flex;
+}
+
+/* ===== MMC tree + content (+ optional actions pane) layout ===== */
+.mmcLayout {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  background: #fff;
+}
+.mmcTree {
+  width: 260px;
+  min-width: 180px;
+  background: #fff;
+  border-right: 1px solid #c4c4c4;
+  overflow: auto;
+  padding: 4px 0;
+}
+.mmcContent {
+  flex: 1;
+  overflow: auto;
+  background: #fff;
+  border-left: 1px solid #d4d4d4;
+  display: flex;
+  flex-direction: column;
+}
+.mmcActions {
+  width: 220px;
+  min-width: 180px;
+  background: #f7f7f7;
+  border-left: 1px solid #d4d4d4;
+  overflow: auto;
+  padding: 4px 0;
+}
+.apGroup {
+  border-bottom: 1px solid #d4d4d4;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+.apGroupTitle {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #555;
+}
+.apItem {
+  padding: 4px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #1d6dad;
+}
+.apItem:hover {
+  background: #e5f1fb;
+}
+.apItemDisabled {
+  color: #999;
+  cursor: default;
+}
+.apItemDisabled:hover {
+  background: transparent;
+}
+
+/* ===== Vertical split (e.g. Hyper-V VM table over Checkpoints tree) ===== */
+.splitVert {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.svTop {
+  flex: 1;
+  overflow: auto;
+  border-bottom: 1px solid #d4d4d4;
+}
+.svBottom {
+  height: 200px;
+  overflow: auto;
+  background: #fafafa;
+}
+
+.treeRow {
+  display: flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.treeRow:hover {
+  background: #e5f1fb;
+}
+.treeRowSelected {
+  background: #cfe2f3;
+  outline: 1px solid #99c2e8;
+}
+.twisty {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  text-align: center;
+  font-size: 10px;
+  color: #555;
+  line-height: 14px;
+  flex: 0 0 14px;
+}
+.ti {
+  width: 16px;
+  height: 16px;
+  margin: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 16px;
+  font-size: 11px;
+  color: #555;
+}
+.tlabel {
+  font-size: 12px;
+}
+
+.contentHeading {
+  background: linear-gradient(#fbfbfb, #f0f0f0);
+  border-bottom: 1px solid #d4d4d4;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+.contentBody {
+  padding: 8px;
+  flex: 1;
+  overflow: auto;
+}
+
+/* ===== Item list table ===== */
+.itemList {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  font-size: 12px;
+}
+.itemList thead th {
+  background: #f5f5f5;
+  border: 1px solid #d4d4d4;
+  border-left: 0;
+  padding: 4px 8px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  position: sticky;
+  top: 0;
+}
+.itemList thead th:first-child {
+  border-left: 1px solid #d4d4d4;
+}
+.itemList tbody td {
+  border-bottom: 1px solid #ececec;
+  padding: 4px 8px;
+  vertical-align: middle;
+}
+.itemList tbody tr {
+  cursor: pointer;
+}
+.itemList tbody tr:hover {
+  background: #f3f8fd;
+}
+.itemListRowSelected {
+  background: #cfe2f3;
+}
+.itmIcon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  text-align: center;
+  line-height: 16px;
+  margin-right: 6px;
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  font-size: 10px;
+  color: #444;
+}
+.emptyPane {
+  padding: 40px;
+  color: #888;
+  text-align: center;
+  font-size: 13px;
+}
+
+/* ===== Server Manager ===== */
+.smLayout {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  background: #fff;
+}
+.smNav {
+  width: 220px;
+  background: #2a2a2a;
+  color: #ddd;
+  padding: 10px 0;
+  overflow: auto;
+}
+.smNavItem {
+  padding: 8px 14px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  font-size: 12px;
+}
+.smNavItem:hover {
+  background: #353535;
+}
+.smNavItemActive {
+  background: #1d6dad;
+  border-left-color: #6ec0ff;
+  color: #fff;
+}
+.smMain {
+  flex: 1;
+  overflow: auto;
+  padding: 14px;
+  background: #fff;
+}
+.smWelcome {
+  background: #fff;
+  border: 1px solid #d4d4d4;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.smWelcome h2 {
+  font-size: 18px;
+  font-weight: 500;
+  color: #1d6dad;
+  margin-bottom: 4px;
+}
+.smWelcomeSub {
+  color: #666;
+  font-size: 12px;
+}
+.smQuick {
+  background: #fff;
+  border: 1px solid #d4d4d4;
+  margin-bottom: 14px;
+}
+.smQuickHead {
+  background: linear-gradient(#fbfbfb, #f0f0f0);
+  border-bottom: 1px solid #d4d4d4;
+  padding: 8px 12px;
+  font-weight: 600;
+  font-size: 13px;
+}
+.smQuickList {
+  list-style: none;
+  padding: 8px 12px 12px 12px;
+}
+.smQuickList li {
+  padding: 6px 0;
+  font-size: 13px;
+  cursor: pointer;
+  color: #1d6dad;
+  display: flex;
+  align-items: center;
+}
+.smQuickList li .num {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  background: #1d6dad;
+  color: #fff;
+  border-radius: 50%;
+  text-align: center;
+  line-height: 18px;
+  font-size: 11px;
+  margin-right: 8px;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+.smQuickList li:hover {
+  text-decoration: underline;
+}
+
+.tileGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.tile {
+  background: #fff;
+  border: 1px solid #d4d4d4;
+  padding: 12px;
+  cursor: pointer;
+}
+.tile:hover {
+  border-color: #1d6dad;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+.tileHead {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1d6dad;
+  margin-bottom: 6px;
+}
+.tileDesc {
+  color: #444;
+  font-size: 12px;
+}
+.roleCard {
+  background: #fff;
+  border: 1px solid #d4d4d4;
+  padding: 0;
+  margin-bottom: 10px;
+}
+.roleCardHead {
+  background: #5b9bd5;
+  color: #fff;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  cursor: pointer;
+}
+.roleCardHead:hover {
+  background: #4a8bc7;
+}
+.roleCardBody {
+  padding: 8px 12px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  font-size: 12px;
+}
+.rcRow {
+  display: flex;
+  justify-content: space-between;
+}
+.rcK {
+  color: #555;
+}
+.rcV {
+  font-weight: 600;
+}
+
+/* ===== Context menu ===== */
+.ctxMenu {
+  position: fixed;
+  background: #fff;
+  border: 1px solid #adadad;
+  box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.2);
+  min-width: 200px;
+  z-index: 9000;
+  padding: 2px 0;
+  font-size: 12px;
+}
+.ctxItem {
+  padding: 4px 24px 4px 24px;
+  cursor: pointer;
+  position: relative;
+  white-space: nowrap;
+}
+.ctxItem:hover {
+  background: #cfe2f3;
+}
+.ctxSep {
+  height: 1px;
+  background: #d4d4d4;
+  margin: 4px 2px;
+}
+.ctxDisabled {
+  color: #999;
+  cursor: default;
+}
+.ctxDisabled:hover {
+  background: transparent;
+}
+.ctxHasSub::after {
+  content: ">";
+  position: absolute;
+  right: 8px;
+  top: 4px;
+}
+.ctxSub {
+  display: none;
+  position: absolute;
+  left: 100%;
+  top: -2px;
+  background: #fff;
+  border: 1px solid #adadad;
+  box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.2);
+  min-width: 200px;
+  padding: 2px 0;
+}
+.ctxHasSub:hover > .ctxSub {
+  display: block;
+}
+
+/* ===== Modal dialogs ===== */
+.dlgOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  z-index: 8000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dlg {
+  background: #f0f0f0;
+  border: 1px solid #808080;
+  min-width: 460px;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+.dlgTitle {
+  background: linear-gradient(#1d6dad, #155a8f);
+  color: #fff;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.dlgClose {
+  width: 26px;
+  height: 18px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+.dlgClose:hover {
+  background: #c42b1c;
+}
+.dlgBody {
+  padding: 14px;
+  overflow: auto;
+  background: #f0f0f0;
+}
+.dlgFooter {
+  padding: 10px 14px;
+  border-top: 1px solid #c4c4c4;
+  background: #f0f0f0;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.btn,
+.btnPrimary {
+  min-width: 75px;
+  height: 24px;
+  background: linear-gradient(#fdfdfd, #e6e6e6);
+  border: 1px solid #adadad;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: "Segoe UI", sans-serif;
+  padding: 0 10px;
+  color: #1f1f1f;
+}
+.btn:hover,
+.btnPrimary:hover {
+  background: linear-gradient(#e9f5fd, #c6e1f4);
+  border-color: #5b9bd5;
+}
+.btnPrimary {
+  background: linear-gradient(#3294da, #1d6dad);
+  color: #fff;
+  border-color: #0c4878;
+}
+.btnPrimary:hover {
+  background: linear-gradient(#52a4e0, #2a7fbd);
+}
+.btn:disabled,
+.btnPrimary:disabled {
+  background: #ddd;
+  color: #888;
+  cursor: default;
+}
+
+/* ===== Tabbed panels ===== */
+.tabs {
+  background: #f0f0f0;
+}
+.tabsStrip {
+  display: flex;
+  border-bottom: 1px solid #adadad;
+  background: #f0f0f0;
+  flex-wrap: wrap;
+}
+.tab {
+  padding: 5px 12px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  font-size: 12px;
+  margin-right: 1px;
+  margin-bottom: -1px;
+  background: #e1e1e1;
+  border-top-left-radius: 3px;
+  border-top-right-radius: 3px;
+}
+.tabActive {
+  background: #f0f0f0;
+  border-color: #adadad;
+  border-bottom: 1px solid #f0f0f0;
+  font-weight: 600;
+}
+.tabPanel {
+  padding: 12px;
+}
+
+/* ===== VM Settings-style dialog navigator (left list + right form) ===== */
+.vsettingsLayout {
+  display: flex;
+  min-height: 420px;
+  max-height: 70vh;
+}
+.vsettingsNav {
+  width: 200px;
+  min-width: 160px;
+  background: #fff;
+  border-right: 1px solid #c4c4c4;
+  overflow: auto;
+  padding: 4px 0;
+}
+.vsGroupTitle {
+  padding: 6px 10px 2px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #555;
+  text-transform: uppercase;
+}
+.vsItem {
+  padding: 4px 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.vsItem:hover {
+  background: #e5f1fb;
+}
+.vsItemActive {
+  background: #cfe2f3;
+  font-weight: 600;
+}
+.vsettingsBody {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+  background: #f0f0f0;
+}
+
+/* ===== Forms ===== */
+.formRow {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.formRow label {
+  flex: 0 0 140px;
+  font-size: 12px;
+  color: #1f1f1f;
+}
+.formRow input[type="text"],
+.formRow input[type="password"],
+.formRow input[type="email"],
+.formRow input[type="number"],
+.formRow select,
+.formRow textarea {
+  flex: 1;
+  border: 1px solid #adadad;
+  padding: 3px 4px;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  color: #1f1f1f;
+}
+.formRow input:focus,
+.formRow select:focus,
+.formRow textarea:focus {
+  outline: 1px solid #1d6dad;
+  border-color: #1d6dad;
+}
+.formRow textarea {
+  min-height: 60px;
+  resize: vertical;
+}
+.formSection {
+  border: 1px solid #adadad;
+  padding: 10px;
+  margin-bottom: 10px;
+  background: #fff;
+  position: relative;
+}
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+  gap: 6px;
+  font-size: 12px;
+}
+.checkboxRow input {
+  margin: 0;
+}
+.helpText {
+  color: #555;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+/* ===== Wizard steps ===== */
+.wizSteps {
+  display: flex;
+  background: #fff;
+  border-bottom: 1px solid #c4c4c4;
+  padding: 8px 12px;
+  gap: 8px;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.wizStep {
+  color: #666;
+  padding: 2px 6px;
+}
+.wizStep::after {
+  content: " >";
+  color: #aaa;
+  margin-left: 6px;
+}
+.wizStep:last-child::after {
+  content: "";
+}
+.wizStepActive {
+  color: #1d6dad;
+  font-weight: 600;
+}
+.wizStepDone {
+  color: #348534;
+}
+
+/* ===== List box ===== */
+.listBox {
+  border: 1px solid #adadad;
+  background: #fff;
+  height: 160px;
+  overflow: auto;
+  padding: 2px;
+  font-size: 12px;
+}
+.lbItem {
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.lbItem:hover {
+  background: #e5f1fb;
+}
+.lbItemSelected {
+  background: #cfe2f3;
+}
+
+.pill {
+  display: inline-block;
+  background: #e1e1e1;
+  border: 1px solid #adadad;
+  border-radius: 8px;
+  padding: 1px 8px;
+  font-size: 11px;
+  margin-right: 4px;
+}
+.pillGreen {
+  background: #e6f4e6;
+  border-color: #348534;
+  color: #1e5f1e;
+}
+.pillRed {
+  background: #fde7e7;
+  border-color: #c42b1c;
+  color: #8a1f15;
+}
+.pillAmber {
+  background: #fff3cd;
+  border-color: #c45911;
+  color: #7a4508;
+}
+
+.dashTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 6px;
+}
+.dashTable th,
+.dashTable td {
+  border-bottom: 1px solid #ececec;
+  padding: 4px 8px;
+  text-align: left;
+}
+.dashTable th {
+  background: #f5f5f5;
+  border-bottom: 1px solid #d4d4d4;
+}
+
+/* ===== Usage bar (volume / quota consumption) ===== */
+.usageBar {
+  position: relative;
+  width: 110px;
+  height: 14px;
+  background: #e6e6e6;
+  border: 1px solid #c4c4c4;
+  display: inline-block;
+  vertical-align: middle;
+}
+.usageBarFill {
+  height: 100%;
+  background: #5b9bd5;
+}
+.usageBarFillAmber {
+  background: #c45911;
+}
+.usageBarFillRed {
+  background: #c42b1c;
+}
+.usageBarText {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #1f1f1f;
+}
+
+.terminal {
+  background: #0c0c0c;
+  color: #cccccc;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 12px;
+  padding: 10px;
+  white-space: pre-wrap;
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid #333;
+}
+
+/* ===== Windows Admin Center (WAC) — card-grid tab shell ===== */
+.wacShell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: #f0f0f0;
+}
+.wacBreadcrumb {
+  background: #fff;
+  border-bottom: 1px solid #d4d4d4;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: #555;
+  flex: 0 0 auto;
+}
+.wacTabStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  background: #fff;
+  border-bottom: 1px solid #d4d4d4;
+  padding: 4px 8px;
+  flex: 0 0 auto;
+  max-height: 90px;
+  overflow-y: auto;
+}
+.wacTab {
+  padding: 5px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 3px;
+  color: #1f1f1f;
+}
+.wacTab:hover {
+  background: #e5f1fb;
+}
+.wacTabActive {
+  background: #1d6dad;
+  color: #fff;
+}
+.wacBody {
+  flex: 1;
+  overflow: auto;
+  padding: 14px;
+}
+.wacCardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+.wacCard {
+  background: #fff;
+  border: 1px solid #d4d4d4;
+  padding: 12px;
+}
+.wacCardTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1d6dad;
+  margin-bottom: 8px;
+}
+.wacGauge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}

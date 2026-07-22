@@ -1,0 +1,1299 @@
+/*
+ * Cisco IOS WebUI visual chrome — a recreation of Cisco Configuration
+ * Professional Express / the modern IOS XE Web UI, ported here from
+ * itbd-lab/simulators/network/css/cisco.css (742 lines) — a dedicated
+ * `cs-*` design system distinct from the Meraki cloud-dashboard suite (light
+ * "enterprise device management" chrome: dark Cisco-blue topbar, light-gray
+ * canvas, white cards/tables, top tabs + collapsible tree sidebar), NOT
+ * reused from meraki-console.module.css. Fidelity to the real CCP Express /
+ * IOS XE Web UI is the point of a simulator; CSS Modules keep these class
+ * names scoped so nothing here leaks into the rest of the app.
+ *
+ * Naming convention: source `cs-foo-bar` classes are ported to camelCase
+ * (`.fooBar`) — e.g. `.cs-topbar` -> `.topbar`, `.cs-tree-head` -> `.treeHead`,
+ * `.cs-iface-tile` -> `.ifaceTile`, `.cs-modal-back` -> `.modalBack`.
+ * Compound/stateful source classes that were combined via multiple class
+ * names in HTML (e.g. `cs-tree-node expanded`, `cs-tree-leaf active`,
+ * `cs-pill up`, `cs-toast show err`, `cs-led admin-down`, `cs-finding green`)
+ * are exposed here as distinct single classes to combine in JSX with
+ * template strings (e.g. `${styles.treeLeaf} ${styles.treeLeafActive}`),
+ * matching the Power-Platform/Purview/Sentinel/Defender/Azure-DevOps/Meraki
+ * console.module.css convention.
+ *
+ * Page-building agents: reference classes via `styles.card`, `styles.pillUp`,
+ * etc. — never hardcode `cs-*` strings, and never add visual styles beyond
+ * this module (only minor one-off `style={{}}` for layout, per cisco-ui.tsx).
+ * This is also the single source of truth for which Cisco classes exist —
+ * do NOT invent extra classes beyond what source has plus the minimal
+ * structural classes the shell/primitives need (e.g. `.flyout*`, `.subtab*`,
+ * `.spark`, which source doesn't have but every ported suite adds for
+ * detail-panel and inline-chart needs).
+ *
+ * CSS Modules "pure selector" rule: every bare global selector from source
+ * (`* {}`, `html, body {}`, `button {}`, `a {}`) has been rescoped under
+ * `.root` (via `:global()` where the source tag genuinely needs to style all
+ * descendants, e.g. `.root :global(a)`), since Next.js's build fails on any
+ * selector with zero local class/id.
+ */
+
+.root,
+.root * {
+  box-sizing: border-box;
+}
+
+.root {
+  --cs-blue: #005073;
+  --cs-blue-dark: #003a55;
+  --cs-blue-deep: #00263a;
+  --cs-blue-light: #1d8ec5;
+  --cs-blue-soft: #e8f1f7;
+  --cs-bg: #f5f6f8;
+  --cs-white: #ffffff;
+  --cs-rail-bg: #f2f4f7;
+  --cs-rail-hover: #e3ecf3;
+  --cs-rail-active: #d2e3ef;
+  --cs-text: #1f2933;
+  --cs-text-mut: #5b6773;
+  --cs-border: #d4d9e0;
+  --cs-border-strong: #b1b9c4;
+  --cs-row-alt: #f7f9fb;
+  --cs-row-hover: #eef4f9;
+  --cs-green: #2e8540;
+  --cs-green-soft: #dff5e1;
+  --cs-amber: #d68b00;
+  --cs-amber-soft: #fff4d6;
+  --cs-red: #b1242a;
+  --cs-red-soft: #fde0e1;
+  --cs-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --cs-shadow-md: 0 4px 18px rgba(0, 0, 0, 0.22);
+
+  height: 100%;
+  background: var(--cs-bg);
+  color: var(--cs-text);
+  font-family: "Lato", "Open Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+}
+
+.root :global(button) {
+  font: inherit;
+  cursor: pointer;
+}
+.root :global(a) {
+  color: #1d6fa5;
+  text-decoration: none;
+}
+.root :global(a:hover) {
+  text-decoration: underline;
+}
+
+/* ===== Top bar (Cisco dark blue) ===== */
+.topbar {
+  height: 56px;
+  background: linear-gradient(180deg, var(--cs-blue) 0%, var(--cs-blue-dark) 100%);
+  color: #fff;
+  display: flex;
+  align-items: stretch;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  position: relative;
+  z-index: 60;
+  flex-shrink: 0;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 22px;
+  min-width: 320px;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+}
+.logo {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #1d8ec5 0%, #00263a 100%);
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 900;
+  font-size: 14px;
+  letter-spacing: -0.5px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+.brandText {
+  line-height: 1.15;
+}
+.brandText .hn {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+.brandText .mo {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.tabs {
+  display: flex;
+  flex: 1;
+  align-items: stretch;
+  overflow-x: auto;
+}
+.tab {
+  background: transparent;
+  border: none;
+  color: #c8dfeb;
+  padding: 0 22px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 120ms;
+  border-bottom: 3px solid transparent;
+  height: 100%;
+  letter-spacing: 0.2px;
+}
+.tab:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+.tabActive {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border-bottom-color: #ffffff;
+}
+
+.topbarRight {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 18px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  min-width: 280px;
+  justify-content: flex-end;
+}
+.uptime {
+  font-size: 11px;
+  opacity: 0.85;
+}
+.uptime b {
+  display: block;
+  font-size: 13px;
+  opacity: 1;
+  font-weight: 600;
+}
+.admin {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.avatar {
+  width: 30px;
+  height: 30px;
+  background: #fff;
+  color: var(--cs-blue);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+.iconbtn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border-radius: 4px;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+.iconbtn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* ===== Sub bar ===== */
+.subbar {
+  height: 36px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--cs-border);
+  padding: 0 22px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--cs-text-mut);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  position: relative;
+  z-index: 55;
+  flex-shrink: 0;
+}
+.subbar b {
+  color: var(--cs-text);
+  font-weight: 600;
+}
+.subbarSep {
+  opacity: 0.6;
+}
+.savecfg {
+  margin-left: auto;
+  background: var(--cs-blue);
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.savecfg:hover {
+  background: var(--cs-blue-dark);
+}
+
+/* ===== Shell ===== */
+.shell {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  background: var(--cs-bg);
+}
+
+/* ===== Left tree pane ===== */
+.rail {
+  width: 290px;
+  flex: 0 0 290px;
+  background: var(--cs-rail-bg);
+  border-right: 1px solid var(--cs-border);
+  overflow-y: auto;
+  padding: 8px 0 30px 0;
+}
+.railTitle {
+  padding: 10px 16px 8px;
+  font-size: 11px;
+  color: var(--cs-text-mut);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--cs-border);
+  background: #ebeff3;
+}
+
+/* Tree node (collapsible parent) */
+.treeNode {
+  border-bottom: 1px solid #e8ebef;
+}
+.treeHead {
+  padding: 9px 16px 9px 14px;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--cs-text);
+  font-size: 13px;
+  transition: background 120ms;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+}
+.treeHead:hover {
+  background: var(--cs-rail-hover);
+}
+.caret {
+  display: inline-block;
+  width: 10px;
+  color: var(--cs-text-mut);
+  font-size: 10px;
+  transition: transform 120ms;
+}
+.caretExpanded {
+  transform: rotate(90deg);
+}
+
+.treeChildren {
+  display: none;
+  background: #f7f9fb;
+  border-top: 1px solid #e3e7ec;
+}
+.treeChildrenExpanded {
+  display: block;
+}
+
+.treeLeaf {
+  padding: 7px 16px 7px 38px;
+  cursor: pointer;
+  color: var(--cs-text);
+  font-size: 12.5px;
+  border-left: 3px solid transparent;
+  user-select: none;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+  display: block;
+}
+.treeLeaf:hover {
+  background: var(--cs-rail-hover);
+}
+.treeLeafActive {
+  background: var(--cs-rail-active);
+  color: var(--cs-blue);
+  font-weight: 600;
+  border-left-color: var(--cs-blue);
+}
+
+/* ===== Main area ===== */
+.main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 26px 36px;
+  background: var(--cs-bg);
+}
+.main h2 {
+  font-size: 18px;
+  color: var(--cs-blue);
+  font-weight: 600;
+  margin: 0 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--cs-blue);
+  letter-spacing: 0.2px;
+}
+.main h3 {
+  font-size: 14px;
+  color: var(--cs-blue-dark);
+  font-weight: 700;
+  margin: 16px 0 8px;
+  letter-spacing: 0.2px;
+}
+.main p {
+  line-height: 1.55;
+  margin-bottom: 10px;
+}
+.crumb {
+  color: var(--cs-text-mut);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.crumb b {
+  color: var(--cs-text);
+}
+.pageH {
+  font-size: 18px;
+  color: var(--cs-blue);
+  font-weight: 600;
+  margin: 0 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--cs-blue);
+  letter-spacing: 0.2px;
+}
+
+/* ===== Card / panel ===== */
+.card {
+  background: #fff;
+  border: 1px solid var(--cs-border);
+  border-radius: 4px;
+  margin-bottom: 16px;
+  box-shadow: var(--cs-shadow);
+  overflow: hidden;
+}
+.cardHeader {
+  background: linear-gradient(180deg, #f4f7fa 0%, #e6edf3 100%);
+  border-bottom: 1px solid var(--cs-border);
+  padding: 9px 14px;
+  font-weight: 600;
+  color: var(--cs-blue-dark);
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.cardBody {
+  padding: 14px;
+}
+.cardBodyTight {
+  padding: 0;
+}
+
+/* ===== Forms / two-column ===== */
+.form {
+  width: 100%;
+}
+.formRow {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+.formLabel {
+  flex: 0 0 220px;
+  font-weight: 600;
+  color: var(--cs-text);
+  font-size: 12.5px;
+  text-align: right;
+  padding-right: 6px;
+}
+.formLabel .req {
+  color: var(--cs-red);
+  margin-left: 2px;
+}
+.formCtl {
+  flex: 1;
+}
+.formHint {
+  font-size: 11px;
+  color: var(--cs-text-mut);
+  margin-top: 3px;
+}
+.formGroup {
+  margin-bottom: 10px;
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  border: 1px solid var(--cs-border-strong);
+  border-radius: 3px;
+  padding: 6px 8px;
+  font-size: 13px;
+  background: #fff;
+  color: var(--cs-text);
+  transition: border-color 120ms, box-shadow 120ms;
+  font-family: inherit;
+}
+.textarea {
+  resize: vertical;
+  min-height: 70px;
+  font-family: "Consolas", "Monaco", monospace;
+  font-size: 12px;
+}
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--cs-blue-light);
+  box-shadow: 0 0 0 2px rgba(29, 142, 197, 0.18);
+}
+.checkrow label {
+  margin-right: 16px;
+  font-weight: normal;
+}
+
+/* ===== Toggle switch — structural addition beyond source (source used
+   plain checkboxes; toggle matches Meraki-suite convention for on/off
+   settings like SSH/Telnet/HTTPS enable, matching page-builder needs). ===== */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.toggle input {
+  appearance: none;
+  width: 32px;
+  height: 18px;
+  background: #c5ccd6;
+  border-radius: 9px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.toggle input:checked {
+  background: var(--cs-green);
+}
+.toggle input::before {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  top: 2px;
+  left: 2px;
+  transition: left 0.15s;
+}
+.toggle input:checked::before {
+  left: 16px;
+}
+
+/* ===== Buttons ===== */
+.btn {
+  background: var(--cs-blue);
+  color: #fff;
+  border: 1px solid var(--cs-blue-dark);
+  border-radius: 3px;
+  padding: 6px 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: background 120ms;
+  letter-spacing: 0.2px;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn:hover {
+  background: var(--cs-blue-dark);
+}
+.btn:active {
+  background: var(--cs-blue-deep);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btnSm {
+  padding: 4px 10px;
+  font-size: 11.5px;
+}
+.btnGhost {
+  background: #fff;
+  color: var(--cs-blue);
+  border-color: var(--cs-blue);
+}
+.btnGhost:hover {
+  background: var(--cs-blue-soft);
+}
+.btnDanger {
+  background: var(--cs-red);
+  border-color: #8a1c20;
+}
+.btnDanger:hover {
+  background: #8a1c20;
+}
+.btnWarn {
+  background: var(--cs-amber);
+  border-color: #a26f00;
+  color: #fff;
+}
+.btnMuted {
+  background: #e7eaef;
+  color: var(--cs-text);
+  border-color: #c2c8d1;
+}
+.btnMuted:hover {
+  background: #d8dce3;
+}
+
+.toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.searchInput {
+  border: 1px solid var(--cs-border-strong);
+  border-radius: 3px;
+  padding: 6px 10px;
+  min-width: 240px;
+  font-size: 12.5px;
+}
+.toolbarSpacer {
+  flex: 1;
+}
+
+/* ===== Tables ===== */
+.tableWrap {
+  border: 1px solid var(--cs-border);
+  border-radius: 4px;
+  background: #fff;
+  overflow-x: auto;
+  box-shadow: var(--cs-shadow);
+  margin-bottom: 16px;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.table thead th {
+  background: linear-gradient(180deg, #eef3f8 0%, #dde6ee 100%);
+  color: var(--cs-blue-dark);
+  text-align: left;
+  padding: 8px 10px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--cs-border-strong);
+  border-right: 1px solid var(--cs-border);
+  font-size: 12px;
+  letter-spacing: 0.15px;
+  white-space: nowrap;
+}
+.table thead th:last-child {
+  border-right: none;
+}
+.table tbody td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--cs-border);
+  border-right: 1px solid #eef0f3;
+  vertical-align: middle;
+}
+.table tbody td:last-child {
+  border-right: none;
+}
+.table tbody tr:nth-child(odd) {
+  background: #ffffff;
+}
+.table tbody tr:nth-child(even) {
+  background: var(--cs-row-alt);
+}
+.table tbody tr:hover {
+  background: var(--cs-row-hover);
+}
+.tableClickable tbody tr {
+  cursor: pointer;
+}
+.actions a {
+  color: var(--cs-blue);
+  margin-right: 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.actions a.del {
+  color: var(--cs-red);
+}
+.actions a:hover {
+  text-decoration: underline;
+}
+
+.mono {
+  font-family: "Consolas", "Monaco", monospace;
+  font-size: 12px;
+}
+.small {
+  font-size: 11px;
+  color: var(--cs-text-mut);
+}
+.mt6 {
+  margin-top: 6px;
+}
+.mt10 {
+  margin-top: 10px;
+}
+.mt16 {
+  margin-top: 16px;
+}
+.mb10 {
+  margin-bottom: 10px;
+}
+.flex {
+  display: flex;
+  gap: 12px;
+}
+.flexWrap {
+  flex-wrap: wrap;
+}
+.flexBetween {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.textR {
+  text-align: right;
+}
+.textC {
+  text-align: center;
+}
+
+/* ===== Pills / status ===== */
+.pill {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.6;
+  letter-spacing: 0.2px;
+}
+.pillUp {
+  background: var(--cs-green-soft);
+  color: var(--cs-green);
+}
+.pillDown {
+  background: var(--cs-red-soft);
+  color: var(--cs-red);
+}
+.pillWarn {
+  background: var(--cs-amber-soft);
+  color: var(--cs-amber);
+}
+.pillInfo {
+  background: var(--cs-blue-soft);
+  color: var(--cs-blue);
+}
+.pillMuted {
+  background: #ececef;
+  color: #555;
+}
+
+.led {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  box-shadow: 0 0 4px currentColor;
+}
+.ledUp {
+  background: #2e8540;
+  color: #2e8540;
+}
+.ledDown {
+  background: #b1242a;
+  color: #b1242a;
+}
+.ledAdminDown {
+  background: #6b7280;
+  color: #6b7280;
+  box-shadow: none;
+}
+
+/* ===== Dashboard widgets / grids ===== */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.kv {
+  width: 100%;
+}
+.kv dt,
+.kv dd {
+  display: inline-block;
+  font-size: 12.5px;
+}
+.kv dt {
+  width: 45%;
+  color: var(--cs-text-mut);
+  padding: 3px 0;
+}
+.kv dd {
+  width: 54%;
+  color: var(--cs-text);
+  padding: 3px 0;
+  font-weight: 500;
+}
+
+/* gauge */
+.gauge {
+  position: relative;
+  display: inline-block;
+}
+.gaugeText {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+.gaugeText .v {
+  display: block;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--cs-blue);
+}
+.gaugeText .l {
+  display: block;
+  font-size: 11px;
+  color: var(--cs-text-mut);
+}
+
+/* ===== stat tiles — structural addition beyond source (source's dashboard
+   used cs-grid + cs-card + cs-kv only; every ported suite adds a compact
+   StatTile/StatRow for the Home/Overview page's headline numbers) ===== */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.tile {
+  background: #fff;
+  border: 1px solid var(--cs-border);
+  border-radius: 4px;
+  padding: 12px 14px;
+  box-shadow: var(--cs-shadow);
+}
+.tileL {
+  font-size: 11px;
+  color: var(--cs-text-mut);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.tileV {
+  font-size: 24px;
+  font-weight: 700;
+  margin-top: 4px;
+  color: var(--cs-blue-dark);
+}
+.tileS {
+  font-size: 11px;
+  color: var(--cs-text-mut);
+  margin-top: 4px;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.grid3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+/* interface LED grid */
+.ifaceGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+.ifaceTile {
+  border: 1px solid var(--cs-border);
+  border-radius: 4px;
+  background: #fff;
+  padding: 10px 12px;
+  box-shadow: var(--cs-shadow);
+}
+.ifaceTile .nm {
+  font-weight: 700;
+  color: var(--cs-blue-dark);
+  font-size: 13px;
+}
+.ifaceTile .ip {
+  font-size: 11.5px;
+  color: var(--cs-text-mut);
+  margin-top: 2px;
+  font-family: "Consolas", monospace;
+}
+.ifaceTile .ds {
+  margin-top: 5px;
+  font-size: 11px;
+}
+
+/* ===== bars (mini) ===== */
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 90px;
+  border-bottom: 1px solid var(--cs-border);
+  padding: 4px 0;
+}
+.bars .bar {
+  flex: 1;
+  background: var(--cs-blue-light);
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+  transition: height 350ms;
+}
+.bars .barOut {
+  background: var(--cs-green);
+}
+
+/* ===== Console / output blocks ===== */
+.console {
+  background: #0d2230;
+  color: #c6d6e0;
+  font-family: "Consolas", "Monaco", monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 12px 14px;
+  border-radius: 3px;
+  border: 1px solid #001824;
+  white-space: pre-wrap;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.consoleTall {
+  max-height: 600px;
+}
+.console b {
+  color: #ffffff;
+  font-weight: 600;
+}
+.console .ok {
+  color: #6cd07a;
+}
+.console .er {
+  color: #ff6b6b;
+}
+.console .wn {
+  color: #ffd166;
+}
+.console .hi {
+  color: #ffd166;
+}
+
+/* ===== Syslog viewer (colored severities) ===== */
+.logViewer {
+  background: #fbfcfd;
+  border: 1px solid var(--cs-border);
+  border-radius: 3px;
+  font-family: "Consolas", "Monaco", monospace;
+  font-size: 11.5px;
+  line-height: 1.6;
+  padding: 6px 10px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.logViewer .ln {
+  padding: 1px 0;
+}
+.logViewer .ln.emergency,
+.logViewer .ln.alert,
+.logViewer .ln.critical {
+  color: #b1242a;
+  font-weight: 600;
+}
+.logViewer .ln.error {
+  color: #b1242a;
+}
+.logViewer .ln.warning {
+  color: #a26f00;
+}
+.logViewer .ln.notice,
+.logViewer .ln.info {
+  color: #2c4a5f;
+}
+.logViewer .ln.debug {
+  color: var(--cs-text-mut);
+}
+
+/* ===== Diagnostic result blocks ===== */
+.diag {
+  background: #fff;
+  border: 1px solid var(--cs-border);
+  border-radius: 3px;
+  margin-top: 12px;
+}
+.diagHd {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--cs-border);
+  font-weight: 700;
+  color: var(--cs-blue-dark);
+  background: #eef3f8;
+  font-size: 12.5px;
+}
+.diagBd {
+  padding: 12px;
+}
+.finding {
+  border-left: 4px solid #d4d9e0;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: #fbfcfd;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.findingGreen {
+  border-left-color: var(--cs-green);
+  background: #f3faf4;
+}
+.findingYellow {
+  border-left-color: var(--cs-amber);
+  background: #fffbeb;
+}
+.findingRed {
+  border-left-color: var(--cs-red);
+  background: #fdf2f2;
+}
+.findingTag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-right: 6px;
+  letter-spacing: 0.4px;
+}
+.findingGreen .findingTag {
+  background: var(--cs-green);
+  color: #fff;
+}
+.findingYellow .findingTag {
+  background: var(--cs-amber);
+  color: #fff;
+}
+.findingRed .findingTag {
+  background: var(--cs-red);
+  color: #fff;
+}
+.findingFix {
+  margin-top: 5px;
+  background: #001824;
+  color: #c6d6e0;
+  font-family: "Consolas", "Monaco", monospace;
+  font-size: 11.5px;
+  padding: 6px 8px;
+  border-radius: 3px;
+  white-space: pre-wrap;
+}
+.findingRef {
+  color: var(--cs-text-mut);
+  font-size: 11px;
+  font-style: italic;
+  margin-top: 4px;
+}
+
+/* ===== Modal ===== */
+.modalBack {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 36, 55, 0.5);
+  z-index: 200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 70px 20px 40px;
+}
+.modal {
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: var(--cs-shadow-md);
+  width: 760px;
+  max-width: 100%;
+  border-top: 4px solid var(--cs-blue);
+  overflow: hidden;
+}
+.modalH {
+  padding: 12px 16px;
+  background: #f4f7fa;
+  border-bottom: 1px solid var(--cs-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modalH .t {
+  font-weight: 700;
+  color: var(--cs-blue-dark);
+  font-size: 14px;
+}
+.modalClose {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  color: var(--cs-text-mut);
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+.modalClose:hover {
+  color: var(--cs-red);
+}
+.modalB {
+  padding: 16px;
+  max-height: calc(100vh - 240px);
+  overflow-y: auto;
+}
+.modalF {
+  padding: 10px 16px;
+  background: #f4f7fa;
+  border-top: 1px solid var(--cs-border);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* ===== Flyout (slide-in side panel — structural addition beyond source,
+   which has no per-item detail panel; mirrors the Modal chrome so
+   interface/ACL/route/tunnel/neighbor detail views have a consistent place
+   to live, matching every other ported suite's convention) ===== */
+.flyoutMask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 36, 55, 0.5);
+  z-index: 200;
+}
+.flyout {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 760px;
+  max-width: 96vw;
+  height: 100vh;
+  background: #fff;
+  box-shadow: var(--cs-shadow-md);
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+}
+.flyoutHeader {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--cs-border);
+  background: #f4f7fa;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.flyoutHeader h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--cs-blue-dark);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.flyoutBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+.flyoutFooter {
+  padding: 10px 16px;
+  border-top: 1px solid var(--cs-border);
+  background: #f4f7fa;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ===== Toast ===== */
+.toast {
+  position: fixed;
+  bottom: 50px;
+  right: 22px;
+  background: var(--cs-blue-dark);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 3px;
+  box-shadow: var(--cs-shadow-md);
+  opacity: 0;
+  transform: translateY(15px);
+  transition: opacity 220ms, transform 220ms;
+  z-index: 250;
+  font-size: 13px;
+  font-weight: 500;
+  pointer-events: none;
+}
+.toastShow {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.toastErr {
+  background: var(--cs-red);
+}
+.toastWarn {
+  background: var(--cs-amber);
+}
+
+/* ===== Bottom links ===== */
+.bottomLinks {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  background: #003a55;
+  color: #c8dfeb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  font-size: 11.5px;
+  z-index: 70;
+  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.15);
+}
+.bottomLinks a {
+  color: #fff;
+  text-decoration: none;
+  font-weight: 500;
+}
+.bottomLinks a:hover {
+  color: #e9f4fa;
+  text-decoration: underline;
+}
+
+/* ===== Sub-tabs — structural addition beyond source (compact pill-style
+   switcher for in-page filter rows), matching every other ported suite's
+   convention. ===== */
+.subtabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  background: #fff;
+  border: 1px solid var(--cs-border);
+  border-radius: 4px;
+  padding: 4px;
+}
+.subtab {
+  background: transparent;
+  border: 0;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  color: var(--cs-text);
+  cursor: pointer;
+  border-radius: 3px;
+  font-family: inherit;
+}
+.subtab:hover {
+  background: var(--cs-rail-hover);
+}
+.subtabActive {
+  background: var(--cs-rail-active);
+  color: var(--cs-blue);
+  font-weight: 600;
+}
+
+/* ===== sparkline — structural addition beyond source (interface throughput /
+   CPU history charts), matching every other ported suite's convention ===== */
+.spark {
+  display: inline-block;
+  width: 90px;
+  height: 22px;
+  vertical-align: middle;
+}
+
+/* ===== empty state ===== */
+.empty {
+  padding: 40px;
+  text-align: center;
+  color: var(--cs-text-mut);
+  background: #fff;
+  border: 1px dashed var(--cs-border-strong);
+  border-radius: 4px;
+}
+
+/* ===== Scrollbar polish ===== */
+.rail::-webkit-scrollbar,
+.main::-webkit-scrollbar,
+.console::-webkit-scrollbar,
+.logViewer::-webkit-scrollbar,
+.modalB::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+.rail::-webkit-scrollbar-thumb,
+.main::-webkit-scrollbar-thumb,
+.console::-webkit-scrollbar-thumb,
+.logViewer::-webkit-scrollbar-thumb,
+.modalB::-webkit-scrollbar-thumb {
+  background: #b8c0c9;
+  border-radius: 4px;
+}
+.rail::-webkit-scrollbar-thumb:hover,
+.main::-webkit-scrollbar-thumb:hover {
+  background: #939ba6;
+}

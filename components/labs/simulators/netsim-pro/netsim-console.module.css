@@ -1,0 +1,831 @@
+/*
+ * NetSim Pro — Neumorphism + Holographic dark dashboard theme, ported from
+ * itbd-lab/simulators/network/index.html's <style> block (lines 16-590).
+ * This is its own dedicated `neu-*`/`holo-*` design system — a modern dark,
+ * glassmorphic/neumorphic learning-platform dashboard — deliberately NOT
+ * reused from the vendor-portal-style simulators (network-cisco,
+ * network-fortigate, network-paloalto, meraki) which mimic real vendor
+ * console chrome. NetSim Pro's source is a standalone product UI, so this
+ * module is scoped and self-contained like every other simulator's CSS
+ * module.
+ *
+ * Naming convention: source kebab-case classes become camelCase module keys
+ * (e.g. `.neu-card` -> `.neuCard`, `.nav-item` -> `.navItem`,
+ * `.holo-border` -> `.holoBorder`, `.progress-fill` -> `.progressFill`,
+ * `.badge-blue` -> `.badgeBlue`). Compound/stateful source classes applied
+ * via multiple class names in HTML (e.g. `nav-item active`, `tab-content
+ * active`, `modal-overlay active`) are exposed as distinct single classes to
+ * combine in JSX (e.g. `${styles.navItem} ${styles.navItemActive}`),
+ * matching the Meraki/Power-Platform/Purview/Sentinel/Defender/
+ * Azure-DevOps-console.module.css convention used by every prior port.
+ *
+ * Tab accent system: source drives the "active accent" via a single
+ * `--accent`/`--accent-glow` pair set on <html style="..."> per active tab
+ * (see index.html:3, dashboard.js is silent on this — it's set elsewhere in
+ * app.js, not in scope here). Here the 6 in-scope accents (CLI's 7th excluded
+ * per this sub-phase) are exposed as `--accent-{tab}` custom properties on
+ * `.root` plus a settable `--accent`/`--accent-glow` pair that
+ * netsim-shell.tsx updates inline per the active tab (mirrors source's
+ * approach without needing global document-level style mutation).
+ *
+ * CSS Modules "pure selector" rule: every bare global selector from source
+ * (`*, *::before, *::after {}`, `body {}`, `body::before {}`,
+ * `[data-tooltip] {}`, `[data-tooltip]:hover::after {}`, `@media print { * {} }`)
+ * has been rescoped under `.root` (via `:global()` where the source
+ * genuinely needs to style all descendants), since Next.js's build fails on
+ * any selector with zero local class/id. `@font-face` and bare `@keyframes`
+ * are safe as-is (not selectors) and are kept unscoped since CSS Modules
+ * allow global at-rules; class names referencing them are still local.
+ */
+
+.root,
+.root * {
+  box-sizing: border-box;
+}
+
+.root {
+  /* Neumorphism base */
+  --neu-bg: #1a1a2e;
+  --neu-bg-light: #1e1e35;
+  --neu-bg-dark: #151528;
+  --shadow-out: 6px 6px 12px rgba(0, 0, 0, 0.5), -6px -6px 12px rgba(50, 50, 80, 0.15);
+  --shadow-in: inset 4px 4px 8px rgba(0, 0, 0, 0.5), inset -4px -4px 8px rgba(50, 50, 80, 0.15);
+  --shadow-sm: 3px 3px 6px rgba(0, 0, 0, 0.4), -3px -3px 6px rgba(50, 50, 80, 0.1);
+
+  /* Text */
+  --text-primary: #e8e8f0;
+  --text-secondary: #9595b0;
+  --text-muted: #6565a0;
+
+  /* Glass */
+  --glass-bg: rgba(255, 255, 255, 0.04);
+  --glass-border: rgba(255, 255, 255, 0.08);
+
+  /* Holographic gradient */
+  --holo-gradient: linear-gradient(135deg, #ff006e, #8338ec, #3a86ff, #06d6a0, #ffbe0b, #ff006e);
+  --holo-gradient-soft: linear-gradient(135deg, rgba(255, 0, 110, 0.3), rgba(131, 56, 236, 0.3), rgba(58, 134, 255, 0.3), rgba(6, 214, 160, 0.3));
+
+  /* Tab accent colors (CLI's 7th omitted — out of scope this sub-phase, kept
+     as a comment for when it's wired: --accent-cli: #ef4444) */
+  --accent-dashboard: #6366f1;
+  --accent-learn: #10b981;
+  --accent-topology: #06b6d4;
+  --accent-troubleshoot: #f59e0b;
+  --accent-scenarios: #8b5cf6;
+  --accent-reference: #ec4899;
+
+  /* Active accent — updated inline by netsim-shell.tsx per active tab,
+     mirrors source's per-tab <html style="--accent:...;--accent-glow:...">. */
+  --accent: #6366f1;
+  --accent-glow: rgba(99, 102, 241, 0.3);
+
+  /* Layout */
+  --sidebar-width: 72px;
+  --sidebar-expanded: 240px;
+  --header-height: 60px;
+  --transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+
+  height: 100%;
+  min-height: 100vh;
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--neu-bg);
+  color: var(--text-primary);
+  position: relative;
+}
+
+.root :global(button) {
+  font: inherit;
+  cursor: pointer;
+  border: 0;
+  background: none;
+  color: inherit;
+}
+.root :global(a) {
+  color: inherit;
+  text-decoration: none;
+}
+.root :global(input),
+.root :global(select),
+.root :global(textarea) {
+  font: inherit;
+  color: var(--text-primary);
+}
+
+/* Animated background grid (source body::before) */
+.bgGrid {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+  animation: gridShift 20s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes gridShift {
+  0% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(50px, 50px);
+  }
+}
+
+@keyframes holoShift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInNotif {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOutNotif {
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ═══════ SIDEBAR ═══════ */
+.sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--sidebar-width);
+  background: var(--neu-bg-dark);
+  border-right: 1px solid var(--glass-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  z-index: 100;
+  transition: var(--transition);
+  overflow: hidden;
+}
+
+.sidebar:hover {
+  width: var(--sidebar-expanded);
+}
+
+.sidebarLogo {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--holo-gradient);
+  background-size: 300% 300%;
+  animation: holoShift 4s ease infinite;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 900;
+  color: #fff;
+  margin-bottom: 20px;
+  flex-shrink: 0;
+  box-shadow: 0 0 20px rgba(131, 56, 236, 0.3);
+}
+
+.sidebarNav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 0 10px;
+  flex: 1;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: var(--transition);
+  position: relative;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  text-decoration: none;
+  user-select: none;
+  width: 100%;
+  text-align: left;
+}
+
+.navItem:hover {
+  background: var(--glass-bg);
+  color: var(--text-primary);
+}
+
+.navItemActive {
+  background: var(--glass-bg);
+  color: var(--accent);
+  box-shadow: var(--shadow-in);
+}
+
+.navItemActive::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 24px;
+  border-radius: 0 4px 4px 0;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.navItemDisabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.navIcon {
+  font-size: 20px;
+  width: 28px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.navLabel {
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.sidebar:hover .navLabel {
+  opacity: 1;
+}
+
+/* ═══════ HEADER ═══════ */
+.header {
+  position: fixed;
+  top: 0;
+  left: var(--sidebar-width);
+  right: 0;
+  height: var(--header-height);
+  background: rgba(26, 26, 46, 0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--glass-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  z-index: 90;
+}
+
+.headerTitle {
+  font-size: 18px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tabName {
+  background: var(--holo-gradient);
+  background-size: 300% 300%;
+  animation: holoShift 4s ease infinite;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.headerBtn {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  padding: 8px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.headerBtn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+/* ═══════ MAIN CONTENT ═══════ */
+.mainContent {
+  margin-left: var(--sidebar-width);
+  margin-top: var(--header-height);
+  min-height: calc(100vh - var(--header-height));
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.mainContent::-webkit-scrollbar {
+  width: 6px;
+}
+.mainContent::-webkit-scrollbar-track {
+  background: transparent;
+}
+.mainContent::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.tabContent {
+  animation: fadeIn 0.4s ease;
+}
+
+/* ═══════ SHARED COMPONENTS ═══════ */
+
+.neuCard {
+  background: var(--neu-bg-light);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: var(--shadow-out);
+  border: 1px solid var(--glass-border);
+  transition: var(--transition);
+}
+
+.neuCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 8px 8px 16px rgba(0, 0, 0, 0.6), -8px -8px 16px rgba(50, 50, 80, 0.2);
+}
+
+.neuCardClickable {
+  cursor: pointer;
+}
+
+.neuCardFlat {
+  background: var(--neu-bg-light);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: var(--shadow-out);
+  border: 1px solid var(--glass-border);
+}
+
+.neuInset {
+  background: var(--neu-bg-dark);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: var(--shadow-in);
+}
+
+.glassPanel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.holoBorder {
+  position: relative;
+  border-radius: 16px;
+  padding: 20px;
+  background: var(--neu-bg-light);
+}
+
+.holoBorder::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 18px;
+  background: var(--holo-gradient);
+  background-size: 300% 300%;
+  animation: holoShift 4s ease infinite;
+  z-index: -1;
+  opacity: 0.6;
+}
+
+.holoText {
+  background: var(--holo-gradient);
+  background-size: 300% 300%;
+  animation: holoShift 4s ease infinite;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Buttons */
+.btn {
+  padding: 10px 20px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btnPrimary {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 4px 15px var(--accent-glow);
+}
+
+.btnPrimary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px var(--accent-glow);
+}
+
+.btnGhost {
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--glass-border);
+}
+
+.btnGhost:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.btnGhostLeft {
+  text-align: left;
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.btnSm {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
+/* Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badgeGreen {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+.badgeBlue {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+}
+.badgeYellow {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+.badgeRed {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+.badgePurple {
+  background: rgba(139, 92, 246, 0.15);
+  color: #8b5cf6;
+}
+
+/* Section headers */
+.sectionTitle {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sectionTitleSm {
+  font-size: 16px;
+}
+
+.sectionSubtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+}
+
+/* Grid */
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.grid4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 1200px) {
+  .grid4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .grid3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 768px) {
+  .grid2,
+  .grid3,
+  .grid4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Tags */
+.tag {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  background: var(--glass-bg);
+  color: var(--text-secondary);
+  border: 1px solid var(--glass-border);
+}
+
+/* Progress bar */
+.progressBar {
+  height: 6px;
+  background: var(--neu-bg-dark);
+  border-radius: 3px;
+  overflow: hidden;
+  box-shadow: var(--shadow-in);
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: width 0.6s ease;
+}
+
+/* Progress ring label (SVG itself is inline in netsim-ui.tsx) */
+.progressRingWrap {
+  text-align: center;
+}
+
+.progressRingLabel {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* Tooltip (source's bare [data-tooltip] attribute selector, rescoped) */
+.root :global([data-tooltip]) {
+  position: relative;
+}
+.root :global([data-tooltip]:hover)::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: #222;
+  color: #fff;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+/* kbd (source used inline styles per-<kbd>; consolidated into one class) */
+.kbd {
+  background: var(--neu-bg-dark);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: monospace;
+  box-shadow: var(--shadow-sm);
+  color: var(--accent);
+}
+
+/* ═══════ NOTIFICATIONS ═══════ */
+.notificationContainer {
+  position: fixed;
+  top: 70px;
+  right: 20px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notification {
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: var(--shadow-out);
+  animation: slideInNotif 0.3s ease, fadeOutNotif 0.3s ease 2.7s forwards;
+  max-width: 350px;
+}
+
+.notificationSuccess {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+.notificationError {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.notificationInfo {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+.notificationWarning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+/* ═══════ LOADING SPINNER ═══════ */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--glass-border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* ═══════ MODAL ═══════ */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal {
+  background: var(--neu-bg-light);
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: var(--shadow-out);
+  border: 1px solid var(--glass-border);
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.modalTitle {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.modalClose {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: var(--transition);
+}
+
+.modalClose:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.modalBody {
+  margin-bottom: 16px;
+}
+
+.modalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ═══════ ACCORDION / EXPANDABLE CARD ═══════ */
+/* Structural addition (source's Learn/Troubleshoot/Scenarios/Reference pages
+   each hand-roll their own expand/collapse via inline onclick handlers
+   toggling a `.expanded` class + max-height) — consolidated into one
+   reusable primitive per prior-port convention. */
+.accordionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  gap: 12px;
+  user-select: none;
+}
+
+.accordionCaret {
+  font-size: 12px;
+  color: var(--text-secondary);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.accordionCaretOpen {
+  transform: rotate(90deg);
+}
+
+.accordionBody {
+  margin-top: 14px;
+  animation: fadeIn 0.3s ease;
+}
+
+/* ═══════ PRINT STYLES ═══════ */
+/* Local module classes (`.sidebar`, `.header`, etc.) are already scoped by
+   the CSS Modules compiler, so referencing them directly here (no
+   `:global()` needed) is a pure selector — only the true bare selector
+   (`*`) needs rescoping under `.root`. */
+@media print {
+  .sidebar,
+  .header,
+  .navItem,
+  .notificationContainer {
+    display: none !important;
+  }
+  .mainContent {
+    margin: 0 !important;
+    padding: 20px !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .root {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .holoText {
+    -webkit-text-fill-color: #000 !important;
+  }
+  .root * {
+    color: #000 !important;
+  }
+}

@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { db } from "@/DB/drizzle";
+import { isAdminRole, type Role } from "@/lib/rbac";
 import {
   adminInterviewEvaluations,
   aiInterviewEvaluations,
@@ -47,7 +48,6 @@ type AdminStructured = {
 };
 
 const uuidSchema = z.string().uuid();
-const adminRoles = new Set(["devAdmin", "adminTeam", "executive"]);
 
 function hasCompleteDimensionScores(
   dimensions: ReturnType<typeof normalizeDimensionMap>,
@@ -336,7 +336,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!adminRoles.has(session.user.role ?? "user")) {
+  if (!isAdminRole(session.user.role as Role | undefined)) {
     return NextResponse.json(
       { error: "Access denied: admin role required" },
       { status: 403 },

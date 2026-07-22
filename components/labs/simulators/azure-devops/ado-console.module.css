@@ -1,0 +1,1734 @@
+/*
+ * Real Azure DevOps / dev.azure.com visual chrome — deliberately bypasses the
+ * app's ITBD brand tokens. Azure DevOps is its own dedicated `ado-*` design
+ * system in the source simulator (dark blue-to-navy topbar gradient
+ * #0078d4 -> #005a9e -> #002050, matching real dev.azure.com chrome, white
+ * content cards, light-blue #0078d4 accents, collapsible grouped sidebar),
+ * ported here from itbd-lab/simulators/azure-devops/css/azure-devops.css
+ * (1251 lines) — NOT reused from any other already-ported simulator's CSS
+ * module. Fidelity to the real product is the point of a simulator; CSS
+ * Modules keep these class names scoped so nothing here leaks into the rest
+ * of the app.
+ *
+ * Naming convention: source `ado-foo-bar` classes (and bare/legacy classes
+ * like `.bar`, `.pl-h`, `.tp-grid` that source used without an `ado-` prefix)
+ * are ported to camelCase (`.fooBar`) — e.g. `.ado-topbar`->`.topbar`,
+ * `.ado-nav-item`->`.navItem`, `.ado-stat-row`->`.statRow`,
+ * `.ado-kanban-col`->`.kanbanCol`, `.stage-node`->`.stageNode`,
+ * `.yaml-editor`->`.yamlEditor`. Compound/stateful source classes that were
+ * combined via multiple class names in HTML (e.g. `ado-nav-item active`,
+ * `ado-nav-sub open`, `ado-state state-active`, `ado-toast success`) are
+ * exposed here as distinct single classes to combine in JSX with template
+ * strings (e.g. `${styles.navItem} ${styles.navItemActive}`), matching the
+ * Purview/Sentinel/Defender-console.module.css convention.
+ * Page-building agents: reference classes via `styles.topbar`,
+ * `styles.statePillActive`, etc. — never hardcode `ado-*` strings, and never
+ * add visual styles beyond this module (only minor one-off `style={{}}` for
+ * layout, per ado-ui.tsx).
+ */
+
+.root,
+.root * {
+  box-sizing: border-box;
+}
+
+.root {
+  height: 100%;
+  font-family: "Segoe UI", "Segoe UI Web", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
+  color: #1f1f1f;
+  background: #f5f5f5;
+  display: flex;
+  flex-direction: column;
+}
+
+.root :global(a) {
+  color: #0078d4;
+  text-decoration: none;
+  cursor: pointer;
+}
+.root :global(a:hover) {
+  text-decoration: underline;
+}
+
+.codeInline {
+  font-family: ui-monospace, "Cascadia Code", Consolas, "Courier New", monospace;
+  font-size: 12.5px;
+}
+.hash {
+  background: #eef3f8;
+  color: #0078d4;
+  padding: 1px 6px;
+  border-radius: 2px;
+}
+.branchTag {
+  background: #e1f2ff;
+  color: #0078d4;
+  padding: 1px 6px;
+  border-radius: 2px;
+}
+
+/* ===================== TOP BAR ===================== */
+.topbar {
+  height: 44px;
+  background: linear-gradient(90deg, #0078d4 0%, #005a9e 30%, #002050 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  position: relative;
+  z-index: 100;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+  flex-shrink: 0;
+}
+.tbLeft,
+.tbRight {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.tbCenter {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+.wordmark {
+  font-size: 14px;
+  font-weight: 600;
+  margin-left: 4px;
+  margin-right: 6px;
+  white-space: nowrap;
+}
+.tbSep {
+  width: 1px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.28);
+  margin: 0 6px;
+}
+.tbSlash {
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0 4px;
+}
+.tbIconBtn {
+  background: transparent;
+  border: 0;
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tbIconBtn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+.tbPill {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 3px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tbPill:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+.tbCaret {
+  font-size: 10px;
+  opacity: 0.7;
+}
+.tbSearch {
+  width: 460px;
+  height: 30px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 6px;
+}
+.tbSearch input {
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: #fff;
+  flex: 1;
+  font-size: 13px;
+}
+.tbSearch input::placeholder {
+  color: rgba(255, 255, 255, 0.7);
+}
+.tbAvatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #50e6ff;
+  color: #002050;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-left: 6px;
+}
+
+/* ===================== LAYOUT ===================== */
+.main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ===================== SIDEBAR ===================== */
+.sidebar {
+  width: 232px;
+  background: #f5f5f5;
+  border-right: 1px solid #e1dfdd;
+  overflow-y: auto;
+  flex-shrink: 0;
+  padding: 6px 0 80px 0;
+}
+.sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background: #c8c6c4;
+  border-radius: 3px;
+}
+
+.sideProj {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 12px 12px;
+  border-bottom: 1px solid #e1dfdd;
+  margin-bottom: 4px;
+}
+.sideProjIcon {
+  width: 28px;
+  height: 28px;
+  background: #0078d4;
+  color: #fff;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 13px;
+}
+.sideProjText {
+  font-weight: 600;
+  color: #1f1f1f;
+  font-size: 13px;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  color: #1f1f1f;
+  font-size: 13.5px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  white-space: nowrap;
+  width: 100%;
+  background: transparent;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  text-align: left;
+  font-family: inherit;
+}
+.navItem .ico {
+  color: #605e5c;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.navItem:hover {
+  background: #ebebeb;
+  text-decoration: none;
+}
+.navItemActive {
+  background: #fff;
+  border-left-color: #0078d4;
+  color: #0078d4;
+  font-weight: 600;
+}
+.navItemActive .ico {
+  color: #0078d4;
+}
+.navItemActiveParent {
+  color: #0078d4;
+  font-weight: 600;
+}
+.chev {
+  margin-left: auto;
+  font-size: 10px;
+  color: #605e5c;
+  transition: transform 0.15s;
+}
+.chevOpen {
+  transform: rotate(90deg);
+}
+.navSub {
+  display: none;
+}
+.navSubOpen {
+  display: block;
+}
+.navSub .navItem {
+  padding-left: 42px;
+  font-size: 13px;
+}
+.navSub .navItemActive {
+  background: #fff;
+  color: #0078d4;
+  font-weight: 600;
+}
+.navDivider {
+  border-top: 1px solid #e1dfdd;
+  margin: 8px 0;
+}
+
+/* ===================== CONTENT ===================== */
+.content {
+  flex: 1;
+  background: #fff;
+  overflow-y: auto;
+  padding: 20px 26px 100px 26px;
+}
+
+.pageH1 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1f1f1f;
+  margin-bottom: 4px;
+}
+.pageSub {
+  color: #605e5c;
+  font-size: 13px;
+  margin-bottom: 18px;
+}
+.h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f1f1f;
+  margin: 18px 0 10px 0;
+}
+.h3 {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #1f1f1f;
+  margin: 14px 0 8px 0;
+}
+.empty {
+  background: #f9f8f7;
+  border: 1px dashed #d2d0ce;
+  color: #605e5c;
+  padding: 30px;
+  text-align: center;
+  border-radius: 4px;
+}
+
+/* ===================== STAT TILES ===================== */
+.statRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 12px 0 20px 0;
+}
+.stat {
+  flex: 1;
+  min-width: 140px;
+  background: #fff;
+  border: 1px solid #e1dfdd;
+  border-top: 3px solid #0078d4;
+  padding: 14px 16px;
+  border-radius: 4px;
+}
+.stat .statVal {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1f1f1f;
+}
+.stat .statLabel {
+  font-size: 12.5px;
+  color: #605e5c;
+  margin-top: 2px;
+}
+
+.tileGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.tile {
+  background: #fff;
+  border: 1px solid #e1dfdd;
+  border-radius: 4px;
+  padding: 14px;
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.tile:hover {
+  border-color: #0078d4;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+.tile .tileTitle {
+  font-weight: 600;
+  color: #0078d4;
+  margin-bottom: 4px;
+}
+.tile .tileDesc {
+  font-size: 12.5px;
+  color: #605e5c;
+}
+
+/* ===================== BUTTONS ===================== */
+.btn,
+.btnPrimary,
+.btnOutline,
+.btnSubtle,
+.btnLink,
+.btnDanger {
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 2px;
+  border: 1px solid transparent;
+  line-height: 1;
+}
+.btn,
+.btnPrimary {
+  background: #0078d4;
+  color: #fff;
+  border-color: #0078d4;
+}
+.btn:hover,
+.btnPrimary:hover {
+  background: #106ebe;
+  border-color: #106ebe;
+}
+.btnOutline {
+  background: #fff;
+  color: #0078d4;
+  border-color: #0078d4;
+}
+.btnOutline:hover {
+  background: #eef3f8;
+}
+.btnSubtle {
+  background: #fff;
+  color: #1f1f1f;
+  border-color: #d2d0ce;
+}
+.btnSubtle:hover {
+  background: #f3f2f1;
+}
+.btnLink {
+  background: transparent;
+  color: #0078d4;
+  padding: 4px 6px;
+  border: 0;
+}
+.btnLink:hover {
+  text-decoration: underline;
+}
+.btnDanger {
+  background: #d13438;
+  color: #fff;
+  border-color: #d13438;
+}
+.btnDanger:hover {
+  background: #a4262c;
+}
+
+/* ===================== TOOLBAR ===================== */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f3f2f1;
+  flex-wrap: wrap;
+}
+.tbSpacer {
+  flex: 1;
+}
+
+/* ===================== TABS ===================== */
+.tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #e1dfdd;
+  margin: 8px 0 14px 0;
+}
+.tab {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 13.5px;
+  color: #605e5c;
+  font-family: inherit;
+}
+.tab:hover {
+  color: #0078d4;
+}
+.tabActive {
+  color: #0078d4;
+  border-bottom-color: #0078d4;
+  font-weight: 600;
+}
+
+/* Compact pill-style sub-tab switcher (no direct source class — added for
+   parity with the Purview/Sentinel `SubTabBar` convention; styled to match
+   `.saved-q` pill vocabulary already present in source). */
+.subTabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0 14px 0;
+}
+.subTab {
+  background: #f3f2f1;
+  color: #1f1f1f;
+  border: 0;
+  padding: 4px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-family: inherit;
+}
+.subTab:hover {
+  background: #ebebeb;
+}
+.subTabActive {
+  background: #eef3f8;
+  color: #0078d4;
+  font-weight: 600;
+}
+
+/* ===================== TABLES ===================== */
+.tableWrap {
+  background: #fff;
+  border: 1px solid #e1dfdd;
+  border-radius: 2px;
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.table thead th {
+  text-align: left;
+  background: #f9f8f7;
+  color: #605e5c;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e1dfdd;
+  white-space: nowrap;
+}
+.table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f3f2f1;
+}
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.tableClickable tbody tr {
+  cursor: pointer;
+}
+.tableClickable tbody tr:hover {
+  background: #f3f2f1;
+}
+.tableSmall {
+  font-size: 12.5px;
+}
+
+/* ===================== FORM CONTROLS ===================== */
+.input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #d2d0ce;
+  border-radius: 2px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+  outline: none;
+  color: #1f1f1f;
+}
+.input:focus {
+  border-color: #0078d4;
+}
+textarea.input {
+  resize: vertical;
+  min-height: 60px;
+  font-family: inherit;
+}
+
+.formRow {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 12px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+.formRow label {
+  color: #1f1f1f;
+  font-size: 13px;
+  font-weight: 500;
+}
+.select {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #d2d0ce;
+  border-radius: 2px;
+  font-family: inherit;
+  font-size: 13px;
+  background: #fff;
+}
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+  cursor: pointer;
+}
+.checkboxRow input {
+  cursor: pointer;
+}
+.checklist {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+}
+
+.filterBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 12px;
+  padding: 8px 0;
+}
+.filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #605e5c;
+}
+.filter select {
+  padding: 4px 8px;
+  border: 1px solid #d2d0ce;
+  border-radius: 2px;
+  font-family: inherit;
+  font-size: 13px;
+  background: #fff;
+}
+
+/* ===================== STATE BADGES ===================== */
+.statePill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.6;
+  border: 1px solid transparent;
+}
+.stateNew {
+  background: #f3f2f1;
+  color: #323130;
+  border-color: #d2d0ce;
+}
+.stateActive {
+  background: #fff4ce;
+  color: #835400;
+  border-color: #f9d77a;
+}
+.stateResolved {
+  background: #cfe4fa;
+  color: #004578;
+  border-color: #71afe5;
+}
+.stateDone {
+  background: #dff6dd;
+  color: #0e660e;
+  border-color: #92c5a3;
+}
+.stateRejected {
+  background: #fde7e9;
+  color: #a4262c;
+  border-color: #f3aaa3;
+}
+.stateDefault {
+  background: #f3f2f1;
+  color: #323130;
+  border-color: #d2d0ce;
+}
+
+.badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #eef3f8;
+  color: #0078d4;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 4px;
+}
+.tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 2px;
+  background: #f3f2f1;
+  color: #1f1f1f;
+  font-size: 11px;
+  margin-right: 2px;
+}
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #c8e6ff;
+  color: #003a6b;
+  font-size: 10px;
+  font-weight: 700;
+  margin-right: 4px;
+}
+.wiIco {
+  font-weight: 700;
+  margin-right: 2px;
+}
+
+/* ===================== CARDS ===================== */
+.card {
+  background: #fff;
+  border: 1px solid #e1dfdd;
+  border-radius: 4px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.cardH {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #1f1f1f;
+  margin-bottom: 10px;
+}
+.row {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f3f2f1;
+}
+.row:last-child {
+  border-bottom: 0;
+}
+.row .lbl {
+  color: #605e5c;
+  font-size: 13px;
+}
+
+/* ===================== MODAL ===================== */
+.modalMask {
+  display: flex;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+}
+.modal {
+  width: 600px;
+  max-width: 96vw;
+  max-height: 92vh;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modalHeader {
+  display: flex;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid #e1dfdd;
+  background: #fafafa;
+}
+.modalHeader h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f1f1f;
+  flex: 1;
+}
+.modalClose {
+  background: transparent;
+  border: 0;
+  font-size: 22px;
+  cursor: pointer;
+  color: #605e5c;
+}
+.modalBody {
+  padding: 18px;
+  overflow-y: auto;
+  flex: 1;
+}
+.modalFooter {
+  padding: 12px 18px;
+  border-top: 1px solid #e1dfdd;
+  background: #fafafa;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ===================== TOASTS ===================== */
+.toastContainer {
+  position: fixed;
+  bottom: 26px;
+  right: 26px;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.toast {
+  background: #1f1f1f;
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 3px;
+  font-size: 13px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+  max-width: 360px;
+}
+.toastSuccess {
+  background: #107c10;
+}
+.toastError {
+  background: #a4262c;
+}
+.toastInfo {
+  background: #0078d4;
+}
+
+/* ===================== ORG / PROJECT SWITCHER ===================== */
+.switcherRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid #e1dfdd;
+  border-radius: 3px;
+  cursor: pointer;
+  margin-bottom: 6px;
+}
+.switcherRow:hover {
+  background: #f3f2f1;
+}
+.switcherRowActive {
+  border-color: #0078d4;
+  background: #eef3f8;
+}
+.switcherRow .swIcon {
+  width: 32px;
+  height: 32px;
+  background: #0078d4;
+  color: #fff;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+.swIconProj {
+  background: #50b0d4;
+}
+.switcherRow .swTitle {
+  font-weight: 600;
+  color: #1f1f1f;
+}
+.switcherRow .swSub {
+  font-size: 12px;
+  color: #605e5c;
+  margin-top: 1px;
+}
+
+/* ===================== BACK LINK ===================== */
+.backHome {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  z-index: 400;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #d2d0ce;
+  color: #0078d4;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 12.5px;
+  text-decoration: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+.backHome:hover {
+  background: #eef3f8;
+  text-decoration: none;
+}
+.backHome svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ===================== WORK ITEM DETAIL ===================== */
+.wiGrid {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 16px;
+}
+.wiField {
+  margin-bottom: 14px;
+}
+.wiField label {
+  display: block;
+  color: #605e5c;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  letter-spacing: 0.3px;
+}
+.wiText {
+  background: #fafafa;
+  border: 1px solid #e1dfdd;
+  padding: 8px 10px;
+  border-radius: 2px;
+  color: #1f1f1f;
+  line-height: 1.45;
+}
+.wiPre {
+  background: #fafafa;
+  border: 1px solid #e1dfdd;
+  padding: 8px 10px;
+  border-radius: 2px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12.5px;
+  color: #1f1f1f;
+  white-space: pre-wrap;
+}
+.wiComment {
+  padding: 8px 0;
+  border-bottom: 1px solid #f3f2f1;
+}
+.wiComment .cmH {
+  font-size: 12.5px;
+  color: #605e5c;
+  margin-bottom: 4px;
+}
+.wiComment .cmB {
+  color: #1f1f1f;
+}
+
+/* ===================== KANBAN ===================== */
+.sprintBanner {
+  background: #eef3f8;
+  border-left: 3px solid #0078d4;
+  padding: 12px 14px;
+  border-radius: 2px;
+  margin-bottom: 14px;
+  color: #1f1f1f;
+}
+.progress {
+  background: #e1dfdd;
+  height: 6px;
+  border-radius: 3px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+.progressWide {
+  width: 100%;
+}
+.progressFill {
+  background: #0078d4;
+  height: 100%;
+}
+.capacityBar .progress {
+  margin-top: 8px;
+}
+
+.kanban {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 8px;
+}
+.kanbanCol {
+  background: #f5f5f5;
+  border: 1px solid #e1dfdd;
+  border-radius: 3px;
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+}
+.kanbanCol .kbH {
+  padding: 8px 12px;
+  background: #fff;
+  border-bottom: 1px solid #e1dfdd;
+  font-weight: 600;
+  font-size: 13px;
+  color: #1f1f1f;
+  display: flex;
+  justify-content: space-between;
+}
+.kanbanCol .kbCount {
+  background: #eef3f8;
+  color: #0078d4;
+  border-radius: 10px;
+  font-size: 11px;
+  padding: 1px 8px;
+}
+.kanbanCol .kbBody {
+  padding: 8px;
+  flex: 1;
+  min-height: 100px;
+}
+.kbEmpty {
+  color: #a19f9d;
+  font-size: 12px;
+  text-align: center;
+  padding: 20px 0;
+}
+
+.cardMini {
+  background: #fff;
+  border: 1px solid #e1dfdd;
+  border-left: 3px solid #0078d4;
+  border-radius: 2px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  cursor: grab;
+  font-size: 12.5px;
+}
+.cardMini:hover {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.cardMini .cmId {
+  color: #605e5c;
+  font-size: 11.5px;
+  margin-bottom: 2px;
+}
+.cardMini .cmTitle {
+  color: #1f1f1f;
+  font-weight: 500;
+  line-height: 1.3;
+  margin-bottom: 6px;
+}
+.cardMini .cmMeta {
+  display: flex;
+  align-items: center;
+}
+.cardMini .cmSp {
+  background: #eef3f8;
+  color: #0078d4;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+/* ===================== BACKLOG / DELIVERY PLANS ===================== */
+.backlogTable tbody tr {
+  cursor: pointer;
+}
+.backlogTable tbody tr:hover {
+  background: #f3f2f1;
+}
+
+.planTable thead th {
+  background: #fafafa;
+  min-width: 130px;
+}
+.planTable td.planTeam {
+  background: #fafafa;
+  font-weight: 600;
+  color: #1f1f1f;
+  min-width: 240px;
+}
+.planBar {
+  background: #0078d4;
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 2px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ===================== QUERIES ===================== */
+.queryRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.queryRow .lbl {
+  color: #605e5c;
+  font-size: 12.5px;
+}
+.queryRow select {
+  padding: 4px 8px;
+  border: 1px solid #d2d0ce;
+  border-radius: 2px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 13px;
+}
+.savedList {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.savedQ {
+  background: #eef3f8;
+  color: #0078d4;
+  padding: 4px 10px;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+/* ===================== CHART FAKE ===================== */
+.fakeChart {
+  background: #fff;
+  border: 1px solid #e1dfdd;
+  border-radius: 3px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.barRow {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  height: 140px;
+  border-bottom: 1px solid #d2d0ce;
+  padding-bottom: 4px;
+}
+.barCol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  position: relative;
+}
+.barColHasIdeal {
+  flex-direction: row;
+  align-items: flex-end;
+}
+.bar {
+  width: 30px;
+  background: #0078d4;
+  border-top-left-radius: 2px;
+  border-top-right-radius: 2px;
+}
+.barIdeal {
+  background: #c8c6c4;
+  width: 12px;
+  margin-right: 2px;
+}
+.barActual {
+  background: #0078d4;
+  width: 12px;
+}
+.barLabel {
+  font-size: 11px;
+  color: #605e5c;
+  margin-top: 4px;
+}
+.chartLegend {
+  font-size: 12px;
+  color: #605e5c;
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.lgIdeal,
+.lgActual {
+  display: inline-block;
+  width: 12px;
+  height: 8px;
+}
+.lgIdeal {
+  background: #c8c6c4;
+}
+.lgActual {
+  background: #0078d4;
+}
+
+/* ===================== REPOS — FILE TREE ===================== */
+.repoSwitcher {
+  background: #fafafa;
+  border: 1px solid #e1dfdd;
+  border-radius: 2px;
+  padding: 8px 10px;
+  margin-bottom: 14px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.repoSwitcher select {
+  padding: 4px 8px;
+  border: 1px solid #d2d0ce;
+  border-radius: 2px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 13px;
+}
+.repoSwitcher .repoMeta {
+  color: #605e5c;
+  font-size: 12.5px;
+}
+
+.repoGrid {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 14px;
+  border: 1px solid #e1dfdd;
+  border-radius: 3px;
+  background: #fff;
+  min-height: 400px;
+}
+.fileTree {
+  border-right: 1px solid #e1dfdd;
+  padding: 10px;
+  background: #fafafa;
+  overflow: auto;
+}
+.fileTree .treeH {
+  font-weight: 600;
+  color: #0078d4;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e1dfdd;
+  margin-bottom: 6px;
+}
+.treeList {
+  list-style: none;
+  padding-left: 12px;
+  margin: 0;
+}
+.treeFolder,
+.treeFile {
+  padding: 3px 4px;
+  border-radius: 2px;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+.treeFolder {
+  color: #835400;
+}
+.treeFile {
+  color: #1f1f1f;
+}
+.treeFile:hover,
+.treeFolder:hover {
+  background: #ebebeb;
+}
+.treeFileActive {
+  background: #eef3f8;
+  color: #0078d4;
+  font-weight: 600;
+}
+.treeIcon {
+  margin-right: 4px;
+}
+
+.fileViewer {
+  padding: 10px;
+  overflow: auto;
+}
+.fileHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #e1dfdd;
+  font-size: 13px;
+}
+.fileActions {
+  display: inline-flex;
+  gap: 6px;
+}
+.codeBlock {
+  background: #fafafa;
+  border: 1px solid #e1dfdd;
+  border-radius: 2px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  overflow-x: auto;
+}
+.codeLine {
+  display: flex;
+  padding: 0 6px;
+}
+.codeLine:hover {
+  background: #ebebeb;
+}
+.codeLine .ln {
+  color: #c8c6c4;
+  width: 36px;
+  text-align: right;
+  margin-right: 12px;
+  user-select: none;
+}
+.codeLine .lc {
+  color: #1f1f1f;
+  white-space: pre;
+}
+
+/* ===================== DIFF / COMMITS ===================== */
+.diffAdd {
+  color: #107c10;
+}
+.diffDel {
+  color: #d13438;
+}
+.diffFile {
+  border: 1px solid #e1dfdd;
+  border-radius: 2px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12.5px;
+}
+.diffFileH {
+  background: #fafafa;
+  padding: 6px 10px;
+  border-bottom: 1px solid #e1dfdd;
+  font-weight: 600;
+  color: #1f1f1f;
+}
+.diffRow {
+  display: grid;
+  grid-template-columns: 40px 40px 1fr;
+  padding: 1px 0;
+}
+.diffRowAdd {
+  background: #e6ffed;
+}
+.diffRowDel {
+  background: #ffeef0;
+}
+.lnOld,
+.lnNew {
+  color: #a19f9d;
+  text-align: right;
+  padding-right: 8px;
+  user-select: none;
+}
+.diffLine {
+  white-space: pre;
+  padding-left: 6px;
+}
+
+.commitMeta {
+  color: #605e5c;
+  font-size: 13px;
+}
+
+/* ===================== PIPELINES ===================== */
+.statusDot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.plH {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  color: #605e5c;
+  font-size: 13px;
+}
+.npGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.npTile {
+  border: 1px solid #d2d0ce;
+  border-radius: 3px;
+  padding: 12px;
+  cursor: pointer;
+}
+.npTile:hover {
+  border-color: #0078d4;
+}
+.npTitle {
+  font-weight: 600;
+  color: #0078d4;
+}
+.npSub {
+  font-size: 12px;
+  color: #605e5c;
+}
+
+.yamlEditor {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 10px;
+  border-radius: 2px;
+  overflow-x: auto;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12.5px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.yamlEditor pre {
+  white-space: pre;
+  color: #d4d4d4;
+}
+.yamlHint {
+  color: #605e5c;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.stageGraph {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.stageNode {
+  background: #eef3f8;
+  border: 1px solid #0078d4;
+  color: #0078d4;
+  padding: 8px 14px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.stageArrow {
+  color: #605e5c;
+  font-size: 18px;
+}
+
+.runH {
+  background: #fafafa;
+  border: 1px solid #e1dfdd;
+  border-radius: 2px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+}
+.stageTimeline {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.stageStep {
+  flex: 1;
+  min-width: 130px;
+  background: #fafafa;
+  border: 1px solid #e1dfdd;
+  border-radius: 2px;
+  padding: 8px 12px;
+}
+.stageStepOk {
+  border-left: 3px solid #107c10;
+}
+.stageStepFail {
+  border-left: 3px solid #d13438;
+}
+.stageStepCancel {
+  border-left: 3px solid #605e5c;
+}
+.stageStep .ssDot {
+  font-weight: 700;
+  color: #107c10;
+}
+.stageStepFail .ssDot {
+  color: #d13438;
+}
+.stageStepCancel .ssDot {
+  color: #605e5c;
+}
+.stageStep .ssName {
+  font-weight: 600;
+}
+.stageStep .ssStatus {
+  font-size: 12px;
+  color: #605e5c;
+}
+
+.runSummaryRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 12px 0;
+}
+.miniCard {
+  padding: 12px;
+  text-align: center;
+}
+.miniCard .mcVal {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0078d4;
+}
+.miniCard .mcLbl {
+  font-size: 12px;
+  color: #605e5c;
+}
+
+.jobLog {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border-radius: 2px;
+  padding: 10px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-x: auto;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.relPipeline {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.relStage {
+  background: #fafafa;
+  border: 1px solid #e1dfdd;
+  border-radius: 3px;
+  padding: 12px;
+  min-width: 180px;
+  flex: 1;
+}
+.relStageSucceeded {
+  border-left: 3px solid #107c10;
+}
+.relStageFailed {
+  border-left: 3px solid #d13438;
+}
+.relStagePending {
+  border-left: 3px solid #605e5c;
+}
+.relStage .rsName {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.relStage .rsStatus {
+  font-size: 12.5px;
+}
+.relStage .rsGates {
+  font-size: 11.5px;
+  color: #605e5c;
+  margin-top: 4px;
+}
+.relArrow {
+  color: #605e5c;
+  font-size: 18px;
+}
+
+/* ===================== TEST PLANS ===================== */
+.tpGrid {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 14px;
+  border: 1px solid #e1dfdd;
+  border-radius: 3px;
+  background: #fff;
+  min-height: 400px;
+}
+.tpTree {
+  padding: 10px;
+  border-right: 1px solid #e1dfdd;
+  background: #fafafa;
+  overflow: auto;
+}
+.tpPlan {
+  padding: 6px 4px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+.tpPlan:hover {
+  background: #ebebeb;
+}
+.tpPlanActive {
+  background: #eef3f8;
+}
+.tpPlanName {
+  font-weight: 600;
+  color: #1f1f1f;
+}
+.tpSuiteList {
+  margin-left: 14px;
+  margin-top: 4px;
+}
+.tpSuite {
+  padding: 3px 4px;
+  cursor: pointer;
+  border-radius: 2px;
+  font-size: 12.5px;
+  color: #1f1f1f;
+}
+.tpSuite:hover {
+  background: #ebebeb;
+}
+.tpSuiteActive {
+  background: #fff;
+  color: #0078d4;
+  font-weight: 600;
+}
+.tpCount {
+  color: #605e5c;
+}
+.tpDetail {
+  padding: 12px 16px;
+  overflow: auto;
+}
+
+/* ===================== ARTIFACTS ===================== */
+.afGrid {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 14px;
+  border: 1px solid #e1dfdd;
+  border-radius: 3px;
+  background: #fff;
+  min-height: 380px;
+}
+.afTree {
+  padding: 10px;
+  border-right: 1px solid #e1dfdd;
+  background: #fafafa;
+}
+.afDetail {
+  padding: 12px 16px;
+  overflow: auto;
+}
+.afFeed {
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+.afFeed:hover {
+  background: #ebebeb;
+}
+.afFeedActive {
+  background: #eef3f8;
+}
+.afFeedName {
+  font-weight: 600;
+  color: #1f1f1f;
+}
+.afFeedType {
+  font-size: 12px;
+  color: #605e5c;
+}
+
+.snipH {
+  font-weight: 600;
+  font-size: 13px;
+  margin: 10px 0 4px 0;
+  color: #1f1f1f;
+}
+.snip {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 10px;
+  border-radius: 2px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12.5px;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* ===================== PR DETAIL ===================== */
+.prH {
+  display: flex;
+  justify-content: space-between;
+  background: #fafafa;
+  border: 1px solid #e1dfdd;
+  padding: 8px 12px;
+  border-radius: 2px;
+  margin-bottom: 8px;
+  color: #605e5c;
+  font-size: 13px;
+}
+.prDesc {
+  background: #fafafa;
+  padding: 10px 12px;
+  border: 1px solid #e1dfdd;
+  border-radius: 2px;
+  margin-bottom: 12px;
+}
+.prActivity {
+  list-style: none;
+  padding-left: 0;
+}
+.prActivity li {
+  padding: 6px 0;
+  border-bottom: 1px solid #f3f2f1;
+}
+
+/* ===================== PROJECT SETTINGS ===================== */
+.page {
+  padding-bottom: 60px;
+}
+
+/* ===================== RESPONSIVE ===================== */
+@media (max-width: 1200px) {
+  .repoGrid,
+  .tpGrid,
+  .afGrid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 720px) {
+  .kanban {
+    grid-template-columns: 1fr 1fr;
+  }
+  .formRow {
+    grid-template-columns: 1fr;
+  }
+  .tbSearch {
+    width: 220px;
+  }
+}

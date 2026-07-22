@@ -35,6 +35,7 @@ import {
   Play,
   RefreshCw,
 } from "lucide-react";
+import { isAdminRole, type Role } from "@/lib/rbac";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -132,20 +133,24 @@ export default function ResultsEvaluationPage() {
     }
   };
 
-  // Redirect if not devAdmin
+  // Redirect non-admins. Only act once the session is fully resolved
+  // (authenticated + role present) to avoid a false denial while role is
+  // briefly undefined. Server-side proxy + requireAdminPage() are the real
+  // gate; this is UX. isAdminRole → executive and future admin roles allowed.
   useEffect(() => {
-    if (status === "loading") {
-      return;
-    }
-
-    if (session?.user?.role !== "devAdmin") {
+    if (status !== "authenticated") return;
+    const role = session?.user?.role;
+    if (role && !isAdminRole(role as Role)) {
       router.push("/dashboard");
-      toast.error("Access denied. devAdmin role required.");
+      toast.error("Access denied. Administrator role required.");
     }
   }, [session, status, router]);
 
   const fetchSessions = useCallback(async () => {
-    if (status !== "authenticated" || session?.user?.role !== "devAdmin") {
+    if (
+      status !== "authenticated" ||
+      !isAdminRole((session?.user?.role ?? null) as Role | null)
+    ) {
       return;
     }
 

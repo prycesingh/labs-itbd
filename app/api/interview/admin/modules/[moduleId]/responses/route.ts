@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { db } from "@/DB/drizzle";
 import { interviewModules } from "@/DB/interviewSchema";
 import { deleteModuleResponses } from "@/lib/interview/moduleCleanup";
+import { isAdminRole, type Role } from "@/lib/rbac";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -16,7 +17,7 @@ export async function DELETE(
   try {
     const session = await auth();
 
-    if (!["devAdmin", "adminTeam"].includes(session?.user?.role ?? "user")) {
+    if (!isAdminRole(session?.user?.role as Role | undefined)) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 

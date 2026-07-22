@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { db } from "@/DB/drizzle";
 import { candidateInterviewSessions } from "@/DB/interviewSchema";
+import { isAdminRole, type Role } from "@/lib/rbac";
 import { initializeBackgroundJobs } from "@/lib/backgroundJobHandlers";
 import {
   getSessionProcessingStatus,
@@ -55,8 +56,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const role = session.user.role ?? "user";
-      const isAdmin = ["devAdmin", "adminTeam", "executive"].includes(role);
+      const isAdmin = isAdminRole(session.user.role as Role | undefined);
       const isOwner = sessionRow.candidateId === session.user.id;
 
       if (!isAdmin && !isOwner) {
@@ -102,8 +102,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const role = session.user.role ?? "user";
-      const isAdmin = ["devAdmin", "adminTeam", "executive"].includes(role);
+      const isAdmin = isAdminRole(session.user.role as Role | undefined);
       const isOwner = sessionRow.candidateId === session.user.id;
 
       if (!isAdmin && !isOwner) {

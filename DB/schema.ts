@@ -48,7 +48,14 @@ export const users = mysqlTable(
       .default("user")
       .notNull(),
     username: varchar({ length: 50 }),
-    password: varchar({ length: 50 }),
+    // Break-glass credential login: holds a bcrypt hash (60 chars) for admins
+    // who need to bypass SSO. Null for the SSO-only majority. Widened from
+    // varchar(50) — a bcrypt hash does not fit in 50 chars. Never store
+    // plaintext here. See the Credentials provider in auth.config.ts.
+    password: varchar({ length: 255 }),
+    // When true, the user was given a temporary password by a superadmin and
+    // must change it on their next credential login before proceeding.
+    mustChangePassword: int().default(0).notNull(),
     // Bumped whenever an admin changes this user's role (or otherwise needs to
     // force re-authentication). The auth jwt callback compares the value baked
     // into the user's cookie against this column and invalidates the session

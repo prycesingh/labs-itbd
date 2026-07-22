@@ -21,6 +21,18 @@ export default async function Home() {
     await signIn("microsoft-entra-id", { redirectTo: "/dashboard" });
   }
 
+  // Break-glass admin credential login (bypasses SSO). Only succeeds for a user
+  // whose `users` row has a bcrypt password hash provisioned via the admin
+  // bootstrap script; SSO-only users can never authenticate here.
+  async function signInWithCredentials(username: string, password: string) {
+    "use server";
+    await signIn("credentials", {
+      username,
+      password,
+      redirectTo: "/dashboard",
+    });
+  }
+
   return (
     <main className="itbd-login-bg grid min-h-dvh grid-rows-[1fr_auto] text-white md:h-(--vh100,100dvh) md:min-h-0 md:overflow-hidden">
       <ViewportHeightFix />
@@ -76,6 +88,7 @@ export default async function Home() {
               description="Practice with 13+ industry-standard simulators including Azure, Microsoft 365, Active Directory and more."
               accent="blue"
               className="flex-1"
+              href="/dashboard/labs"
             />
             <LabCard
               icon="communication"
@@ -88,7 +101,10 @@ export default async function Home() {
           {/* login panel — right column, spans all row bands but the card
               itself stays content-sized and vertically centered (not stretched) */}
           <div className="md:col-start-4 md:row-span-3 md:row-start-1">
-            <LoginCard signInAction={signInWithMicrosoft} />
+            <LoginCard
+              signInAction={signInWithMicrosoft}
+              onAdminSubmit={signInWithCredentials}
+            />
           </div>
         </div>
       </div>

@@ -13,6 +13,7 @@ import {
   resolveAbsolutePath,
   saveUpload,
 } from "@/lib/uploads";
+import { isAdminRole, type Role } from "@/lib/rbac";
 import { updateBankQuestionSchema } from "@/lib/validation/interview";
 import { count, eq, sql } from "drizzle-orm";
 import fs from "node:fs/promises";
@@ -55,7 +56,7 @@ export async function GET(
 ) {
   try {
     const session = await auth();
-    if (!["devAdmin", "adminTeam"].includes(session?.user?.role ?? "user")) {
+    if (!isAdminRole(session?.user?.role as Role | undefined)) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -158,7 +159,7 @@ export async function PATCH(
 ) {
   try {
     const session = await auth();
-    if (!["devAdmin", "adminTeam"].includes(session?.user?.role ?? "user")) {
+    if (!isAdminRole(session?.user?.role as Role | undefined)) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -260,7 +261,7 @@ export async function DELETE(
 ) {
   try {
     const session = await auth();
-    if (!["devAdmin", "adminTeam"].includes(session?.user?.role ?? "user")) {
+    if (!isAdminRole(session?.user?.role as Role | undefined)) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 

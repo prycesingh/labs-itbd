@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { db } from "@/DB/drizzle";
 import { interviewQuestions } from "@/DB/interviewSchema";
 import { transcribeAudio } from "@/lib/interview/aiServices";
+import { isAdminRole, type Role } from "@/lib/rbac";
 import {
   buildDownloadUrl,
   extractId,
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
   try {
     const session = await auth();
 
-    if (!["devAdmin", "adminTeam"].includes(session?.user?.role ?? "user")) {
+    if (!isAdminRole(session?.user?.role as Role | undefined)) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -176,7 +177,7 @@ export async function GET(request: Request) {
   try {
     const session = await auth();
 
-    if (!["devAdmin", "adminTeam"].includes(session?.user?.role ?? "user")) {
+    if (!isAdminRole(session?.user?.role as Role | undefined)) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -214,7 +215,7 @@ export async function DELETE(request: Request) {
   try {
     const session = await auth();
 
-    if (!["devAdmin", "adminTeam"].includes(session?.user?.role ?? "user")) {
+    if (!isAdminRole(session?.user?.role as Role | undefined)) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -250,7 +251,7 @@ export async function PATCH(request: Request) {
   try {
     const session = await auth();
 
-    if (!["devAdmin", "adminTeam"].includes(session?.user?.role ?? "user")) {
+    if (!isAdminRole(session?.user?.role as Role | undefined)) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 

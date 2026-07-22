@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { db } from "@/DB/drizzle";
 import { interviewQuestionStandardResponses } from "@/DB/interviewSchema";
+import { isAdminRole, type Role } from "@/lib/rbac";
 import { updateStandardResponseSchema } from "@/lib/validation/interview";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -16,7 +17,7 @@ export async function DELETE(
   try {
     const session = await auth();
 
-    if (!["devAdmin", "adminTeam"].includes(session?.user?.role ?? "user")) {
+    if (!isAdminRole(session?.user?.role as Role | undefined)) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -58,7 +59,7 @@ export async function PATCH(
 ) {
   try {
     const session = await auth();
-    if (!["devAdmin", "adminTeam"].includes(session?.user?.role ?? "user")) {
+    if (!isAdminRole(session?.user?.role as Role | undefined)) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 

@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { db } from "@/DB/drizzle";
+import { isAdminRole, type Role } from "@/lib/rbac";
 import {
   adminInterviewEvaluations,
   aiInterviewEvaluations,
@@ -207,8 +208,7 @@ export async function GET(request: NextRequest) {
   const userId = request.nextUrl.searchParams.get("userId");
 
   if (userId) {
-    const role = session.user.role ?? "user";
-    const isAdmin = ["devAdmin", "adminTeam", "executive"].includes(role);
+    const isAdmin = isAdminRole(session.user.role as Role | undefined);
 
     if (!isAdmin && userId !== session.user.id) {
       return NextResponse.json(

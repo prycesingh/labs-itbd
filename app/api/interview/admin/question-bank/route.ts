@@ -11,6 +11,7 @@ import {
   resolveAbsolutePath,
   saveUpload,
 } from "@/lib/uploads";
+import { isAdminRole, type Role } from "@/lib/rbac";
 import { createBankQuestionSchema } from "@/lib/validation/interview";
 import { count, eq, ilike, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -49,7 +50,7 @@ async function transcribeBankQuestionAudio(
 export async function GET(request: Request) {
   try {
     const session = await auth();
-    if (!["devAdmin", "adminTeam"].includes(session?.user?.role ?? "user")) {
+    if (!isAdminRole(session?.user?.role as Role | undefined)) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -135,7 +136,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const session = await auth();
-    if (!["devAdmin", "adminTeam"].includes(session?.user?.role ?? "user")) {
+    if (!isAdminRole(session?.user?.role as Role | undefined)) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 

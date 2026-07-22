@@ -1,0 +1,1020 @@
+/*
+ * Cisco Meraki cloud dashboard (dashboard.meraki.com) visual chrome —
+ * deliberately bypasses the app's ITBD brand tokens. Meraki is its own
+ * dedicated `mer-*` design system in the source simulator (dark navy topbar,
+ * light-grey canvas, white/light-grey grouped collapsible sidebar, green
+ * accents matching real dashboard.meraki.com chrome), ported here from
+ * itbd-lab/simulators/meraki/css/meraki.css (569 lines) — NOT reused from any
+ * other already-ported simulator's CSS module. Fidelity to the real product
+ * is the point of a simulator; CSS Modules keep these class names scoped so
+ * nothing here leaks into the rest of the app.
+ *
+ * Naming convention: source `mer-foo-bar` classes are ported to camelCase
+ * (`.fooBar`) — e.g. `.mer-topbar` -> `.topbar`, `.mer-rail-item` -> `.railItem`,
+ * `.mer-tile-v` -> `.tileV`, `.mer-modal-back` -> `.modalBack`. Compound/
+ * stateful source classes that were combined via multiple class names in HTML
+ * (e.g. `mer-rail-item active`, `mer-rail-items collapsed`, `mer-pill ok`,
+ * `mer-toast show ok`, `mer-port up`) are exposed here as distinct single
+ * classes to combine in JSX with template strings (e.g. `${styles.railItem}
+ * ${styles.railItemActive}`), matching the Power-Platform/Purview/Sentinel/
+ * Defender/Azure-DevOps-console.module.css convention.
+ *
+ * Page-building agents: reference classes via `styles.tile`, `styles.pillOk`,
+ * etc. — never hardcode `mer-*` strings, and never add visual styles beyond
+ * this module (only minor one-off `style={{}}` for layout, per meraki-ui.tsx).
+ * This is also the single source of truth for which Meraki classes exist —
+ * do NOT invent extra classes beyond what source has plus the minimal
+ * structural classes the shell/primitives need.
+ *
+ * CSS Modules "pure selector" rule: every bare global selector from source
+ * (`* {}`, `html, body {}`, `button {}`, `a {}`, `input, select, textarea {}`)
+ * has been rescoped under `.root` (via `:global()` where the source tag
+ * genuinely needs to style all descendants, e.g. `.root :global(a)`), since
+ * Next.js's build fails on any selector with zero local class/id.
+ */
+
+.root,
+.root * {
+  box-sizing: border-box;
+}
+
+.root {
+  --mer-navy: #1a3a52;
+  --mer-navy-2: #143042;
+  --mer-green: #5cb85c;
+  --mer-green-dk: #449d44;
+  --mer-bg: #f4f6f9;
+  --mer-white: #ffffff;
+  --mer-border: #dde2ea;
+  --mer-border-2: #c5ccd6;
+  --mer-text: #2b3138;
+  --mer-text-mut: #6b7785;
+  --mer-link: #2273c1;
+  --mer-rail-bg: #f7f9fc;
+  --mer-rail-hover: #eef2f8;
+  --mer-rail-active: #e2efe2;
+  --mer-amber: #f0ad4e;
+  --mer-red: #d9534f;
+  --mer-info: #5bc0de;
+  --mer-shadow: 0 1px 2px rgba(20, 40, 60, 0.08);
+  --mer-shadow-md: 0 4px 18px rgba(20, 40, 60, 0.18);
+
+  height: 100%;
+  background: var(--mer-bg);
+  color: var(--mer-text);
+  font-family: "Inter", "Helvetica Neue", "Segoe UI", Arial, sans-serif;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+}
+
+.root :global(button) {
+  font: inherit;
+  cursor: pointer;
+  border: 0;
+  background: none;
+  color: inherit;
+}
+.root :global(a) {
+  color: var(--mer-link);
+  text-decoration: none;
+}
+.root :global(a:hover) {
+  text-decoration: underline;
+}
+.root :global(input),
+.root :global(select),
+.root :global(textarea) {
+  font: inherit;
+  color: var(--mer-text);
+}
+
+/* ===== top bar ===== */
+.topbar {
+  height: 52px;
+  background: var(--mer-navy);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 14px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
+  position: relative;
+  z-index: 50;
+  flex-shrink: 0;
+}
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 0.3px;
+}
+.logoMark {
+  width: 28px;
+  height: 28px;
+  background: var(--mer-green);
+  color: #0f2233;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-weight: 800;
+  font-size: 14px;
+}
+.topSel {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+  padding: 6px 10px;
+  min-width: 180px;
+  font-size: 12px;
+}
+.topSel:focus {
+  outline: 1px solid var(--mer-green);
+}
+.topSearch {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #fff;
+  border-radius: 4px;
+  padding: 7px 12px;
+  max-width: 380px;
+}
+.topSearch::placeholder {
+  color: #b6c4d2;
+}
+.topSpacer {
+  flex: 1;
+}
+.topRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.topIcon {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: #d6e2ec;
+  font-size: 16px;
+}
+.topIcon:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.admin {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 4px;
+}
+.adminAvatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--mer-green);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+/* ===== shell ===== */
+.shell {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.rail {
+  width: 252px;
+  flex: 0 0 252px;
+  background: var(--mer-rail-bg);
+  border-right: 1px solid var(--mer-border);
+  overflow-y: auto;
+  padding: 8px 0 60px 0;
+}
+.rail::-webkit-scrollbar {
+  width: 10px;
+}
+.rail::-webkit-scrollbar-thumb {
+  background: #c9d3df;
+  border-radius: 4px;
+}
+
+.railGroup {
+  border-bottom: 1px solid var(--mer-border);
+}
+.railGrpHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 14px;
+  background: #eef2f8;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #4d6276;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  user-select: none;
+  width: 100%;
+  text-align: left;
+}
+.railGrpHead:hover {
+  background: #e4ebf5;
+}
+.grpCaret {
+  font-size: 11px;
+  color: #6b7785;
+}
+.railItems {
+  display: block;
+}
+.railItemsCollapsed {
+  display: none;
+}
+.railItem {
+  display: flex;
+  align-items: center;
+  padding: 7px 14px 7px 28px;
+  color: var(--mer-text);
+  font-size: 12.5px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  width: 100%;
+  text-align: left;
+}
+.railItem:hover {
+  background: var(--mer-rail-hover);
+}
+.railItemActive {
+  background: var(--mer-rail-active);
+  color: #0f5c0f;
+  font-weight: 600;
+  border-left-color: var(--mer-green);
+}
+
+/* ===== main area ===== */
+.main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 26px 60px 26px;
+  background: var(--mer-bg);
+}
+.crumb {
+  color: var(--mer-text-mut);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.crumb b {
+  color: var(--mer-text);
+}
+.pageH {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #1d2733;
+}
+.pageSub {
+  color: var(--mer-text-mut);
+  margin-bottom: 14px;
+}
+
+/* ===== cards / tiles ===== */
+.card {
+  background: var(--mer-white);
+  border: 1px solid var(--mer-border);
+  border-radius: 6px;
+  box-shadow: var(--mer-shadow);
+  margin-bottom: 16px;
+}
+.cardH {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--mer-border);
+  background: #f7f9fc;
+  font-weight: 600;
+  color: #2b3138;
+  border-radius: 6px 6px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.cardB {
+  padding: 14px;
+}
+.cardBDense {
+  padding: 0;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.tile {
+  background: var(--mer-white);
+  border: 1px solid var(--mer-border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  box-shadow: var(--mer-shadow);
+}
+.tileL {
+  font-size: 11px;
+  color: var(--mer-text-mut);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.tileV {
+  font-size: 24px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+.tileS {
+  font-size: 11px;
+  color: var(--mer-text-mut);
+  margin-top: 4px;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.grid3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+/* ===== tables ===== */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.table thead th {
+  background: #f1f4f9;
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--mer-border-2);
+  font-size: 11.5px;
+  color: #4d6276;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.table tbody td {
+  padding: 7px 10px;
+  border-bottom: 1px solid #eef1f5;
+}
+.table tbody tr:hover {
+  background: #f9fbfd;
+}
+.tableWrap {
+  overflow-x: auto;
+}
+.tableClickable tbody tr {
+  cursor: pointer;
+}
+.mono {
+  font-family: "Consolas", "Menlo", monospace;
+  font-size: 11.5px;
+}
+.rowLink {
+  color: var(--mer-link);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+}
+.rowLink:hover {
+  text-decoration: underline;
+}
+
+/* ===== status pills ===== */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid;
+}
+.pill .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.pillOk {
+  color: #1f7a1f;
+  background: #e7f5e7;
+  border-color: #c1e1c1;
+}
+.pillOk .dot {
+  background: var(--mer-green);
+}
+.pillWarn {
+  color: #8a5b00;
+  background: #fff4e0;
+  border-color: #f1d9aa;
+}
+.pillWarn .dot {
+  background: var(--mer-amber);
+}
+.pillCrit {
+  color: #a02923;
+  background: #fdebea;
+  border-color: #f3c2c0;
+}
+.pillCrit .dot {
+  background: var(--mer-red);
+}
+.pillInfo {
+  color: #1f6b85;
+  background: #e1f2f9;
+  border-color: #b5dcec;
+}
+.pillInfo .dot {
+  background: var(--mer-info);
+}
+.pillMuted {
+  color: #5f6b78;
+  background: #eef1f5;
+  border-color: #d4dae3;
+}
+.pillMuted .dot {
+  background: #95a1ae;
+}
+
+/* ===== buttons ===== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: #fff;
+  border: 1px solid var(--mer-border-2);
+  border-radius: 3px;
+  color: #2b3138;
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+}
+.btn:hover {
+  background: #f3f6fa;
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btnPrimary {
+  background: var(--mer-green);
+  border-color: var(--mer-green-dk);
+  color: #fff;
+}
+.btnPrimary:hover {
+  background: var(--mer-green-dk);
+}
+.btnDanger {
+  background: var(--mer-red);
+  border-color: #c64541;
+  color: #fff;
+}
+.btnSm {
+  padding: 3px 9px;
+  font-size: 11.5px;
+}
+
+.actbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.actbarLeft {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.actbarRight {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.input,
+.select,
+.textarea {
+  background: #fff;
+  border: 1px solid var(--mer-border-2);
+  border-radius: 3px;
+  padding: 5px 9px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--mer-text);
+}
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: 1px solid var(--mer-green);
+  border-color: var(--mer-green);
+}
+.textarea {
+  width: 100%;
+  min-height: 70px;
+  font-family: inherit;
+}
+.full {
+  width: 100%;
+}
+
+/* ===== modal ===== */
+.modalBack {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 40, 60, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+.modal {
+  background: #fff;
+  border-radius: 6px;
+  width: 720px;
+  max-width: 96vw;
+  max-height: 92vh;
+  overflow: auto;
+  box-shadow: var(--mer-shadow-md);
+  display: flex;
+  flex-direction: column;
+}
+.modalH {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--mer-border);
+  background: #f4f7fb;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modalClose {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7785;
+}
+.modalClose:hover {
+  background: #e7ebf1;
+  color: #2b3138;
+}
+.modalB {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+.modalF {
+  padding: 10px 16px;
+  border-top: 1px solid var(--mer-border);
+  background: #f4f7fb;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ===== flyout (slide-in side panel — structural addition beyond source,
+   which has no per-item detail panel; mirrors the Modal chrome so client/
+   AP/port/SSID detail views have a consistent place to live) ===== */
+.flyoutMask {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 40, 60, 0.5);
+  z-index: 200;
+}
+.flyout {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 760px;
+  max-width: 96vw;
+  height: 100vh;
+  background: #fff;
+  box-shadow: var(--mer-shadow-md);
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+}
+.flyoutHeader {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--mer-border);
+  background: #f4f7fb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.flyoutHeader h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1d2733;
+}
+.flyoutBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+.flyoutFooter {
+  padding: 10px 16px;
+  border-top: 1px solid var(--mer-border);
+  background: #f4f7fb;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ===== forms ===== */
+.formrow {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 12px;
+  margin-bottom: 10px;
+  align-items: start;
+}
+.formrow label {
+  color: var(--mer-text-mut);
+  padding-top: 6px;
+  font-size: 12px;
+}
+.formrow small {
+  color: var(--mer-text-mut);
+  display: block;
+  margin-top: 3px;
+  font-size: 11.5px;
+}
+.formGroup {
+  margin-bottom: 10px;
+}
+.formLabel {
+  display: block;
+  color: var(--mer-text-mut);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.formHelp {
+  color: var(--mer-text-mut);
+  display: block;
+  margin-top: 3px;
+  font-size: 11.5px;
+}
+
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--mer-border);
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.tab {
+  padding: 9px 16px;
+  color: var(--mer-text-mut);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  font-weight: 500;
+  background: transparent;
+  border-top: 0;
+  border-left: 0;
+  border-right: 0;
+  font-family: inherit;
+  font-size: 13px;
+}
+.tab:hover {
+  color: var(--mer-text);
+}
+.tabActive {
+  color: #0f5c0f;
+  border-bottom-color: var(--mer-green);
+  font-weight: 600;
+}
+
+/* Sub-tabs — structural addition beyond source (compact pill-style switcher
+   for in-page filter rows), matching every other ported suite's convention. */
+.subtabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  background: #fff;
+  border: 1px solid var(--mer-border);
+  border-radius: 4px;
+  padding: 4px;
+}
+.subtab {
+  background: transparent;
+  border: 0;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  color: var(--mer-text);
+  cursor: pointer;
+  border-radius: 3px;
+  font-family: inherit;
+}
+.subtab:hover {
+  background: var(--mer-rail-hover);
+}
+.subtabActive {
+  background: var(--mer-rail-active);
+  color: #0f5c0f;
+  font-weight: 600;
+}
+
+/* ===== toast ===== */
+.toast {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  background: #2b3138;
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 4px;
+  box-shadow: var(--mer-shadow-md);
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 300;
+}
+.toastShow {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.toastOk {
+  background: var(--mer-green-dk);
+}
+.toastWarn {
+  background: #c4892b;
+}
+.toastErr {
+  background: #a02923;
+}
+
+/* ===== bottom links ===== */
+.bottomLinks {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 36px;
+  background: #f1f4f9;
+  border-top: 1px solid var(--mer-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  font-size: 12px;
+  color: var(--mer-text-mut);
+  z-index: 40;
+}
+.bottomLinks a {
+  color: var(--mer-link);
+}
+
+/* ===== sparkline ===== */
+.spark {
+  display: inline-block;
+  width: 90px;
+  height: 22px;
+  vertical-align: middle;
+}
+
+/* ===== misc ===== */
+.mono2 {
+  font-family: "Consolas", "Menlo", monospace;
+  font-size: 11.5px;
+}
+.small {
+  font-size: 11.5px;
+  color: var(--mer-text-mut);
+}
+.mt8 {
+  margin-top: 8px;
+}
+.mt12 {
+  margin-top: 12px;
+}
+.mb8 {
+  margin-bottom: 8px;
+}
+.mb12 {
+  margin-bottom: 12px;
+}
+.flex {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.flexBetween {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.textR {
+  text-align: right;
+}
+.textC {
+  text-align: center;
+}
+.empty {
+  padding: 40px;
+  text-align: center;
+  color: var(--mer-text-mut);
+  background: #fff;
+  border: 1px dashed var(--mer-border-2);
+  border-radius: 6px;
+}
+
+/* ===== port grid (switch) ===== */
+.portgrid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 4px;
+  padding: 12px;
+  background: #2b3138;
+  border-radius: 4px;
+}
+.port {
+  background: #1d2733;
+  color: #aab4be;
+  text-align: center;
+  padding: 8px 0;
+  border-radius: 3px;
+  border: 1px solid #0e161e;
+  font-size: 10.5px;
+  cursor: pointer;
+  user-select: none;
+}
+.portUp {
+  background: #1d6b1d;
+  color: #d6f5d6;
+}
+.portUp:hover {
+  background: #2c8a2c;
+}
+.portDown {
+  background: #1d2733;
+  color: #738090;
+}
+.portDown:hover {
+  background: #283543;
+}
+.portPoeWarn {
+  background: #8a5b00;
+  color: #ffe5b3;
+}
+.portTrunk {
+  box-shadow: inset 0 0 0 2px #f0ad4e;
+}
+
+/* ===== bandwidth bar ===== */
+.bar {
+  height: 8px;
+  background: #eef1f5;
+  border-radius: 4px;
+  overflow: hidden;
+  width: 100%;
+}
+.bar > div {
+  height: 100%;
+  background: var(--mer-green);
+  border-radius: 4px;
+}
+.barWarn > div {
+  background: var(--mer-amber);
+}
+.barCrit > div {
+  background: var(--mer-red);
+}
+
+/* ===== topology svg ===== */
+.topo {
+  background: #fafbfd;
+  border: 1px solid var(--mer-border);
+  border-radius: 6px;
+  width: 100%;
+  height: 460px;
+}
+
+.help {
+  background: #f0f7fb;
+  border: 1px solid #b5dcec;
+  border-left: 4px solid var(--mer-info);
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #1f4a5e;
+  border-radius: 3px;
+  margin-bottom: 12px;
+}
+
+.sectionTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1d2733;
+  margin: 14px 0 8px 0;
+  border-bottom: 1px solid var(--mer-border);
+  padding-bottom: 5px;
+}
+
+/* ===== toggle switch ===== */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.toggle input {
+  appearance: none;
+  width: 32px;
+  height: 18px;
+  background: #c5ccd6;
+  border-radius: 9px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.toggle input:checked {
+  background: var(--mer-green);
+}
+.toggle input::before {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  top: 2px;
+  left: 2px;
+  transition: left 0.15s;
+}
+.toggle input:checked::before {
+  left: 16px;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  row-gap: 6px;
+  column-gap: 12px;
+}
+.kv dt {
+  color: var(--mer-text-mut);
+  font-size: 12px;
+}
+.kv dd {
+  font-size: 12.5px;
+}
+
+/* tag chip */
+.tag {
+  display: inline-block;
+  padding: 1px 7px;
+  background: #eef1f5;
+  border: 1px solid #d4dae3;
+  border-radius: 10px;
+  font-size: 10.5px;
+  color: #4d6276;
+  margin-right: 3px;
+}
+
+/* ===== network switcher (topbar) — structural addition: source used a
+   plain <select>, kept here as `.topSel`; this is a labeled wrapper some
+   pages may want for the org/network switcher pairing. ===== */
+.netSwitcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

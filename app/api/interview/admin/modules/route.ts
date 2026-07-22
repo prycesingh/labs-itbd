@@ -6,6 +6,7 @@ import {
   interviewQuestionBank,
   interviewQuestionStandardResponses,
 } from "@/DB/interviewSchema";
+import { isAdminRole, type Role } from "@/lib/rbac";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -119,7 +120,7 @@ export async function POST(request: Request) {
     const session = await auth();
 
     // Check admin authorization
-    if (!["devAdmin", "adminTeam"].includes(session?.user?.role ?? "user")) {
+    if (!isAdminRole(session?.user?.role as Role | undefined)) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -172,7 +173,7 @@ export async function GET() {
     const session = await auth();
 
     // Check admin authorization
-    if (!["devAdmin", "adminTeam"].includes(session?.user?.role ?? "user")) {
+    if (!isAdminRole(session?.user?.role as Role | undefined)) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -226,7 +227,7 @@ export async function PATCH(request: Request) {
   try {
     const session = await auth();
 
-    if (!["devAdmin", "adminTeam"].includes(session?.user?.role ?? "user")) {
+    if (!isAdminRole(session?.user?.role as Role | undefined)) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 

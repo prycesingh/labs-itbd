@@ -19,6 +19,12 @@ const SECTIONS = [
     description:
       "Scenario-based written email assessments with AI scoring, manual review, and session reporting.",
   },
+  {
+    href: "/dashboard/labs",
+    title: "Technical Lab",
+    description:
+      "Glossary and exam-style practice quizzes for cloud, identity, security, and networking.",
+  },
 ];
 
 export default function DashboardHome() {

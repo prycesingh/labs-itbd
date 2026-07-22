@@ -1,0 +1,1129 @@
+/*
+ * Real Microsoft Sentinel / Azure Portal blade visual chrome — deliberately
+ * bypasses the app's ITBD brand tokens. Sentinel is its own dedicated `sn-*`
+ * design system in the source simulator (blade nav, tables, tiles, KQL editor,
+ * flyout/modal/toast, MITRE chips, playbook designer steps), ported here
+ * from itbd-lab/simulators/sentinel/css/sentinel.css. A handful of source
+ * classes (`.az-topbar` / `.az-tb-*` / `.az-main`, ~9 total) are a visual
+ * look-alike of the Azure Portal simulator's blue top bar — NOT a shared
+ * import of the Azure Portal simulator's CSS module — matching the precedent
+ * already set by the AVD simulator visually matching Azure Portal chrome
+ * without importing its code. Fidelity to the real product is the point of
+ * a simulator; CSS Modules keep these class names scoped so nothing here
+ * leaks into the rest of the app.
+ *
+ * Naming convention: source `sn-foo-bar` / `az-foo-bar` classes are ported to
+ * camelCase (`.fooBar`) — e.g. `.sn-topbar`->`.topbar` (n/a here, see
+ * `.snShell`/`.bladenav` below), `.az-tb-search`->`.tbSearch`,
+ * `.sn-bladenav`->`.bladenav`, `.sn-nav-item.active`->`.navItemActive`.
+ * Compound/stateful source classes that were combined via multiple class
+ * names in HTML (e.g. `sn-nav-item active`, `sn-sev high`, `sn-flyout open`)
+ * are exposed here as distinct single classes to combine in JSX with
+ * template strings (e.g. `${styles.navItem} ${styles.navItemActive}`),
+ * matching the defender-console.module.css convention. Page-building agents:
+ * reference classes via `styles.bladenav`, `styles.sevHigh`, etc. — never
+ * hardcode `sn-*`/`az-*` strings.
+ */
+
+.root,
+.root * {
+  box-sizing: border-box;
+}
+
+.root {
+  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 14px;
+  color: #323130;
+  background: #f2f2f2;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.root a {
+  color: #0078d4;
+  text-decoration: none;
+  cursor: pointer;
+}
+.root a:hover {
+  text-decoration: underline;
+}
+.root button {
+  font-family: inherit;
+}
+
+/* ===================== TOP BAR (Azure blue look-alike) ===================== */
+.topbar {
+  height: 46px;
+  background: #0078d4;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  position: relative;
+  z-index: 100;
+  flex-shrink: 0;
+}
+.tbLeft,
+.tbRight {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.tbCenter {
+  flex: 1;
+  max-width: 600px;
+  margin: 0 16px;
+  position: relative;
+}
+.tbIconBtn {
+  background: transparent;
+  border: 0;
+  color: #fff;
+  width: 40px;
+  height: 46px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tbIconBtn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+.tbWordmark {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+.tbSearch {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.tbSearch input {
+  width: 100%;
+  height: 32px;
+  padding: 5px 12px 5px 32px;
+  border-radius: 3px;
+  border: 0;
+  background: #fff;
+  color: #323130;
+  font-size: 13px;
+  outline: none;
+}
+.tbSearchIc {
+  position: absolute;
+  left: 10px;
+  color: #605e5c;
+}
+.tbAvatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: 4px;
+}
+
+/* ===================== LAYOUT ===================== */
+.main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ===================== SENTINEL BLADE HEADER ===================== */
+.bladeHeader {
+  background: #fff;
+  border-bottom: 1px solid #e1dfdd;
+  padding: 14px 26px 0 26px;
+  flex-shrink: 0;
+}
+.bc {
+  font-size: 12px;
+  color: #605e5c;
+  margin-bottom: 6px;
+}
+.bc a {
+  color: #605e5c;
+}
+.bladeTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.wsIcon {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #3a7bd5, #3a6073);
+  color: #fff;
+  font-weight: 700;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+.bladeTitle h1 {
+  font-size: 22px;
+  font-weight: 600;
+  color: #201f1e;
+}
+.bladeTitleSub {
+  font-size: 12px;
+  color: #605e5c;
+  margin-left: 4px;
+}
+.bladeToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 10px;
+  padding-bottom: 10px;
+}
+.tbBtn {
+  background: transparent;
+  border: 0;
+  color: #323130;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.tbBtn:hover {
+  background: #f3f2f1;
+}
+.tbBtnIco {
+  color: #0078d4;
+  font-weight: 700;
+  font-size: 14px;
+}
+.tbSep {
+  width: 1px;
+  height: 22px;
+  background: #edebe9;
+  margin: 0 4px;
+}
+
+/* ===================== SENTINEL LEFT NAV (within blade) ===================== */
+.shell {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+.bladenav {
+  width: 232px;
+  background: #fff;
+  border-right: 1px solid #e1dfdd;
+  overflow-y: auto;
+  flex-shrink: 0;
+  padding: 6px 0 60px 0;
+}
+.bladenav::-webkit-scrollbar {
+  width: 8px;
+}
+.bladenav::-webkit-scrollbar-thumb {
+  background: #d2d0ce;
+  border-radius: 4px;
+}
+
+.navSection {
+  font-size: 11px;
+  color: #605e5c;
+  padding: 10px 14px 4px 14px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  color: #323130;
+  font-size: 13px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+}
+.navItem:hover {
+  background: #f3f2f1;
+  text-decoration: none;
+}
+.navItemActive {
+  background: #e1ecf7;
+  border-left-color: #0078d4;
+  color: #0078d4;
+  font-weight: 600;
+}
+.navIco {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #605e5c;
+}
+.navItemActive .navIco {
+  color: #0078d4;
+}
+
+/* ===================== CONTENT ===================== */
+.content {
+  flex: 1;
+  background: #fff;
+  overflow-y: auto;
+  padding: 20px 26px 100px 26px;
+}
+
+.h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #201f1e;
+  margin: 14px 0 10px 0;
+}
+.h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #201f1e;
+  margin: 12px 0 6px 0;
+}
+.sub {
+  font-size: 13px;
+  color: #605e5c;
+  margin-bottom: 14px;
+}
+
+/* ===================== TABS ===================== */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #e1dfdd;
+  margin-bottom: 14px;
+  gap: 0;
+}
+.tab {
+  background: transparent;
+  border: 0;
+  padding: 9px 16px;
+  font-size: 13px;
+  color: #323130;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.tab:hover {
+  background: #f3f2f1;
+}
+.tabActive {
+  border-bottom-color: #0078d4;
+  color: #0078d4;
+  font-weight: 600;
+}
+
+/* Sub-tab variant (compact pill-style secondary switcher) */
+.subTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.subTab {
+  background: #fff;
+  border: 1px solid #c8c6c4;
+  border-radius: 2px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #323130;
+}
+.subTab:hover {
+  background: #f3f2f1;
+}
+.subTabActive {
+  background: #e1ecf7;
+  border-color: #0078d4;
+  color: #0078d4;
+  font-weight: 600;
+}
+
+/* ===================== TABLES ===================== */
+.tableWrap {
+  background: #fff;
+  border: 1px solid #e1dfdd;
+  border-radius: 2px;
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.table thead th {
+  text-align: left;
+  background: #faf9f8;
+  color: #605e5c;
+  font-weight: 600;
+  border-bottom: 1px solid #e1dfdd;
+  padding: 9px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.table tbody td {
+  padding: 9px 12px;
+  border-bottom: 1px solid #f3f2f1;
+  color: #323130;
+  vertical-align: middle;
+}
+.table tbody tr {
+  cursor: pointer;
+}
+.table tbody tr:hover {
+  background: #f3f2f1;
+}
+.table tbody tr.selected {
+  background: #e1ecf7;
+}
+.rowLink {
+  color: #0078d4;
+  font-weight: 500;
+}
+.rowLink:hover {
+  text-decoration: underline;
+}
+
+/* ===================== FILTER ROW ===================== */
+.filterRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+.chip {
+  background: #fff;
+  border: 1px solid #c8c6c4;
+  border-radius: 2px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #323130;
+}
+.chip:hover {
+  background: #f3f2f1;
+}
+.chipActive {
+  background: #e1ecf7;
+  border-color: #0078d4;
+  color: #0078d4;
+  font-weight: 600;
+}
+
+/* ===================== SEVERITY ===================== */
+.sev {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.sevDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.sevHigh .sevDot {
+  background: #cf2030;
+}
+.sevHigh {
+  color: #cf2030;
+}
+.sevMedium .sevDot {
+  background: #d97900;
+}
+.sevMedium {
+  color: #d97900;
+}
+.sevLow .sevDot {
+  background: #f7b500;
+}
+.sevLow {
+  color: #b8870e;
+}
+.sevInformational .sevDot {
+  background: #707070;
+}
+.sevInformational {
+  color: #707070;
+}
+
+/* ===================== PILLS / CHIPS ===================== */
+.pill {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 11px;
+  font-size: 11px;
+  font-weight: 500;
+  background: #e6f2fb;
+  color: #0078d4;
+  border: 1px solid #b9d2f1;
+  margin-right: 4px;
+}
+.pillSuccess {
+  background: #e1f4d4;
+  color: #107c10;
+  border-color: #bce5a3;
+}
+.pillWarn {
+  background: #fff4ce;
+  color: #797673;
+  border-color: #f5e0a3;
+}
+.pillErr {
+  background: #fde7e9;
+  color: #a4262c;
+  border-color: #f5b8bd;
+}
+.pillMuted {
+  background: #f3f2f1;
+  color: #605e5c;
+  border-color: #d2d0ce;
+}
+.pillTactic {
+  background: #2c2c2c;
+  color: #fff;
+  border-color: #2c2c2c;
+}
+
+/* ===================== BUTTONS ===================== */
+.btn {
+  background: #0078d4;
+  color: #fff;
+  border: 1px solid #0078d4;
+  padding: 6px 14px;
+  font-size: 13px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.btn:hover {
+  background: #106ebe;
+}
+.btn:disabled {
+  background: #c8c6c4;
+  border-color: #c8c6c4;
+  cursor: not-allowed;
+}
+.btnOutline {
+  background: #fff;
+  color: #323130;
+  border: 1px solid #8a8886;
+}
+.btnOutline:hover {
+  background: #f3f2f1;
+}
+
+/* ===================== STAT CARDS ===================== */
+.statRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.stat {
+  background: #fff;
+  border: 1px solid #e1dfdd;
+  border-radius: 2px;
+  padding: 14px 16px;
+}
+.statVal {
+  font-size: 26px;
+  font-weight: 600;
+  color: #201f1e;
+}
+.statLabel {
+  font-size: 12px;
+  color: #605e5c;
+  margin-top: 4px;
+}
+
+/* ===================== TILES ===================== */
+.tileGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.tile {
+  background: #fff;
+  border: 1px solid #e1dfdd;
+  border-radius: 2px;
+  padding: 14px;
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+}
+.tile:hover {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+}
+.tileTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #201f1e;
+}
+.tileSub {
+  font-size: 12px;
+  color: #605e5c;
+  margin-top: 3px;
+}
+.tileFoot {
+  font-size: 11px;
+  color: #605e5c;
+  margin-top: 8px;
+  border-top: 1px solid #f3f2f1;
+  padding-top: 6px;
+}
+
+/* ===================== CARD ===================== */
+.card {
+  background: #fff;
+  border: 1px solid #e1dfdd;
+  border-radius: 2px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.cardTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #201f1e;
+  margin-bottom: 10px;
+}
+
+/* ===================== FORMS ===================== */
+.formGroup {
+  margin-bottom: 12px;
+}
+.formLabel {
+  display: block;
+  font-size: 13px;
+  color: #323130;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+.input,
+.select,
+.textarea {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #8a8886;
+  border-radius: 2px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  background: #fff;
+}
+.input:focus,
+.select:focus,
+.textarea:focus {
+  border-color: #0078d4;
+}
+.textarea {
+  font-family: Consolas, "Cascadia Code", monospace;
+  font-size: 12.5px;
+}
+.checkboxRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #323130;
+  cursor: pointer;
+}
+
+/* ===================== FLYOUT / BLADE ===================== */
+.flyoutMask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  z-index: 1000;
+}
+.flyout {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 1100px;
+  max-width: 96vw;
+  height: 100vh;
+  background: #fff;
+  box-shadow: -2px 0 12px rgba(0, 0, 0, 0.18);
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+}
+.flyoutHeader {
+  padding: 14px 18px;
+  border-bottom: 1px solid #e1dfdd;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.flyoutHeader h2 {
+  font-size: 17px;
+  font-weight: 600;
+  color: #201f1e;
+}
+.flyoutClose {
+  background: transparent;
+  border: 0;
+  color: #605e5c;
+  cursor: pointer;
+  font-size: 22px;
+  padding: 4px 10px;
+}
+.flyoutTabs {
+  flex-shrink: 0;
+  padding: 0 18px;
+  border-bottom: 1px solid #e1dfdd;
+}
+.flyoutBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px;
+}
+.flyoutFooter {
+  border-top: 1px solid #e1dfdd;
+  padding: 12px 18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  background: #faf9f8;
+  flex-shrink: 0;
+}
+
+/* ===================== MODAL / WIZARD ===================== */
+.modalMask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal {
+  background: #fff;
+  width: 920px;
+  max-width: 96vw;
+  max-height: 92vh;
+  border-radius: 2px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modalHeader {
+  padding: 14px 18px;
+  border-bottom: 1px solid #e1dfdd;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modalHeader h2 {
+  font-size: 17px;
+  font-weight: 600;
+  color: #201f1e;
+}
+.modalBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px;
+}
+.modalFooter {
+  border-top: 1px solid #e1dfdd;
+  padding: 12px 18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  background: #faf9f8;
+}
+
+/* Wizard steps */
+.wizSteps {
+  display: flex;
+  border-bottom: 1px solid #e1dfdd;
+  background: #faf9f8;
+  overflow-x: auto;
+}
+.wizStep {
+  padding: 10px 16px;
+  font-size: 13px;
+  color: #605e5c;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  background: transparent;
+  border-top: 0;
+  border-left: 0;
+  border-right: 0;
+}
+.wizStepActive {
+  color: #0078d4;
+  border-bottom-color: #0078d4;
+  font-weight: 600;
+}
+.wizStepDone {
+  color: #107c10;
+}
+.wizCheck {
+  color: #107c10;
+  margin-right: 4px;
+}
+
+/* ===================== KQL EDITOR ===================== */
+.kql {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  font-family: Consolas, "Cascadia Code", monospace;
+  font-size: 13px;
+  border-radius: 3px;
+  padding: 14px;
+  border: 1px solid #3a3a3a;
+  width: 100%;
+  min-height: 220px;
+  outline: none;
+  resize: vertical;
+}
+.kql:focus {
+  border-color: #0078d4;
+}
+.kqlToolbar {
+  display: flex;
+  gap: 6px;
+  background: #fff;
+  padding: 8px 0;
+  align-items: center;
+}
+
+/* hunting results bar */
+.resultsInfo {
+  background: #f3f9fd;
+  border: 1px solid #b9d2f1;
+  border-radius: 2px;
+  padding: 8px 12px;
+  margin: 10px 0;
+  font-size: 12.5px;
+  color: #115ea3;
+}
+
+/* ===================== INVESTIGATION GRAPH ===================== */
+.graph {
+  background: linear-gradient(180deg, #0d1b2a 0%, #1b263b 100%);
+  border: 1px solid #2a3854;
+  border-radius: 2px;
+  width: 100%;
+  height: 420px;
+  position: relative;
+  overflow: hidden;
+}
+
+.legend {
+  display: flex;
+  gap: 14px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #605e5c;
+}
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.legendDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* ===================== WORKBOOK CHARTS ===================== */
+.chart {
+  background: #fafafa;
+  border: 1px solid #e1dfdd;
+  border-radius: 2px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.chart h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #323130;
+  margin-bottom: 8px;
+}
+.barRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+  font-size: 12px;
+}
+.barRowLbl {
+  width: 140px;
+  color: #605e5c;
+}
+.barRowBar {
+  flex: 1;
+  height: 14px;
+  background: #f3f2f1;
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+}
+.barRowFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, #0078d4, #50abf1);
+  border-radius: 2px;
+}
+.barRowVal {
+  width: 60px;
+  text-align: right;
+  color: #323130;
+  font-weight: 500;
+}
+
+.lineChart {
+  height: 140px;
+  background: #fff;
+  border: 1px solid #e1dfdd;
+  position: relative;
+  padding: 8px;
+}
+
+/* ===================== PLAYBOOK DESIGNER ===================== */
+.pbCanvas {
+  background: #faf9f8;
+  border: 1px solid #e1dfdd;
+  border-radius: 2px;
+  padding: 20px;
+  overflow-x: auto;
+}
+.pbStep {
+  background: #fff;
+  border: 1px solid #c8c6c4;
+  border-left: 4px solid #0078d4;
+  border-radius: 3px;
+  padding: 10px 14px;
+  margin: 0 auto 6px auto;
+  max-width: 520px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.pbStepTrigger {
+  border-left-color: #6264a7;
+}
+.pbStepCondition {
+  border-left-color: #d97900;
+}
+.pbStepForeach {
+  border-left-color: #8c52ff;
+}
+.pbStepType {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #605e5c;
+  letter-spacing: 0.3px;
+}
+.pbStepName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #201f1e;
+  margin: 2px 0;
+}
+.pbStepDetails {
+  font-size: 12px;
+  color: #424242;
+}
+.pbArrow {
+  width: 0;
+  height: 24px;
+  border-left: 2px dashed #c8c6c4;
+  margin: 0 auto;
+}
+
+/* ===================== TOAST ===================== */
+.toastContainer {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.toast {
+  background: #fff;
+  border-left: 4px solid #107c10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #323130;
+  min-width: 280px;
+}
+.toastSuccess {
+  border-left-color: #107c10;
+}
+.toastInfo {
+  border-left-color: #0078d4;
+}
+.toastWarn {
+  border-left-color: #d97900;
+}
+.toastError {
+  border-left-color: #cf2030;
+}
+
+/* ===================== EMPTY ===================== */
+.empty {
+  background: #fafafa;
+  border: 1px dashed #c8c6c4;
+  border-radius: 2px;
+  padding: 36px;
+  text-align: center;
+  color: #605e5c;
+  font-size: 13px;
+}
+
+/* ===================== ENTITY PANEL ===================== */
+.entityRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f3f2f1;
+  font-size: 13px;
+}
+.entType {
+  background: #e6f2fb;
+  color: #0078d4;
+  border: 1px solid #b9d2f1;
+  border-radius: 11px;
+  font-size: 11px;
+  padding: 1px 8px;
+  margin-right: 4px;
+}
+.entName {
+  color: #0078d4;
+  font-weight: 500;
+  font-family: Consolas, monospace;
+}
+
+/* ===================== back link ===================== */
+.backHome {
+  position: fixed;
+  bottom: 18px;
+  left: 18px;
+  background: rgba(31, 31, 31, 0.92);
+  color: #fff;
+  padding: 7px 14px;
+  border-radius: 18px;
+  text-decoration: none;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 2000;
+}
+.backHome:hover {
+  background: #1f1f1f;
+  text-decoration: none;
+}
+.backHome svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* MITRE chip */
+.mitre {
+  display: inline-block;
+  background: #2c2c2c;
+  color: #fff;
+  border-radius: 11px;
+  font-size: 10px;
+  padding: 2px 8px;
+  margin-right: 4px;
+  margin-bottom: 2px;
+}
+
+/* connector status */
+.connStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+}
+.connStatusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.connStatusConnected .connStatusDot {
+  background: #107c10;
+}
+.connStatusConnected {
+  color: #107c10;
+}
+.connStatusDisconnected .connStatusDot {
+  background: #c8c6c4;
+}
+.connStatusDisconnected {
+  color: #605e5c;
+}
+
+/* row layout */
+.row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.row > * {
+  flex: 1;
+  min-width: 240px;
+}
+
+/* live stream banner */
+.livestream {
+  background: #fff4ce;
+  border: 1px solid #f5e0a3;
+  color: #797673;
+  padding: 8px 12px;
+  border-radius: 2px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.livestreamPulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d97900;
+  animation: sentinelPulse 1.5s ease-in-out infinite;
+}
+@keyframes sentinelPulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(1.4);
+  }
+}

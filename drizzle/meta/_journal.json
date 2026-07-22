@@ -8,6 +8,27 @@
       "when": 1782398064095,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1783517691081,
+      "tag": "0001_fearless_network",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1783519283003,
+      "tag": "0002_same_gabe_jones",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1784307818838,
+      "tag": "0003_peaceful_abomination",
+      "breakpoints": true
     }
   ]
 }

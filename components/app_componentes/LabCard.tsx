@@ -4,6 +4,7 @@ import DefaultButton from "@/components/app_componentes/customButtons";
 import { cn } from "@/lib/utils";
 import { ArrowRight, Cog, MessagesSquare } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
+import Link from "next/link";
 import { useRef, useState } from "react";
 
 /**
@@ -34,7 +35,8 @@ export type LabCardIcon = keyof typeof ICONS;
  * `prefers-reduced-motion`: no entrance travel, no hover lift, no spotlight —
  * the card renders static and fully readable.
  *
- * The "Explore →" button is a styled placeholder for now (no handler).
+ * The "Explore →" button links to `href` when provided (through the
+ * dashboard's auth gate); otherwise it renders as a styled placeholder.
  */
 export function LabCard({
   icon,
@@ -42,12 +44,14 @@ export function LabCard({
   description,
   accent = "blue",
   className,
+  href,
 }: {
   icon: LabCardIcon;
   title: string;
   description: string;
   accent?: "blue" | "green";
   className?: string;
+  href?: string;
 }) {
   const Icon = ICONS[icon];
   const reduce = useReducedMotion();
@@ -127,11 +131,21 @@ export function LabCard({
         </p>
 
         {/* CTA pinned to the bottom so both cards read the same regardless of
-            blurb length. Styled placeholder (no destination yet). Blue per brand. */}
+            blurb length. Blue per brand. Links through the dashboard's auth
+            gate when href is set; otherwise a styled placeholder. */}
         <div className="mt-auto pt-4">
-          <DefaultButton size="sm" className="gap-2">
-            Explore
-            <ArrowRight className="h-4 w-4" />
+          <DefaultButton size="sm" className="gap-2" asChild={Boolean(href)}>
+            {href ? (
+              <Link href={href}>
+                Explore
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            ) : (
+              <>
+                Explore
+                <ArrowRight className="h-4 w-4" />
+              </>
+            )}
           </DefaultButton>
         </div>
       </div>

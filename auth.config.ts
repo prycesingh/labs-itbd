@@ -1,9 +1,12 @@
 import { db } from "@/DB/drizzle";
 import { accounts, sessions, users, verificationTokens } from "@/DB/schema";
+import { isAdminRole } from "@/lib/rbac";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
+import { compare } from "bcryptjs";
 import { eq } from "drizzle-orm";
 import type { NextAuthConfig } from "next-auth";
 import { customFetch } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
 import AzureADProvider from "next-auth/providers/microsoft-entra-id";
 import { randomUUID } from "node:crypto";
 
@@ -67,9 +70,6 @@ const DEFAULT_DEVADMIN_WHITELIST_EMAILS = [
   "gagan.sandhu@itbd.net",
   "ssaini@itbd.net",
   "jkhan@itbd.net",
-  "SBhatia@itbd.net",
-  "Tanya.Khurana@itbd.net",
-  "Sameer.Shukla@itbd.net",
 ];
 
 const DEFAULT_EXECUTIVE_WHITELIST_EMAILS = [
@@ -483,8 +483,7 @@ export const authConfig = {
       // FIRST login only
       if (user) {
         t.id =
-          user.id ??
-          (typeof t.sub === "string" ? t.sub : (t.id as string));
+          user.id ?? (typeof t.sub === "string" ? t.sub : (t.id as string));
         t.role = isWhitelistedDevAdminEmail(user.email)
           ? "devAdmin"
           : isWhitelistedExecutiveEmail(user.email)
@@ -652,6 +651,82 @@ export const authConfig = {
       microsoftEntraProvider[customFetch] ?? fetch,
     );
 
-    return [microsoftEntraProvider];
+    // Break-glass credential login. This is an admin bypass for when SSO is
+    // unavailable — it authenticates ONLY users who already have a bcrypt
+    // password hash stored on their `users` row (seeded deliberately via the
+    // admin bootstrap script). SSO-only users have `password = NULL` and can
+    // never be logged into through this path, so it can't be used to
+    // impersonate arbitrary accounts. Roles are still resolved by the jwt
+    // callback below (whitelist-driven), so this grants no extra privilege
+    // beyond what the same email gets over SSO.
+    const credentialsProvider = CredentialsProvider({
+      id: "credentials",
+      name: "Admin credentials",
+      credentials: {
+        username: { label: "Username or Email", type: "text" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        const identifier = normalizeEmail(
+          typeof credentials?.username === "string" ? credentials.username : "",
+        );
+        const password =
+          typeof credentials?.password === "string" ? credentials.password : "";
+
+        if (!identifier || !password) {
+          return null;
+        }
+
+        try {
+          // Match on email OR username, but only rows that actually have a
+          // stored hash. `.limit(1)` — email is unique, username is not
+          // guaranteed to be, so prefer the email match implicitly by ordering.
+          const rows = await db
+            .select({
+              id: users.id,
+              name: users.name,
+              email: users.email,
+              role: users.role,
+              password: users.password,
+              sessionVersion: users.sessionVersion,
+            })
+            .from(users)
+            .where(eq(users.email, identifier))
+            .limit(1);
+
+          const account = rows[0];
+          if (!account || !account.password) {
+            // No such user, or user has no credential login provisioned.
+            return null;
+          }
+
+          // ADMIN-ONLY: credential login is a break-glass path reserved for
+          // admins. Non-admins must use SSO — reject them even if a password
+          // hash somehow exists on their row. `ADMIN_ROLES` in lib/rbac.ts is
+          // the single source of truth for who counts as an admin.
+          if (!isAdminRole(account.role)) {
+            return null;
+          }
+
+          const ok = await compare(password, account.password);
+          if (!ok) {
+            return null;
+          }
+
+          return {
+            id: account.id,
+            name: account.name ?? undefined,
+            email: account.email,
+            role: account.role,
+            sessionVersion: account.sessionVersion,
+          };
+        } catch (error) {
+          console.error("[auth] Credentials authorize failed:", error);
+          return null;
+        }
+      },
+    });
+
+    return [microsoftEntraProvider, credentialsProvider];
   })(),
 } satisfies NextAuthConfig;

@@ -1,0 +1,814 @@
+/*
+ * Wireshark packet-capture simulator chrome — ported from
+ * itbd-lab/simulators/wireshark/css/wireshark.css (700 lines). Unlike every
+ * prior ported suite, this one is a SINGLE-SCREEN workbench (title bar / menu
+ * bar / toolbar / filter bar / three-pane split / status bar), never swapped
+ * for other "pages" — so there is no `.rail`/`.main`/page-nav chrome here at
+ * all, just the persistent workbench frame plus the generic modal/table/tab
+ * primitives every modal-building agent will share.
+ *
+ * ===== RECONCILED CLASS-NAME MISMATCHES (do NOT replicate source's bugs) =====
+ * Source has SIX confirmed JS-markup vs CSS-rule mismatches (documented from a
+ * prior investigation). This module picks ONE consistent, working naming
+ * scheme — following the CSS file's naming intent as authoritative, since it
+ * clearly encodes a real 45/30/25 three-way pane split and full bar styling —
+ * camelCased per every prior port's convention:
+ *   1. `.ws-panes` (JS, wrapper div)         -> `.panes`        (real flex column, was unstyled in source)
+ *   2. `.ws-list`/`.ws-details`/`.ws-bytes` (JS) vs
+ *      `.ws-pane-list`/`.ws-pane-details`/`.ws-pane-bytes` (CSS) -> `.paneList` / `.paneDetails` / `.paneBytes`
+ *      (both share the base `.pane` class for the common overflow/border/background rule)
+ *   3. `.ws-titlebar` (JS) vs `.ws-title` (CSS) -> `.titleBar`
+ *   4. `.ws-menubar`/`.ws-menu` (JS: bar + per-item) vs a single `.ws-menu` in
+ *      CSS (wrongly styling items as if it were the bar) -> `.menuBar` (the bar)
+ *      + `.menuItem` (each top-level label), distinct classes
+ *   5. `.ws-filterbar` (JS) vs `.ws-filter-bar` (CSS) -> `.filterBar`
+ *   6. `.ws-status` (JS) vs `.ws-statusbar` (CSS) -> `.statusBar`
+ * The dropdown-menu system CSS anticipated but source never built
+ * (`.ws-menu-popup`/`.ws-mp-item`/`.ws-mp-shortcut`, source used `prompt()`
+ * instead) is ported here as `.menuPopup` / `.mpItem` / `.mpShortcut` / etc.,
+ * and IS wired up for real by `MenuDropdown` in wireshark-ui.tsx.
+ *
+ * ===== CSS Modules "pure selector" fixes =====
+ * Source's `* { box-sizing: border-box; margin: 0; padding: 0; }` and
+ * `html, body { ... }` are bare global selectors with zero local class/id —
+ * Next.js's build fails on these ("Selector is not pure"). Rescoped under
+ * `.root, .root *` (mirrors the Meraki suite's established fix) and `.root`
+ * for the html/body rule (the workbench root div taking over that role).
+ * `.ws-form-row input[type="text"]...` / `.ws-form-row label` bare-descendant
+ * rules are rescoped as `.formRow :global(label)` / `.formRow :global(input)`
+ * etc. per the same rule (they DO need to reach the bare tag).
+ */
+
+.root,
+.root * {
+  box-sizing: border-box;
+}
+
+.root {
+  height: 100%;
+  overflow: hidden;
+  font-family: "Segoe UI", "Tahoma", "Lucida Sans", sans-serif;
+  font-size: 12px;
+  color: #1a1a1a;
+  background: #ececec;
+  display: flex;
+  flex-direction: column;
+}
+
+.root :global(button) {
+  font: inherit;
+}
+
+/* ===== TITLE BAR ===== */
+.titleBar {
+  height: 30px;
+  flex: 0 0 30px;
+  background: linear-gradient(#3a3a3a, #2d2d2d);
+  color: #f0f0f0;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 12px;
+  user-select: none;
+  border-bottom: 1px solid #1f1f1f;
+  gap: 8px;
+}
+.sharkIcon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  background: radial-gradient(circle at 30% 30%, #4ec9ff, #1f6da3 60%, #0a3a55 100%);
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgba(78, 201, 255, 0.6);
+}
+.titleText {
+  flex: 1;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.titleInterface {
+  color: #b8dcf5;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+/* Capture status badge in the title bar */
+.captureBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 10px;
+  font-size: 10.5px;
+  font-weight: 600;
+  border: 1px solid;
+  white-space: nowrap;
+}
+.captureBadge .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.badgeIdle {
+  color: #d8d8d8;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.badgeIdle .dot {
+  background: #999;
+}
+.badgeCapturing {
+  color: #d6f5d6;
+  background: rgba(78, 201, 255, 0.12);
+  border-color: rgba(78, 201, 255, 0.4);
+}
+.badgeCapturing .dot {
+  background: #4ec9ff;
+  box-shadow: 0 0 4px rgba(78, 201, 255, 0.8);
+}
+.badgeStopped {
+  color: #f9d6d6;
+  background: rgba(232, 17, 35, 0.12);
+  border-color: rgba(232, 17, 35, 0.4);
+}
+.badgeStopped .dot {
+  background: #e81123;
+}
+
+/* ===== MENU BAR ===== */
+.menuBar {
+  height: 24px;
+  flex: 0 0 24px;
+  background: #f8f8f8;
+  border-bottom: 1px solid #c8c8c8;
+  display: flex;
+  align-items: stretch;
+  padding: 0 4px;
+  user-select: none;
+  position: relative;
+  z-index: 30;
+}
+.menuItem {
+  padding: 0 9px;
+  line-height: 24px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #202020;
+  background: none;
+  border: 0;
+  font-family: inherit;
+}
+.menuItem:hover,
+.menuItemOpen {
+  background: #d4e5f5;
+}
+
+.menuPopup {
+  position: absolute;
+  background: #fafafa;
+  border: 1px solid #999;
+  box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.25);
+  padding: 4px 0;
+  min-width: 250px;
+  z-index: 200;
+  font-size: 12px;
+  top: 24px;
+  left: 0;
+}
+.mpItem {
+  padding: 4px 24px 4px 28px;
+  cursor: pointer;
+  position: relative;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  background: none;
+  border: 0;
+  font-family: inherit;
+  font-size: 12px;
+  color: #1a1a1a;
+  text-align: left;
+}
+.mpItem:hover {
+  background: #2a72c4;
+  color: #fff;
+}
+.mpSep {
+  height: 1px;
+  background: #d0d0d0;
+  margin: 4px 0;
+}
+.mpShortcut {
+  color: #888;
+  font-size: 11px;
+}
+.mpItem:hover .mpShortcut {
+  color: #cde0f7;
+}
+.mpItemDisabled {
+  color: #aaa;
+  cursor: default;
+}
+.mpItemDisabled:hover {
+  background: transparent;
+  color: #aaa;
+}
+.mpArrow {
+  font-size: 10px;
+}
+
+/* ===== TOOLBAR ===== */
+.toolbar {
+  height: 32px;
+  flex: 0 0 32px;
+  background: #ececec;
+  border-bottom: 1px solid #c8c8c8;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  gap: 2px;
+  user-select: none;
+}
+.tbBtn {
+  height: 26px;
+  min-width: 26px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 2px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #2c5aa0;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+}
+.tbBtn:hover {
+  background: #d4e5f5;
+  border-color: #b0c5e0;
+}
+.tbBtn:disabled {
+  color: #b5b5b5;
+  cursor: default;
+}
+.tbBtn:disabled:hover {
+  background: transparent;
+  border-color: transparent;
+}
+.tbSep {
+  width: 1px;
+  height: 22px;
+  background: #c0c0c0;
+  margin: 0 4px;
+  flex: 0 0 1px;
+}
+.tbSelect {
+  height: 24px;
+  padding: 0 4px;
+  border: 1px solid #b0b0b0;
+  border-radius: 2px;
+  background: #fff;
+  font-size: 11px;
+  font-family: inherit;
+  color: #1a1a1a;
+  max-width: 180px;
+}
+
+/* ===== FILTER BAR ===== */
+.filterBar {
+  height: 30px;
+  flex: 0 0 30px;
+  background: #ececec;
+  border-bottom: 1px solid #c8c8c8;
+  display: flex;
+  align-items: center;
+  padding: 2px 4px;
+  gap: 4px;
+  position: relative;
+  z-index: 20;
+}
+.filterBookmark {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  background: #e8e8e8;
+  border: 1px solid #b0b0b0;
+  border-radius: 2px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #2c5aa0;
+  font-size: 12px;
+}
+.filterBookmark:hover {
+  background: #d4e5f5;
+}
+.filterInputWrap {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+.filterInput {
+  width: 100%;
+  height: 24px;
+  background: #d3f0c2;
+  border: 1px solid #8fbf6c;
+  padding: 2px 8px;
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 12px;
+  color: #1a1a1a;
+  outline: none;
+}
+.filterInputInvalid {
+  background: #f7c5c5;
+  border-color: #c44d4d;
+}
+.filterInputEmpty {
+  background: #fff;
+  border-color: #b0b0b0;
+}
+.filterInput:focus {
+  border-color: #2c5aa0;
+}
+.filterApply,
+.filterClear,
+.filterHelp {
+  height: 24px;
+  padding: 0 8px;
+  background: #e8e8e8;
+  border: 1px solid #b0b0b0;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 11px;
+  color: #2c5aa0;
+  font-family: inherit;
+}
+.filterApply:hover,
+.filterClear:hover,
+.filterHelp:hover {
+  background: #d4e5f5;
+}
+
+/* Autocomplete dropdown */
+.filterAutocomplete {
+  position: absolute;
+  top: 28px;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #888;
+  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 50;
+}
+.acItem {
+  padding: 4px 10px;
+  cursor: pointer;
+  font-family: "Consolas", monospace;
+  font-size: 11px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  background: none;
+  border: 0;
+  text-align: left;
+  color: #1a1a1a;
+}
+.acItem:hover,
+.acItemSelected {
+  background: #2a72c4;
+  color: #fff;
+}
+.acDesc {
+  color: #777;
+  font-size: 10px;
+  font-family: "Segoe UI", sans-serif;
+}
+.acItem:hover .acDesc,
+.acItemSelected .acDesc {
+  color: #d6e8fa;
+}
+
+/* Save-filter inline mini-form (replaces source's window.prompt()) */
+.saveFilterPopover {
+  position: absolute;
+  top: 28px;
+  right: 4px;
+  background: #fafafa;
+  border: 1px solid #999;
+  box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.25);
+  padding: 8px;
+  z-index: 60;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.saveFilterInput {
+  height: 24px;
+  padding: 2px 6px;
+  border: 1px solid #b0b0b0;
+  font-size: 11px;
+  font-family: inherit;
+  min-width: 160px;
+}
+
+/* ===== THREE-PANE LAYOUT ===== */
+.panes {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: #fff;
+}
+.pane {
+  overflow: auto;
+  background: #fff;
+  border-bottom: 1px solid #c8c8c8;
+  position: relative;
+  min-height: 0;
+}
+.paneList {
+  flex: 0 0 45%;
+  min-height: 100px;
+}
+.paneDetails {
+  flex: 0 0 30%;
+  min-height: 80px;
+}
+.paneBytes {
+  flex: 1;
+  min-height: 80px;
+  border-bottom: 0;
+}
+.splitter {
+  height: 4px;
+  background: #d4d4d4;
+  cursor: row-resize;
+  border-top: 1px solid #b8b8b8;
+  border-bottom: 1px solid #b8b8b8;
+  flex: 0 0 4px;
+}
+.splitter:hover {
+  background: #2a72c4;
+}
+
+/* ===== STATUS BAR ===== */
+.statusBar {
+  height: 22px;
+  flex: 0 0 22px;
+  background: #f2f2f2;
+  border-top: 1px solid #c8c8c8;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  font-size: 11px;
+  user-select: none;
+  gap: 14px;
+}
+.sbSection {
+  color: #303030;
+  padding: 0 6px;
+  border-right: 1px solid #d0d0d0;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sbSection:last-child {
+  border-right: 0;
+}
+.sbProfile {
+  margin-left: auto;
+  color: #2c5aa0;
+}
+
+/* ===== MODAL / DIALOG ===== */
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+}
+.modal {
+  background: #f4f4f4;
+  border: 1px solid #777;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  min-width: 480px;
+  max-width: 92vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+}
+.modalHeader {
+  padding: 8px 12px;
+  background: linear-gradient(#3a3a3a, #2d2d2d);
+  color: #f0f0f0;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modalClose {
+  background: transparent;
+  border: 0;
+  color: #ddd;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 6px;
+}
+.modalClose:hover {
+  color: #fff;
+}
+.modalBody {
+  padding: 14px;
+  overflow: auto;
+  max-height: 72vh;
+  background: #fafafa;
+}
+.modalFooter {
+  padding: 8px 12px;
+  background: #ececec;
+  border-top: 1px solid #c8c8c8;
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.btn {
+  height: 24px;
+  padding: 0 14px;
+  background: #f0f0f0;
+  border: 1px solid #b0b0b0;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #1a1a1a;
+  font-family: inherit;
+}
+.btn:hover {
+  background: #e0ecf8;
+  border-color: #2a72c4;
+}
+.btn:disabled {
+  color: #b0b0b0;
+  cursor: default;
+}
+.btn:disabled:hover {
+  background: #f0f0f0;
+  border-color: #b0b0b0;
+}
+.btnPrimary {
+  background: #2a72c4;
+  color: #fff;
+  border-color: #1f5a9a;
+}
+.btnPrimary:hover {
+  background: #1f5a9a;
+}
+
+.formRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.formRow :global(label) {
+  min-width: 140px;
+  color: #303030;
+  font-size: 12px;
+}
+.formRow :global(input[type="text"]),
+.formRow :global(input[type="number"]),
+.formRow :global(select) {
+  height: 24px;
+  padding: 2px 6px;
+  border: 1px solid #b0b0b0;
+  background: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  flex: 1;
+  min-width: 200px;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid #c0c0c0;
+  margin-bottom: 10px;
+  user-select: none;
+}
+.tab {
+  padding: 6px 14px;
+  background: #e8e8e8;
+  border: 1px solid #c0c0c0;
+  border-bottom: 0;
+  cursor: pointer;
+  font-size: 11px;
+  color: #303030;
+  margin-right: 1px;
+  font-family: inherit;
+}
+.tab:hover {
+  background: #d4e5f5;
+}
+.tabActive {
+  background: #fafafa;
+  color: #1a4a8a;
+  font-weight: 600;
+  border-bottom: 1px solid #fafafa;
+  margin-bottom: -1px;
+}
+
+/* Tables (shared by modals + DataTable primitive) */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-family: "Consolas", monospace;
+}
+.table th,
+.table td {
+  padding: 4px 8px;
+  border: 1px solid #d4d4d4;
+  text-align: left;
+}
+.table thead th {
+  background: #e8e8e8;
+  font-family: "Segoe UI", sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.table tbody tr:nth-child(even) {
+  background: #f5f5f5;
+}
+.table tbody tr:hover {
+  background: #d4e5f5;
+}
+.tableClickable tbody tr {
+  cursor: pointer;
+}
+.tableWrap {
+  overflow-x: auto;
+}
+
+/* Toast — app uses `sonner`, so this rule is unused visually but kept for the
+   `.back-home`-style CSS variable parity note; no bare selector here since
+   the whole suite renders through <Toaster/> from sonner. */
+
+/* Help / cheatsheet styling (Protocol Reference / TLS Keys modals) */
+.helpSection {
+  margin-bottom: 14px;
+}
+.helpSection h4 {
+  font-size: 12px;
+  margin-bottom: 6px;
+  color: #1a4a8a;
+  border-bottom: 1px solid #d0d0d0;
+  padding-bottom: 3px;
+}
+.helpSection code {
+  font-family: "Consolas", monospace;
+  background: #eef3f9;
+  color: #1a4a8a;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 11px;
+}
+.helpSection pre {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 8px 12px;
+  border-radius: 3px;
+  font-family: "Consolas", monospace;
+  font-size: 11px;
+  overflow: auto;
+  margin: 4px 0;
+}
+
+/* Follow stream window */
+.streamContent {
+  background: #fafafa;
+  border: 1px solid #c0c0c0;
+  padding: 8px;
+  font-family: "Consolas", monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 50vh;
+  overflow: auto;
+  user-select: text;
+}
+.streamClient {
+  color: #b51717;
+}
+.streamServer {
+  color: #1a4a8a;
+}
+
+/* Coloring rules editor */
+.colorRuleList {
+  border: 1px solid #c0c0c0;
+  max-height: 360px;
+  overflow: auto;
+  background: #fff;
+}
+.colorRuleRow {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-bottom: 1px solid #ececec;
+  gap: 8px;
+  font-family: "Consolas", monospace;
+  font-size: 11px;
+}
+.colorRuleSwatch {
+  width: 80px;
+  height: 18px;
+  border: 1px solid #888;
+  text-align: center;
+  line-height: 18px;
+  font-size: 10px;
+}
+.colorRuleName {
+  width: 140px;
+}
+.colorRuleFilter {
+  flex: 1;
+  color: #1a4a8a;
+}
+
+/* Protocol hierarchy tree (Statistics modals) */
+.protoTreeRow {
+  display: flex;
+  padding: 3px 4px;
+  border-bottom: 1px solid #ececec;
+  align-items: center;
+  font-size: 11px;
+}
+.protoTreeRow:hover {
+  background: #f0f6fc;
+}
+.protoTreeName {
+  flex: 1;
+  font-family: "Consolas", monospace;
+}
+.protoTreeCol {
+  width: 90px;
+  text-align: right;
+  font-family: "Consolas", monospace;
+}
+
+/* I/O Graph canvas */
+.ioCanvas {
+  background: #fafafa;
+  border: 1px solid #c0c0c0;
+  width: 100%;
+  height: 320px;
+  display: block;
+}
+
+/* ===== misc small helpers ===== */
+.small {
+  font-size: 11px;
+  color: #666;
+}
+.mono {
+  font-family: "Consolas", "Courier New", monospace;
+}
+.flex {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.flexBetween {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.empty {
+  padding: 40px;
+  text-align: center;
+  color: #777;
+  background: #fff;
+  border: 1px dashed #c0c0c0;
+}

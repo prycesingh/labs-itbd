@@ -31,7 +31,7 @@ export function LoginCard({
   className,
 }: {
   signInAction: () => Promise<void>;
-  onAdminSubmit?: (username: string, password: string) => void;
+  onAdminSubmit?: (username: string, password: string) => void | Promise<void>;
   className?: string;
 }) {
   const reduce = useReducedMotion();
@@ -301,7 +301,7 @@ function AdminContent({
   active,
 }: {
   onBack: () => void;
-  onAdminSubmit?: (username: string, password: string) => void;
+  onAdminSubmit?: (username: string, password: string) => void | Promise<void>;
   active: boolean;
 }) {
   const [showPassword, setShowPassword] = useState(false);

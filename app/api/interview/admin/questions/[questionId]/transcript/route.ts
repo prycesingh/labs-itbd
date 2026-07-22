@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { db } from "@/DB/drizzle";
 import { interviewQuestions } from "@/DB/interviewSchema";
 import { transcribeAudio } from "@/lib/interview/aiServices";
+import { isAdminRole, type Role } from "@/lib/rbac";
 import { extractId, resolveAbsolutePath } from "@/lib/uploads";
 import { eq } from "drizzle-orm";
 import fs from "node:fs/promises";
@@ -10,8 +11,6 @@ import { z } from "zod";
 const paramsSchema = z.object({
   questionId: z.string().uuid(),
 });
-
-const adminRoles = new Set(["devAdmin", "adminTeam", "executive"]);
 
 export async function POST(
   _request: Request,
@@ -23,7 +22,7 @@ export async function POST(
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!adminRoles.has(session.user.role ?? "user")) {
+  if (!isAdminRole(session.user.role as Role | undefined)) {
     return Response.json({ error: "Access denied" }, { status: 403 });
   }
 

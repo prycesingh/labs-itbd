@@ -2,15 +2,18 @@ import { NextResponse } from "next/server";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
+import { isAdminRole, type Role } from "@/lib/rbac";
 
 /**
- * Email-assessment roles (the standalone app's role vocabulary). The WMS user
- * model is the source of truth; we translate WMS roles into these:
- *   - WMS "devAdmin"            -> "admin" AND "assessor"
- *   - WMS "user" (default role) -> "candidate"
+ * Email-assessment roles (the standalone app's role vocabulary). The shared
+ * user model is the source of truth; we translate app roles into these:
+ *   - any admin role (see ADMIN_ROLES in lib/rbac: devAdmin, executive, …)
+ *                               -> "admin" AND "assessor"
+ *   - everyone else             -> "candidate"
  *
  * All ported routes/pages were written against this vocabulary, so this mapping
- * lets them run unchanged on top of WMS auth.
+ * lets them run unchanged. Using isAdminRole() keeps this in lockstep with the
+ * proxy/RBAC policy so navigation and page guards never disagree.
  */
 export const roleNames = ["candidate", "admin", "assessor"] as const;
 export type EmailAssessmentRole = (typeof roleNames)[number];
@@ -24,15 +27,16 @@ export type EmailAssessmentUser = {
 };
 
 function mapWmsRoleToEmailAssessmentRole(wmsRole: string | undefined | null): EmailAssessmentRole {
-  return wmsRole === "devAdmin" ? "admin" : "candidate";
+  return isAdminRole((wmsRole ?? null) as Role | null) ? "admin" : "candidate";
 }
 
 /**
- * The set of email-assessment roles a WMS user effectively holds. devAdmin
- * acts as BOTH admin and assessor; everyone else is a candidate.
+ * The set of email-assessment roles an app user effectively holds. Any admin
+ * role (devAdmin, executive, …) acts as BOTH admin and assessor; everyone else
+ * is a candidate.
  */
 function effectiveRoles(wmsRole: string | undefined | null): EmailAssessmentRole[] {
-  if (wmsRole === "devAdmin") {
+  if (isAdminRole((wmsRole ?? null) as Role | null)) {
     return ["admin", "assessor"];
   }
   return ["candidate"];

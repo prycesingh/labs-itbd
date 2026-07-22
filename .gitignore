@@ -7,6 +7,9 @@
 /.next/
 /out/
 
+#sample project
+/itbd-lab
+
 # production
 /build
 
