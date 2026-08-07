@@ -53,7 +53,7 @@ export function ChangePasswordForm({ hasPassword }: { hasPassword: boolean }) {
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
       {hasPassword ? (
         <div className="grid gap-2">
-          <Label htmlFor="currentPassword">Current password</Label>
+          <Label htmlFor="currentPassword" className="text-white/70">Current password</Label>
           <Input
             id="currentPassword"
             type="password"
@@ -66,7 +66,7 @@ export function ChangePasswordForm({ hasPassword }: { hasPassword: boolean }) {
       ) : null}
 
       <div className="grid gap-2">
-        <Label htmlFor="newPassword">New password</Label>
+        <Label htmlFor="newPassword" className="text-white/70">New password</Label>
         <Input
           id="newPassword"
           type="password"
@@ -78,7 +78,7 @@ export function ChangePasswordForm({ hasPassword }: { hasPassword: boolean }) {
       </div>
 
       <div className="grid gap-2">
-        <Label htmlFor="confirmPassword">Confirm new password</Label>
+        <Label htmlFor="confirmPassword" className="text-white/70">Confirm new password</Label>
         <Input
           id="confirmPassword"
           type="password"

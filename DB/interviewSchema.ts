@@ -18,6 +18,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  customType,
   decimal,
   index,
   int,
@@ -31,6 +32,28 @@ import {
   varchar,
 } from "drizzle-orm/mysql-core";
 import { users } from "./schema";
+
+/**
+ * MariaDB reports its `JSON` type as `LONGTEXT` (JSON is a LONGTEXT alias with
+ * a CHECK constraint, not a native binary type like MySQL's). Drizzle's
+ * mysql2 driver decides whether to auto-parse a column based on the type the
+ * driver reports, so `json()` silently returns raw strings on MariaDB instead
+ * of parsed objects. This custom type parses/stringifies explicitly so reads
+ * always yield the declared TS shape regardless of driver auto-parsing.
+ */
+function jsonText<T>(name: string) {
+  return customType<{ data: T; driverData: string }>({
+    dataType() {
+      return "longtext";
+    },
+    toDriver(value: T): string {
+      return JSON.stringify(value);
+    },
+    fromDriver(value: string): T {
+      return JSON.parse(value) as T;
+    },
+  })(name);
+}
 
 // ─────────────────────────────────────────────
 // INTERVIEW CONFIG TABLES
@@ -68,45 +91,6 @@ export const interviewModules = mysqlTable(
       table.isActive,
     ),
     index("interview_modules_created_idx").on(table.createdAt),
-  ],
-);
-
-/**
- * Interview questions belong to interview modules and can include prompt audio + transcript.
- */
-export const interviewQuestions = mysqlTable(
-  "interview_questions",
-  {
-    id: varchar({ length: 36 }).notNull(),
-    moduleId: varchar("module_id", { length: 36 })
-      .notNull()
-      .references(() => interviewModules.id, {
-        onDelete: "cascade",
-        onUpdate: "cascade",
-      }),
-    promptText: text("prompt_text").notNull(),
-    promptAudioPath: varchar("prompt_audio_path", { length: 500 }),
-    promptTranscript: text("prompt_transcript"),
-    questionOrder: int("question_order").notNull(),
-    isActive: boolean("is_active").notNull().default(true),
-    createdAt: timestamp("created_at", { mode: "string" })
-      .default(sql`CURRENT_TIMESTAMP`)
-      .notNull(),
-    updatedAt: timestamp("updated_at", { mode: "string" })
-      .onUpdateNow()
-      .notNull(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.id], name: "interview_questions_id" }),
-    unique("interview_questions_id_unique").on(table.id),
-    unique("interview_questions_module_order_unique").on(
-      table.moduleId,
-      table.questionOrder,
-    ),
-    index("interview_questions_module_active_idx").on(
-      table.moduleId,
-      table.isActive,
-    ),
   ],
 );
 
@@ -248,6 +232,7 @@ export const candidateInterviewSessions = mysqlTable(
       .notNull()
       .default("draft"),
     sessionState: json("session_state").notNull().default({}), // { currentQuestionIndex, recordedCount, processedCount, errors[] }
+    assignedQuestionIds: jsonText<string[]>("assigned_question_ids").notNull(), // ordered bank question IDs picked for this session; fixed at creation, reused on resume
     audioStorageMode: mysqlEnum("audio_storage_mode", ["filesystem", "s3"])
       .notNull()
       .default("filesystem"),

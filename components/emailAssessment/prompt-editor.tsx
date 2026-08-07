@@ -74,82 +74,94 @@ export function PromptEditor({ promptVersion, rubric }: PromptEditorProps) {
 
   return (
     <form
-      className="grid border rounded-2xl p-6 gap-6 mt-5"
+      className="itbd-glow-border relative grid gap-6 overflow-hidden rounded-2xl bg-black/40 p-6 backdrop-blur-md"
       onSubmit={form.handleSubmit(onSubmit)}
     >
-      <div className="">
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-lg">Active evaluator</h2>
-            <p className="text-sm text-muted-foreground">
-              Version {promptVersion.version} · rubric {rubric.name}
-            </p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="model">OpenAI model</Label>
-              <Input id="model" {...form.register("model")} />
-            </div>
-          </div>
+      <span
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+      />
+
+      <div className="relative z-10 space-y-4">
+        <div>
+          <h2 className="text-lg font-bold text-white">Active evaluator</h2>
+          <p className="text-sm text-white/60">
+            Version {promptVersion.version} &middot; rubric {rubric.name}
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="systemPrompt">System prompt</Label>
-            <Textarea
-              id="systemPrompt"
-              className="min-h-40"
-              {...form.register("systemPrompt")}
-            />
+            <Label htmlFor="model" className="text-white/70">
+              OpenAI model
+            </Label>
+            <Input id="model" {...form.register("model")} />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="evaluationPrompt">Evaluation prompt</Label>
-            <Textarea
-              id="evaluationPrompt"
-              className="min-h-40"
-              {...form.register("evaluationPrompt")}
-            />
-          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="systemPrompt" className="text-white/70">
+            System prompt
+          </Label>
+          <Textarea
+            id="systemPrompt"
+            className="min-h-40"
+            {...form.register("systemPrompt")}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="evaluationPrompt" className="text-white/70">
+            Evaluation prompt
+          </Label>
+          <Textarea
+            id="evaluationPrompt"
+            className="min-h-40"
+            {...form.register("evaluationPrompt")}
+          />
         </div>
       </div>
 
-      <div className="">
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-lg">Rubric weights</h2>
-            <p className="text-sm text-muted-foreground">
-              Update how the AI distribution assigns the candidate score.
-            </p>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-3">
-            <ScoreInput
-              label="Professional tone"
-              name="professionalTone"
-              register={form.register}
-            />
-            <ScoreInput
-              label="Grammar / language"
-              name="grammarLanguage"
-              register={form.register}
-            />
-            <ScoreInput
-              label="Clarity / empathy / respect"
-              name="clarityEmpathyRespect"
-              register={form.register}
-            />
-            <ScoreInput
-              label="Structure"
-              name="structure"
-              register={form.register}
-            />
-            <ScoreInput
-              label="Completeness"
-              name="completeness"
-              register={form.register}
-            />
-          </div>
+      <div className="relative z-10 space-y-4 border-t border-white/10 pt-6">
+        <div>
+          <h2 className="text-lg font-bold text-white">Rubric weights</h2>
+          <p className="text-sm text-white/60">
+            Update how the AI distribution assigns the candidate score.
+          </p>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <ScoreInput
+            label="Professional tone"
+            name="professionalTone"
+            register={form.register}
+            defaultValue={rubric.weights.professionalTone}
+          />
+          <ScoreInput
+            label="Grammar / language"
+            name="grammarLanguage"
+            register={form.register}
+            defaultValue={rubric.weights.grammarLanguage}
+          />
+          <ScoreInput
+            label="Clarity / empathy / respect"
+            name="clarityEmpathyRespect"
+            register={form.register}
+            defaultValue={rubric.weights.clarityEmpathyRespect}
+          />
+          <ScoreInput
+            label="Structure"
+            name="structure"
+            register={form.register}
+            defaultValue={rubric.weights.structure}
+          />
+          <ScoreInput
+            label="Completeness"
+            name="completeness"
+            register={form.register}
+            defaultValue={rubric.weights.completeness}
+          />
         </div>
       </div>
 
-      <DefaultButton type="submit" disabled={submitting}>
-        {submitting ? "Saving..." : "Save prompt settings"}
+      <DefaultButton type="submit" loading={submitting} className="relative z-10">
+        Save prompt settings
       </DefaultButton>
     </form>
   );
@@ -159,19 +171,22 @@ function ScoreInput({
   label,
   name,
   register,
+  defaultValue,
 }: {
   label: string;
   name: keyof PromptEditorValues["weights"];
   register: ReturnType<typeof useForm<PromptEditorValues>>["register"];
+  defaultValue: number;
 }) {
   return (
     <div className="space-y-2">
-      <Label>{label}</Label>
+      <Label className="text-white/70">{label}</Label>
       <Input
         type="number"
         min={0}
         max={100}
-        {...register(`weights.${name}` as const)}
+        defaultValue={defaultValue}
+        {...register(`weights.${name}` as const, { valueAsNumber: true })}
       />
     </div>
   );

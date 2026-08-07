@@ -4,8 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { BarChart3, X } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import DefaultButton from "@/components/app_componentes/customButtons";
 import { Input } from "@/components/ui/input";
 
 const API_BASE = "/api/emailAssessment";
@@ -46,8 +45,8 @@ export function EvaluatorScoreForm({
   return (
     <div className="flex flex-wrap items-end gap-3">
       <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-muted-foreground" htmlFor="eval-score">
-          Evaluator score (0 – 10)
+        <label className="text-xs font-medium text-white/60" htmlFor="eval-score">
+          Evaluator score (0 - 10)
         </label>
         <Input
           id="eval-score"
@@ -61,8 +60,8 @@ export function EvaluatorScoreForm({
           placeholder="e.g. 7"
         />
       </div>
-      <div className="flex flex-col gap-1 flex-1 min-w-[180px]">
-        <label className="text-xs font-medium text-muted-foreground" htmlFor="eval-notes">
+      <div className="flex min-w-45 flex-1 flex-col gap-1">
+        <label className="text-xs font-medium text-white/60" htmlFor="eval-notes">
           Notes (optional)
         </label>
         <Input
@@ -72,9 +71,9 @@ export function EvaluatorScoreForm({
           placeholder="Optional reviewer notes..."
         />
       </div>
-      <Button onClick={save} disabled={saving}>
-        {saving ? "Saving…" : "Save score"}
-      </Button>
+      <DefaultButton onClick={save} loading={saving}>
+        Save score
+      </DefaultButton>
     </div>
   );
 }
@@ -84,7 +83,7 @@ export function StandardResponseToggle({ modelAnswer }: { modelAnswer: string | 
 
   if (!modelAnswer) {
     return (
-      <p className="text-sm text-muted-foreground italic">
+      <p className="text-sm text-white/50 italic">
         No standard response recorded for this scenario.
       </p>
     );
@@ -92,15 +91,19 @@ export function StandardResponseToggle({ modelAnswer }: { modelAnswer: string | 
 
   return (
     <div className="space-y-2">
-      <Button size="sm" variant="outline" onClick={() => setOpen((v) => !v)}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="rounded-lg border border-white/10 px-3 py-1.5 text-sm font-medium text-white/70 transition hover:border-itbd-blue hover:text-itbd-blue"
+      >
         {open ? "Hide standard response" : "View standard response"}
-      </Button>
+      </button>
       {open && (
-        <div className="rounded-2xl border border-indigo-200/60 bg-indigo-50/40 p-4 dark:border-indigo-700/40 dark:bg-indigo-950/30">
-          <p className="text-sm font-medium text-indigo-700 dark:text-indigo-300 mb-2">
+        <div className="rounded-xl border border-itbd-blue/30 bg-itbd-blue/5 p-4">
+          <p className="mb-2 text-sm font-medium text-itbd-blue">
             Standard / Model Response
           </p>
-          <p className="whitespace-pre-wrap text-sm leading-7">{modelAnswer}</p>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-white/80">{modelAnswer}</p>
         </div>
       )}
     </div>
@@ -117,14 +120,14 @@ export function AiDetectionBadge({
   return (
     <div className="flex flex-wrap gap-2">
       {detected && (
-        <Badge className="bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300 border border-rose-300 dark:border-rose-600">
-          ⚠ AI-generated content detected (-10%)
-        </Badge>
+        <span className="rounded-full border border-orange-400/40 bg-orange-500/10 px-2.5 py-0.5 text-xs font-semibold text-orange-300">
+          AI-generated content detected (-10%)
+        </span>
       )}
       {copyPenalty > 0 && (
-        <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300 dark:border-amber-600">
-          📋 Copy penalty: −{copyPenalty.toFixed(1)} marks
-        </Badge>
+        <span className="rounded-full border border-orange-400/40 bg-orange-500/10 px-2.5 py-0.5 text-xs font-semibold text-orange-300">
+          Copy penalty: &minus;{copyPenalty.toFixed(1)} marks
+        </span>
       )}
     </div>
   );
@@ -152,88 +155,105 @@ export function CandidateStatsButton({
 
   return (
     <>
-      <Button onClick={() => setOpen(true)} className="flex items-center gap-2">
+      <DefaultButton onClick={() => setOpen(true)} className="gap-2">
         <BarChart3 className="h-4 w-4" />
         View Candidate Stats
-      </Button>
+      </DefaultButton>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-left">
-          <div className="w-full max-w-3xl rounded-2xl border bg-background p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-foreground">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b pb-4 mb-4">
-              <div>
-                <h3 className="text-xl font-bold tracking-tight">Candidate Performance Analytics</h3>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  Historical stats for {candidateName} ({candidateEmail})
-                </p>
-              </div>
-              <Button size="icon" variant="ghost" onClick={() => setOpen(false)} className="rounded-full">
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-
-            {/* Content */}
-            <div className="grid gap-6 md:grid-cols-2 max-h-[60vh] overflow-y-auto pr-2">
-              {/* Grade Distribution */}
-              <div className="rounded-2xl border bg-muted/10 p-5 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 text-left backdrop-blur-sm">
+          <div className="itbd-glow-border relative w-full max-w-3xl overflow-hidden rounded-2xl bg-black/80 p-6 backdrop-blur-md">
+            <span
+              aria-hidden
+              className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+            />
+            <div className="relative z-10">
+              <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-4">
                 <div>
-                  <h4 className="font-semibold text-base">Grade Distribution</h4>
-                  <p className="text-xs text-muted-foreground">
-                    Weighted grades across all completed sessions.
+                  <h3 className="text-xl font-bold tracking-tight text-white">
+                    Candidate Performance Analytics
+                  </h3>
+                  <p className="mt-0.5 text-sm text-white/60">
+                    Historical stats for {candidateName} ({candidateEmail})
                   </p>
                 </div>
-                <div className="space-y-3">
-                  {Object.entries(gradeDistribution).length === 0 ? (
-                    <p className="text-sm text-muted-foreground italic">
-                      No completed session grades yet.
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 text-white/60 transition hover:border-itbd-blue hover:text-itbd-blue"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="grid max-h-[60vh] gap-6 overflow-y-auto pr-2 md:grid-cols-2">
+                <div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-5">
+                  <div>
+                    <h4 className="text-base font-semibold text-white">Grade Distribution</h4>
+                    <p className="text-xs text-white/50">
+                      Weighted grades across all completed sessions.
                     </p>
-                  ) : (
-                    Object.entries(gradeDistribution).map(([grade, count]) => (
-                      <div
-                        key={grade}
-                        className="flex items-center justify-between rounded-xl border bg-card p-3"
-                      >
-                        <span className="font-medium">Grade {grade}</span>
-                        <Badge className="px-2 py-0.5 bg-muted text-muted-foreground">{count}</Badge>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Scenario Performance */}
-              <div className="rounded-2xl border bg-muted/10 p-5 space-y-4">
-                <div>
-                  <h4 className="font-semibold text-base">Scenario Performance</h4>
-                  <p className="text-xs text-muted-foreground">
-                    Average weighted score contribution per scenario.
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  {scenarioPerformance.length === 0 ? (
-                    <p className="text-sm text-muted-foreground italic">No scenarios evaluated yet.</p>
-                  ) : (
-                    scenarioPerformance.map((item) => (
-                      <div key={item.title} className="rounded-xl border bg-card p-3 space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-medium text-sm truncate max-w-[200px]">{item.title}</p>
-                          <Badge className="text-[10px] px-1 py-0">{item.difficulty}</Badge>
+                  </div>
+                  <div className="space-y-3">
+                    {Object.entries(gradeDistribution).length === 0 ? (
+                      <p className="text-sm text-white/50 italic">
+                        No completed session grades yet.
+                      </p>
+                    ) : (
+                      Object.entries(gradeDistribution).map(([grade, count]) => (
+                        <div
+                          key={grade}
+                          className="flex items-center justify-between rounded-lg border border-white/10 bg-black/30 p-3"
+                        >
+                          <span className="font-medium text-white">Grade {grade}</span>
+                          <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/70">
+                            {count}
+                          </span>
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          {item.attempts} attempts · avg{" "}
-                          {(item.weightedTotal / item.attempts).toFixed(2)} / {item.maxScore}
-                        </p>
-                      </div>
-                    ))
-                  )}
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-5">
+                  <div>
+                    <h4 className="text-base font-semibold text-white">Scenario Performance</h4>
+                    <p className="text-xs text-white/50">
+                      Average weighted score contribution per scenario.
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    {scenarioPerformance.length === 0 ? (
+                      <p className="text-sm text-white/50 italic">No scenarios evaluated yet.</p>
+                    ) : (
+                      scenarioPerformance.map((item) => (
+                        <div
+                          key={item.title}
+                          className="space-y-1 rounded-lg border border-white/10 bg-black/30 p-3"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="max-w-50 truncate text-sm font-medium text-white">
+                              {item.title}
+                            </p>
+                            <span className="rounded-full border border-itbd-blue/40 bg-itbd-blue/10 px-1.5 py-0 text-[10px] font-semibold text-itbd-blue capitalize">
+                              {item.difficulty}
+                            </span>
+                          </div>
+                          <p className="text-xs text-white/50">
+                            {item.attempts} attempts &middot; avg{" "}
+                            {(item.weightedTotal / item.attempts).toFixed(2)} / {item.maxScore}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Footer */}
-            <div className="mt-6 flex justify-end border-t pt-4">
-              <Button onClick={() => setOpen(false)}>Close</Button>
+              <div className="mt-6 flex justify-end border-t border-white/10 pt-4">
+                <DefaultButton onClick={() => setOpen(false)}>Close</DefaultButton>
+              </div>
             </div>
           </div>
         </div>

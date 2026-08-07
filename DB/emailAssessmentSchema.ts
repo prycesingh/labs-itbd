@@ -13,9 +13,9 @@
 
 import {
   boolean,
+  customType,
   index,
   int,
-  json,
   mysqlEnum,
   mysqlTable,
   text,
@@ -25,6 +25,28 @@ import {
 } from "drizzle-orm/mysql-core";
 
 import { users } from "./schema";
+
+/**
+ * MariaDB reports its `JSON` type as `LONGTEXT` (JSON is a LONGTEXT alias with
+ * a CHECK constraint, not a native binary type like MySQL's). Drizzle's
+ * mysql2 driver decides whether to auto-parse a column based on the type the
+ * driver reports, so `json()` silently returns raw strings on MariaDB instead
+ * of parsed objects. This custom type parses/stringifies explicitly so reads
+ * always yield the declared TS shape regardless of driver auto-parsing.
+ */
+function jsonText<T>(name: string) {
+  return customType<{ data: T; driverData: string }>({
+    dataType() {
+      return "longtext";
+    },
+    toDriver(value: T): string {
+      return JSON.stringify(value);
+    },
+    fromDriver(value: string): T {
+      return JSON.parse(value) as T;
+    },
+  })(name);
+}
 
 // ─────────────────────────────────────────────
 // Enum helpers (MySQL ENUM type)
@@ -69,7 +91,7 @@ export const emailAssessmentRubrics = mysqlTable(
     id: varchar("id", { length: 36 }).primaryKey(),
     version: varchar("version", { length: 64 }).notNull(),
     name: varchar("name", { length: 180 }).notNull(),
-    weights: json("weights").$type<RubricWeights>().notNull(),
+    weights: jsonText<RubricWeights>("weights").notNull(),
     active: boolean("active").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
@@ -212,10 +234,10 @@ export const emailAssessmentEvaluations = mysqlTable(
     status: eaEvaluationStatusEnum("status").notNull().default("pending"),
     overallScore: int("overall_score"),
     grade: eaGradeEnum("grade"),
-    categoryScores: json("category_scores").$type<CategoryScores>(),
-    strengths: json("strengths").$type<string[]>(),
-    weaknesses: json("weaknesses").$type<string[]>(),
-    improvements: json("improvements").$type<string[]>(),
+    categoryScores: jsonText<CategoryScores>("category_scores"),
+    strengths: jsonText<string[]>("strengths"),
+    weaknesses: jsonText<string[]>("weaknesses"),
+    improvements: jsonText<string[]>("improvements"),
     detailedFeedback: text("detailed_feedback"),
     verdict: text("verdict"),
     aiDetected: boolean("ai_detected").notNull().default(false),
@@ -253,9 +275,9 @@ export const emailAssessmentManualScores = mysqlTable(
       .references(() => users.id, { onDelete: "restrict" }),
     overallScore: int("overall_score").notNull(),
     grade: eaGradeEnum("grade").notNull(),
-    categoryScores: json("category_scores").$type<CategoryScores>().notNull(),
+    categoryScores: jsonText<CategoryScores>("category_scores").notNull(),
     summary: text("summary").notNull(),
-    improvementAreas: json("improvement_areas").$type<string[]>().notNull(),
+    improvementAreas: jsonText<string[]>("improvement_areas").notNull(),
     notes: text("notes"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
@@ -282,7 +304,7 @@ export const emailAssessmentAiRequests = mysqlTable(
     ),
     model: varchar("model", { length: 120 }).notNull(),
     status: eaAiRequestStatusEnum("status").notNull().default("pending"),
-    requestPayload: json("request_payload").notNull(),
+    requestPayload: jsonText<unknown>("request_payload").notNull(),
     inputTokens: int("input_tokens"),
     outputTokens: int("output_tokens"),
     costUsdCents: int("cost_usd_cents"),
@@ -301,8 +323,8 @@ export const emailAssessmentAiResponses = mysqlTable("email_assessment_ai_respon
   aiRequestId: varchar("ai_request_id", { length: 36 })
     .notNull()
     .references(() => emailAssessmentAiRequests.id, { onDelete: "cascade" }),
-  rawResponse: json("raw_response").notNull(),
-  validationErrors: json("validation_errors").$type<string[]>(),
+  rawResponse: jsonText<unknown>("raw_response").notNull(),
+  validationErrors: jsonText<string[]>("validation_errors"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -319,7 +341,7 @@ export const emailAssessmentAuditLogs = mysqlTable(
     action: eaAuditActionEnum("action").notNull(),
     entityType: varchar("entity_type", { length: 80 }).notNull(),
     entityId: varchar("entity_id", { length: 36 }),
-    metadata: json("metadata").notNull(),
+    metadata: jsonText<unknown>("metadata").notNull(),
     ipAddress: varchar("ip_address", { length: 64 }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },

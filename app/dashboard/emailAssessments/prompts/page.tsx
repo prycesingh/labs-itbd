@@ -1,18 +1,12 @@
-﻿import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "@/DB/drizzle";
 import {
   emailAssessmentPromptVersions as promptVersions,
   emailAssessmentRubrics as rubrics,
 } from "@/DB/emailAssessmentSchema";
+import { PromptCreateForm } from "@/components/emailAssessment/prompt-create-form";
 import { PromptEditor } from "@/components/emailAssessment/prompt-editor";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { requireRole } from "@/lib/emailAssessment/auth";
 
 export default async function EmailAssessmentsPromptsPage() {
@@ -27,27 +21,54 @@ export default async function EmailAssessmentsPromptsPage() {
     .limit(1);
 
   return (
-    <main className="flex w-full flex-col">
-      <header className="flex flex-col">
-        <h1 className="text-3xl">Email Assessment Evaluator</h1>
-      </header>
-      <Separator className="my-2 bg-white" />
-      {!activePrompt ? (
-        <Card className="mt-5">
-          <CardHeader>
-            <CardTitle>No active prompt version</CardTitle>
-            <CardDescription>
-              Create or seed an active prompt version and rubric before managing
-              evaluator settings.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      ) : (
-        <PromptEditor
-          promptVersion={activePrompt.promptVersion}
-          rubric={activePrompt.rubric}
-        />
-      )}
+    <main className="flex w-full flex-col gap-6">
+      <h1 className="text-2xl font-bold tracking-wide text-white uppercase sm:text-3xl">
+        Evaluation <span className="text-itbd-blue">Prompts</span>
+      </h1>
+
+      <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+        <ItbdCard>
+          <h2 className="text-lg font-bold text-white">
+            Create prompt version
+          </h2>
+          <p className="mt-1 text-sm text-white/60">
+            Adds a new prompt + rubric and activates it immediately.
+          </p>
+          <div className="mt-4">
+            <PromptCreateForm />
+          </div>
+        </ItbdCard>
+
+        {!activePrompt ? (
+          <ItbdCard>
+            <h2 className="text-lg font-bold text-white">
+              No active prompt version
+            </h2>
+            <p className="mt-1 text-sm text-white/60">
+              Create a prompt version and rubric before managing evaluator
+              settings.
+            </p>
+          </ItbdCard>
+        ) : (
+          <PromptEditor
+            promptVersion={activePrompt.promptVersion}
+            rubric={activePrompt.rubric}
+          />
+        )}
+      </div>
     </main>
+  );
+}
+
+/** Shared glow-border/blur card surface matching the rest of the app's brand. */
+function ItbdCard({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="itbd-glow-border relative overflow-hidden rounded-2xl bg-black/40 p-6 backdrop-blur-md">
+      <span
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+      />
+      <div className="relative z-10">{children}</div>
+    </div>
   );
 }

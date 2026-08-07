@@ -1,4 +1,5 @@
 import { AdoSimulator } from "@/components/labs/simulators/azure-devops/ado-simulator";
+import { SimulatorSessionTracker } from "@/components/labs/SimulatorSessionTracker";
 import { requireUser } from "@/lib/labs/auth";
 
 /**
@@ -12,6 +13,7 @@ export default async function AdoSimulatorPage() {
 
   return (
     <div className="-m-6 h-[calc(100%+3rem)]">
+      <SimulatorSessionTracker simulatorKey="azure-devops" />
       <AdoSimulator />
     </div>
   );

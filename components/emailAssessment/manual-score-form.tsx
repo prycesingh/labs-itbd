@@ -7,7 +7,7 @@ import { useForm, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { Button } from "@/components/ui/button";
+import DefaultButton from "@/components/app_componentes/customButtons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -84,7 +84,7 @@ export function ManualScoreForm({ submissionId }: { submissionId: string }) {
 
   return (
     <form
-      className="space-y-4 rounded-2xl border bg-muted/30 p-4"
+      className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-4"
       onSubmit={form.handleSubmit(onSubmit)}
     >
       <div className="grid gap-3 md:grid-cols-5">
@@ -95,18 +95,18 @@ export function ManualScoreForm({ submissionId }: { submissionId: string }) {
         <ScoreInput label="Complete /15" name="completeness" register={form.register} />
       </div>
       <div className="space-y-2">
-        <Label>Summary</Label>
+        <Label className="text-white/70">Summary</Label>
         <Textarea {...form.register("summary")} />
       </div>
       <div className="space-y-2">
-        <Label>Improvement areas, one per line</Label>
+        <Label className="text-white/70">Improvement areas, one per line</Label>
         <Textarea {...form.register("improvementAreas")} />
       </div>
       <div className="space-y-2">
-        <Label>Private notes</Label>
+        <Label className="text-white/70">Private notes</Label>
         <Textarea {...form.register("notes")} />
       </div>
-      <Button disabled={submitting}>{submitting ? "Saving..." : "Save manual score"}</Button>
+      <DefaultButton loading={submitting}>Save manual score</DefaultButton>
     </form>
   );
 }
@@ -125,7 +125,7 @@ function ScoreInput({
 }) {
   return (
     <div className="space-y-2">
-      <Label>{label}</Label>
+      <Label className="text-white/70">{label}</Label>
       <Input type="number" min={0} {...register(name)} />
     </div>
   );

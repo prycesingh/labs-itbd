@@ -62,6 +62,13 @@ export async function GET(request: NextRequest) {
         try {
           const status = await getSessionProcessingStatus(sessionId);
 
+          // The request can abort (client disconnects) while the await above
+          // is in flight — closeStream() already ran by the time we resume,
+          // so guard every enqueue rather than relying on the try/catch alone.
+          if (closed) {
+            return;
+          }
+
           controller.enqueue(
             sseEvent("progress", {
               transcriptedAnswers: status.progress.transcriptedAnswers,
@@ -96,16 +103,18 @@ export async function GET(request: NextRequest) {
             closeStream();
           }
         } catch (error) {
-          controller.enqueue(
-            sseEvent("error", {
-              sessionId,
-              message:
-                error instanceof Error
-                  ? error.message
-                  : "Failed to read processing status",
-            }),
-          );
-          closeStream();
+          if (!closed) {
+            controller.enqueue(
+              sseEvent("error", {
+                sessionId,
+                message:
+                  error instanceof Error
+                    ? error.message
+                    : "Failed to read processing status",
+              }),
+            );
+            closeStream();
+          }
         } finally {
           inFlight = false;
         }

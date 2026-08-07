@@ -1,5 +1,8 @@
 import { db } from "@/DB/drizzle";
-import { interviewQuestions } from "@/DB/interviewSchema";
+import {
+  interviewModuleQuestionAssignments,
+  interviewQuestionBank,
+} from "@/DB/interviewSchema";
 import { and, asc, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -20,24 +23,32 @@ export async function GET(
 
     const questions = await db
       .select({
-        id: interviewQuestions.id,
-        moduleId: interviewQuestions.moduleId,
-        promptText: interviewQuestions.promptText,
-        promptAudioPath: interviewQuestions.promptAudioPath,
-        promptTranscript: interviewQuestions.promptTranscript,
-        questionOrder: interviewQuestions.questionOrder,
-        isActive: interviewQuestions.isActive,
-        createdAt: interviewQuestions.createdAt,
-        updatedAt: interviewQuestions.updatedAt,
+        id: interviewQuestionBank.id,
+        moduleId: interviewModuleQuestionAssignments.moduleId,
+        promptText: interviewQuestionBank.promptText,
+        promptAudioPath: interviewQuestionBank.promptAudioPath,
+        promptTranscript: interviewQuestionBank.promptTranscript,
+        questionOrder: interviewModuleQuestionAssignments.questionOrder,
+        isActive: interviewQuestionBank.isActive,
+        createdAt: interviewQuestionBank.createdAt,
+        updatedAt: interviewQuestionBank.updatedAt,
       })
-      .from(interviewQuestions)
-      .where(
-        and(
-          eq(interviewQuestions.moduleId, parsed.data),
-          eq(interviewQuestions.isActive, true),
+      .from(interviewModuleQuestionAssignments)
+      .innerJoin(
+        interviewQuestionBank,
+        eq(
+          interviewQuestionBank.id,
+          interviewModuleQuestionAssignments.questionId,
         ),
       )
-      .orderBy(asc(interviewQuestions.questionOrder));
+      .where(
+        and(
+          eq(interviewModuleQuestionAssignments.moduleId, parsed.data),
+          eq(interviewModuleQuestionAssignments.isActive, true),
+          eq(interviewQuestionBank.isActive, true),
+        ),
+      )
+      .orderBy(asc(interviewModuleQuestionAssignments.questionOrder));
 
     return NextResponse.json(questions, { status: 200 });
   } catch (error) {

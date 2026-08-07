@@ -1,7 +1,10 @@
 import { auth } from "@/auth";
+import { DashboardBreadcrumb } from "@/components/app_componentes/dashboard-breadcrumb";
+import { DashboardHeader } from "@/components/app_componentes/dashboard-header";
+import { DashboardNav } from "@/components/app_componentes/dashboard-nav";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { db } from "@/DB/drizzle";
 import { users } from "@/DB/schema";
-import { DashboardNav } from "@/components/app_componentes/dashboard-nav";
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 
@@ -28,9 +31,17 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <DashboardNav user={session.user} />
-      <main className="flex-1 overflow-y-auto p-6">{children}</main>
-    </div>
+    <SidebarProvider className="flex h-screen min-h-0 flex-col overflow-hidden">
+      <DashboardHeader user={session.user} />
+      <div className="flex min-h-0 flex-1">
+        <DashboardNav user={session.user} />
+        <SidebarInset className="overflow-y-auto">
+          <div className="px-6 py-2">
+            <DashboardBreadcrumb />
+          </div>
+          <div className="px-6">{children}</div>
+        </SidebarInset>
+      </div>
+    </SidebarProvider>
   );
 }

@@ -1,13 +1,11 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 
 import { db } from "@/DB/drizzle";
 import { emailAssessmentAssessments as assessments } from "@/DB/emailAssessmentSchema";
 import { ScoreRadar } from "@/components/emailAssessment/score-radar";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import { requireRole } from "@/lib/emailAssessment/auth";
 import { getSessionSummaries } from "@/lib/emailAssessment/session-results";
 
@@ -44,23 +42,22 @@ export default async function EmailAssessmentResultPage({
     session.scenarios.find((scenario) => scenario.assessmentId === id) ?? session.scenarios[0];
 
   return (
-    <main className="flex w-full flex-col">
-      <header className="flex flex-col">
-        <h1 className="text-3xl">Email Assessment Results</h1>
-      </header>
-      <Separator className="my-2 bg-white" />
-      <div className="mt-5 flex flex-col gap-6">
-      <Card>
-        <CardHeader>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge>{session.displayId}</Badge>
-            <Badge>{session.statusLabel}</Badge>
-            <Badge>{session.totalScenarios} scenarios</Badge>
-          </div>
-          <CardTitle>Session results</CardTitle>
-          <CardDescription>Session name: {session.displayName}</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-4">
+    <main className="flex w-full flex-col gap-6">
+      <h1 className="text-2xl font-bold tracking-wide text-white uppercase sm:text-3xl">
+        Email Assessment <span className="text-itbd-blue">Results</span>
+      </h1>
+
+      <ItbdCard>
+        <div className="flex flex-wrap items-center gap-2">
+          <ItbdBadge>{session.displayId}</ItbdBadge>
+          <ItbdBadge>{session.statusLabel}</ItbdBadge>
+          <ItbdBadge>{session.totalScenarios} scenarios</ItbdBadge>
+        </div>
+        <h2 className="mt-3 text-lg font-bold text-white">Session results</h2>
+        <p className="mt-1 text-sm text-white/60">
+          Session name: {session.displayName}
+        </p>
+        <div className="mt-4 grid gap-4 md:grid-cols-4">
           <ResultMetric
             label="AI total"
             value={session.aiWeightedTotal != null ? `${session.aiWeightedTotal.toFixed(2)} / 10` : "Pending"}
@@ -89,40 +86,39 @@ export default async function EmailAssessmentResultPage({
             value="30 minutes"
             hint={`Started ${session.startedAt.toLocaleString()}`}
           />
-        </CardContent>
-      </Card>
+        </div>
+      </ItbdCard>
 
       <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Scenario breakdown</CardTitle>
-            <CardDescription>
-              Review the weighted contribution of each scenario in this session.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
+        <ItbdCard className="h-fit">
+          <h2 className="text-lg font-bold text-white">Scenario breakdown</h2>
+          <p className="mt-1 text-sm text-white/60">
+            Review the weighted contribution of each scenario in this session.
+          </p>
+          <div className="mt-4 space-y-3">
             {session.scenarios.map((scenario) => (
               <Link
                 key={scenario.assessmentId}
                 href={`${TAKE_BASE}/results/${scenario.assessmentId}`}
-                className={`block rounded-2xl border p-4 transition ${
+                className={cn(
+                  "block rounded-xl border p-4 transition-colors",
                   scenario.assessmentId === selectedScenario.assessmentId
-                    ? "border-primary bg-primary/5"
-                    : "hover:border-primary/40"
-                }`}
+                    ? "border-itbd-blue bg-itbd-blue/10"
+                    : "border-white/10 bg-white/5 hover:border-itbd-blue/40",
+                )}
               >
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge>{scenario.scenarioDifficulty}</Badge>
-                  <Badge>{scenario.scenarioCategory}</Badge>
-                  <Badge>Max {scenario.scenarioMaxScore}</Badge>
+                  <ItbdBadge>{scenario.scenarioDifficulty}</ItbdBadge>
+                  <ItbdBadge>{scenario.scenarioCategory}</ItbdBadge>
+                  <ItbdBadge>Max {scenario.scenarioMaxScore}</ItbdBadge>
                 </div>
                 <div className="mt-3 space-y-1">
-                  <p className="font-medium">{scenario.scenarioTitle}</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="font-medium text-white">{scenario.scenarioTitle}</p>
+                  <p className="text-sm text-white/60">
                     Subject: {scenario.subject?.trim() ? scenario.subject : "No subject line submitted"}
                   </p>
                 </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-white/50">
                   <span>
                     AI:{" "}
                     {scenario.aiWeightedScore != null
@@ -138,30 +134,33 @@ export default async function EmailAssessmentResultPage({
                 </div>
               </Link>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </ItbdCard>
 
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge>{selectedScenario.scenarioDifficulty}</Badge>
-                <Badge>{selectedScenario.scenarioCategory}</Badge>
-                <Badge>Max {selectedScenario.scenarioMaxScore}</Badge>
-              </div>
-              <CardTitle>{selectedScenario.scenarioTitle}</CardTitle>
-              <CardDescription>{selectedScenario.scenarioPrompt}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-2xl border bg-muted/20 p-4">
-                <p className="text-sm font-medium text-muted-foreground">Subject line</p>
-                <p className="mt-2 text-base font-medium">
+          <ItbdCard>
+            <div className="flex flex-wrap items-center gap-2">
+              <ItbdBadge>{selectedScenario.scenarioDifficulty}</ItbdBadge>
+              <ItbdBadge>{selectedScenario.scenarioCategory}</ItbdBadge>
+              <ItbdBadge>Max {selectedScenario.scenarioMaxScore}</ItbdBadge>
+            </div>
+            <h2 className="mt-3 text-lg font-bold text-white">
+              {selectedScenario.scenarioTitle}
+            </h2>
+            <p className="mt-1 text-sm text-white/60">
+              {selectedScenario.scenarioPrompt}
+            </p>
+
+            <div className="mt-4 space-y-4">
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                <p className="text-sm font-medium text-white/50">Subject line</p>
+                <p className="mt-2 text-base font-medium text-white">
                   {selectedScenario.subject?.trim() ? selectedScenario.subject : "No subject line submitted"}
                 </p>
               </div>
-              <div className="rounded-2xl border bg-muted/20 p-4">
-                <p className="text-sm font-medium text-muted-foreground">Email response</p>
-                <p className="mt-2 whitespace-pre-wrap leading-7">
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                <p className="text-sm font-medium text-white/50">Email response</p>
+                <p className="mt-2 whitespace-pre-wrap leading-relaxed text-white/80">
                   {selectedScenario.content?.trim() ? selectedScenario.content : "No response submitted."}
                 </p>
               </div>
@@ -197,82 +196,105 @@ export default async function EmailAssessmentResultPage({
                   }
                 />
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </ItbdCard>
 
           {selectedScenario.evaluationStatus !== "completed" ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Evaluation pending</CardTitle>
-                <CardDescription>
-                  AI feedback for this scenario will appear as soon as the evaluation finishes.
-                </CardDescription>
-              </CardHeader>
-            </Card>
+            <ItbdCard>
+              <h2 className="text-lg font-bold text-white">Evaluation pending</h2>
+              <p className="mt-1 text-sm text-white/60">
+                AI feedback for this scenario will appear as soon as the evaluation finishes.
+              </p>
+            </ItbdCard>
           ) : (
             <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Rubric view</CardTitle>
-                  <CardDescription>
-                    The rubric percentages stay the same and then roll into the weighted session total.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
+              <ItbdCard>
+                <h2 className="text-lg font-bold text-white">Rubric view</h2>
+                <p className="mt-1 text-sm text-white/60">
+                  The rubric percentages stay the same and then roll into the weighted session total.
+                </p>
+                <div className="mt-4">
                   {selectedScenario.categoryScores ? (
                     <ScoreRadar scores={selectedScenario.categoryScores} />
                   ) : (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-white/50">
                       No rubric breakdown is available yet.
                     </p>
                   )}
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Feedback</CardTitle>
-                  <CardDescription>{selectedScenario.evaluationVerdict}</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-6 md:grid-cols-3">
+                </div>
+              </ItbdCard>
+              <ItbdCard>
+                <h2 className="text-lg font-bold text-white">Feedback</h2>
+                <p className="mt-1 text-sm text-white/60">{selectedScenario.evaluationVerdict}</p>
+                <div className="mt-4 grid gap-6 md:grid-cols-3">
                   <FeedbackList title="Strengths" items={selectedScenario.strengths} />
                   <FeedbackList title="Weaknesses" items={selectedScenario.weaknesses} />
                   <FeedbackList title="Improvements" items={selectedScenario.improvements} />
-                </CardContent>
-              </Card>
+                </div>
+              </ItbdCard>
             </div>
           )}
 
           {selectedScenario.manualSummary ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Assessor feedback</CardTitle>
-                <CardDescription>Latest manual review for this scenario.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="font-medium">
+            <ItbdCard>
+              <h2 className="text-lg font-bold text-white">Assessor feedback</h2>
+              <p className="mt-1 text-sm text-white/60">Latest manual review for this scenario.</p>
+              <div className="mt-4 space-y-3">
+                <p className="font-medium text-white">
                   {selectedScenario.manualOverallScore}/100
-                  {selectedScenario.manualGrade ? ` Â· Grade ${selectedScenario.manualGrade}` : ""}
+                  {selectedScenario.manualGrade ? ` · Grade ${selectedScenario.manualGrade}` : ""}
                 </p>
-                <p className="text-sm text-muted-foreground">{selectedScenario.manualSummary}</p>
+                <p className="text-sm text-white/60">{selectedScenario.manualSummary}</p>
                 {selectedScenario.manualImprovementAreas.length > 0 ? (
                   <FeedbackList title="Manual improvements" items={selectedScenario.manualImprovementAreas} />
                 ) : null}
-              </CardContent>
-            </Card>
+              </div>
+            </ItbdCard>
           ) : null}
         </div>
-      </div>
       </div>
     </main>
   );
 }
 
+/** Shared glow-border/blur card surface matching the rest of the app's brand. */
+function ItbdCard({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "itbd-glow-border relative overflow-hidden rounded-2xl bg-black/40 p-6 backdrop-blur-md",
+        className,
+      )}
+    >
+      <span
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+      />
+      <div className="relative z-10">{children}</div>
+    </div>
+  );
+}
+
+function ItbdBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-full border border-itbd-blue/40 bg-itbd-blue/10 px-2.5 py-0.5 text-xs font-semibold text-itbd-blue capitalize">
+      {children}
+    </span>
+  );
+}
+
 function ResultMetric({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-2xl border bg-muted/20 p-4">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
-      {hint ? <p className="mt-2 text-sm text-muted-foreground">{hint}</p> : null}
+    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <p className="text-sm text-white/50">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-white">{value}</p>
+      {hint ? <p className="mt-2 text-sm text-white/50">{hint}</p> : null}
     </div>
   );
 }
@@ -281,18 +303,18 @@ function FeedbackList({ title, items }: { title: string; items: string[] }) {
   if (items.length === 0) {
     return (
       <div>
-        <h3 className="mb-3 font-semibold">{title}</h3>
-        <p className="text-sm text-muted-foreground">No notes yet.</p>
+        <h3 className="mb-3 font-semibold text-white">{title}</h3>
+        <p className="text-sm text-white/50">No notes yet.</p>
       </div>
     );
   }
 
   return (
     <div>
-      <h3 className="mb-3 font-semibold">{title}</h3>
-      <ul className="space-y-2 text-sm text-muted-foreground">
+      <h3 className="mb-3 font-semibold text-white">{title}</h3>
+      <ul className="space-y-2 text-sm text-white/70">
         {items.map((item) => (
-          <li key={item} className="rounded-xl border bg-muted/20 px-3 py-2">
+          <li key={item} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
             {item}
           </li>
         ))}

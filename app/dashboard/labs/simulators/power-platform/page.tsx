@@ -1,4 +1,5 @@
 import { PpSimulator } from "@/components/labs/simulators/power-platform/pp-simulator";
+import { SimulatorSessionTracker } from "@/components/labs/SimulatorSessionTracker";
 import { requireUser } from "@/lib/labs/auth";
 
 /**
@@ -12,6 +13,7 @@ export default async function PpSimulatorPage() {
 
   return (
     <div className="-m-6 h-[calc(100%+3rem)]">
+      <SimulatorSessionTracker simulatorKey="power-platform" />
       <PpSimulator />
     </div>
   );

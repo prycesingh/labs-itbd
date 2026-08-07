@@ -1,9 +1,13 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { AudioPlayer } from "@/components/app_componentes/AudioPlayer";
+import DefaultButton, {
+  GreenButton,
+} from "@/components/app_componentes/customButtons";
+import { cn } from "@/lib/utils";
 import { Mic, Square, Trash2, Upload } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 interface AudioRecorderProps {
@@ -13,6 +17,7 @@ interface AudioRecorderProps {
   isLocked?: boolean;
   maxAttempts?: number;
   onUploadSuccess?: (blob: Blob, duration: number) => void;
+  className?: string;
 }
 
 export function AudioRecorder({
@@ -22,6 +27,7 @@ export function AudioRecorder({
   isLocked = false,
   maxAttempts = 2,
   onUploadSuccess,
+  className,
 }: AudioRecorderProps) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -29,15 +35,25 @@ export function AudioRecorder({
   const [duration, setDuration] = useState(0);
   const [attemptNumber, setAttemptNumber] = useState(1);
   const [uploading, setUploading] = useState(false);
-  const [playback, setPlayback] = useState(false);
-  const audioRef = useRef<HTMLAudioElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const reduce = useReducedMotion();
+
+  // Memoized so a re-render doesn't leak a fresh object URL every time —
+  // only regenerate when the blob itself actually changes.
+  const recordedUrl = useMemo(
+    () => (recordedBlob ? URL.createObjectURL(recordedBlob) : null),
+    [recordedBlob],
+  );
+
+  useEffect(() => {
+    if (!recordedUrl) return;
+    return () => URL.revokeObjectURL(recordedUrl);
+  }, [recordedUrl]);
 
   useEffect(() => {
     setRecordedBlob(null);
     setDuration(0);
     setAttemptNumber(1);
-    setPlayback(false);
     setIsRecording(false);
   }, [questionId]);
 
@@ -105,7 +121,6 @@ export function AudioRecorder({
 
     setRecordedBlob(null);
     setDuration(0);
-    if (playback) setPlayback(false);
 
     if (attemptNumber < maxAttempts) {
       setAttemptNumber(attemptNumber + 1);
@@ -179,102 +194,124 @@ export function AudioRecorder({
   };
 
   return (
-    <Card className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold">Record Your Answer</h3>
-        <div className="text-sm text-muted-foreground">
-          {isLocked
-            ? "Submitted"
-            : `Attempt ${attemptNumber} of ${maxAttempts}`}
-        </div>
-      </div>
+    <motion.div
+      className={cn(
+        "itbd-glow-border relative flex w-full flex-col overflow-hidden rounded-2xl bg-black/40 p-4 backdrop-blur-md sm:p-5",
+        className,
+      )}
+      initial={reduce ? false : { opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        duration: 0.5,
+        delay: reduce ? 0 : 0.1,
+        ease: [0.22, 1, 0.36, 1],
+      }}
+    >
+      <span
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+      />
 
-      {isLocked ? (
-        <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">
-          This answer has already been submitted. Re-recording is disabled for
-          this question.
-        </div>
-      ) : null}
-
-      {!recordedBlob ? (
-        <div className="flex flex-col items-center gap-4 py-8">
-          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
-            {isRecording && (
-              <div className="w-4 h-4 bg-red-600 rounded-full animate-pulse" />
-            )}
-            {!isRecording && <Mic className="h-6 w-6 text-muted-foreground" />}
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold tracking-wide text-white uppercase">
+            Record Your Answer
+          </h3>
+          <div className="text-sm font-semibold text-itbd-blue">
+            {isLocked
+              ? "Submitted"
+              : `Attempt ${attemptNumber} of ${maxAttempts}`}
           </div>
-
-          <p className="text-lg font-medium">{formatTime(duration)}</p>
-
-          <div className="flex gap-2">
-            {!isRecording ? (
-              <Button onClick={startRecording} size="lg" disabled={isLocked}>
-                <Mic className="h-4 w-4 mr-2" />
-                Start Recording
-              </Button>
-            ) : (
-              <Button
-                onClick={stopRecording}
-                size="lg"
-                variant="destructive"
-                disabled={isLocked}
-              >
-                <Square className="h-4 w-4 mr-2" />
-                Stop Recording
-              </Button>
-            )}
-          </div>
-
-          <p className="text-xs text-muted-foreground text-center max-w-xs">
-            Speak naturally. You&apos;ll be able to listen to your recording
-            before submitting.
-          </p>
         </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="bg-muted p-4 rounded">
-            <p className="text-sm font-medium mb-2">
-              Recording Duration: {formatTime(duration)}
-            </p>
-            <audio ref={audioRef} controls className="w-full">
-              <source
-                src={URL.createObjectURL(recordedBlob)}
-                type={recordedBlob.type}
-              />
-            </audio>
-          </div>
 
-          <div className="flex gap-2">
-            <Button
-              onClick={handleUpload}
-              disabled={uploading || isLocked}
-              className="flex-1"
+        {isLocked ? (
+          <div className="rounded-xl border border-itbd-green/30 bg-itbd-green/10 p-3 text-sm text-itbd-green">
+            This answer has already been submitted. Re-recording is disabled for
+            this question.
+          </div>
+        ) : null}
+
+        {!recordedBlob ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 py-3">
+            <div
+              className={cn(
+                "flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/5",
+                isRecording && "border-red-500/40",
+              )}
             >
-              <Upload className="h-4 w-4 mr-2" />
-              {uploading ? "Uploading..." : "Submit Answer"}
-            </Button>
+              {isRecording ? (
+                <div className="h-3.5 w-3.5 animate-pulse rounded-full bg-red-500" />
+              ) : (
+                <Mic className="h-5 w-5 text-itbd-blue" />
+              )}
+            </div>
 
-            {!isLocked && attemptNumber < maxAttempts && (
-              <Button
-                onClick={handleDiscard}
-                disabled={uploading}
-                variant="outline"
+            <p className="text-base font-semibold text-white tabular-nums">
+              {formatTime(duration)}
+            </p>
+
+            {!isRecording ? (
+              <DefaultButton onClick={startRecording} disabled={isLocked}>
+                <Mic className="mr-2 h-4 w-4" />
+                Start Recording
+              </DefaultButton>
+            ) : (
+              <DefaultButton
+                onClick={stopRecording}
+                disabled={isLocked}
+                className="bg-red-600 text-white hover:bg-red-600/90"
+              >
+                <Square className="mr-2 h-4 w-4" />
+                Stop Recording
+              </DefaultButton>
+            )}
+
+            <p className="max-w-xs text-center text-xs text-white/50">
+              Speak naturally. You&apos;ll be able to listen to your recording
+              before submitting.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="mb-2 text-sm font-medium text-white/80">
+                Recording Duration:{" "}
+                <span className="text-itbd-blue">{formatTime(duration)}</span>
+              </p>
+              {recordedUrl && <AudioPlayer src={recordedUrl} />}
+            </div>
+
+            <div className="flex gap-2">
+              <DefaultButton
+                onClick={handleUpload}
+                disabled={uploading || isLocked}
+                loading={uploading}
                 className="flex-1"
               >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Discard & Retry
-              </Button>
+                <Upload className="mr-2 h-4 w-4" />
+                Submit Answer
+              </DefaultButton>
+
+              {!isLocked && attemptNumber < maxAttempts && (
+                <GreenButton
+                  onClick={handleDiscard}
+                  disabled={uploading}
+                  className="flex-1"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Discard & Retry
+                </GreenButton>
+              )}
+            </div>
+
+            {attemptNumber >= maxAttempts && (
+              <p className="text-center text-xs text-white/50">
+                No more attempts available. Please submit your answer.
+              </p>
             )}
           </div>
-
-          {attemptNumber >= maxAttempts && (
-            <p className="text-xs text-muted-foreground text-center">
-              ⚠️ No more attempts available. Please submit your answer.
-            </p>
-          )}
-        </div>
-      )}
-    </Card>
+        )}
+      </div>
+    </motion.div>
   );
 }

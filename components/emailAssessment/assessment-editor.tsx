@@ -1,11 +1,10 @@
-﻿"use client";
+"use client";
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import DefaultButton from "@/components/app_componentes/customButtons";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { differenceInSeconds } from "@/lib/emailAssessment/date";
@@ -111,7 +110,7 @@ export function AssessmentEditor({
     };
   }, [assessmentId, ending]);
 
-  // â”€â”€ SECURITY: Tab-switch auto-submit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- SECURITY: Tab-switch auto-submit -----------------------------------
   // When the user switches tabs or minimises the window, we immediately
   // submit the current draft (even if empty) and mark ALL remaining
   // assessments in the session as ended. This prevents candidates from
@@ -125,15 +124,15 @@ export function AssessmentEditor({
 
       // Submit the CURRENT assessment with whatever the candidate has typed
       // (even if empty, so the server records the attempt). We AWAIT this POST
-      // before navigating â€” using sendBeacon here is unreliable because the
+      // before navigating - using sendBeacon here is unreliable because the
       // submission request also runs the (slow) AI evaluation server-side, and
       // navigating away aborts it before the row is persisted.
       const currentBody = JSON.stringify({
         assessmentId,
         subject:
-          subject.trim() || "(no subject â€“ auto-submitted on tab switch)",
+          subject.trim() || "(no subject - auto-submitted on tab switch)",
         content:
-          content.trim() || "(no response â€“ auto-submitted on tab switch)",
+          content.trim() || "(no response - auto-submitted on tab switch)",
       });
 
       // End all OTHER remaining session assessments. These are lightweight and
@@ -166,7 +165,7 @@ export function AssessmentEditor({
           keepalive: true,
         });
       } catch {
-        // ignore â€” navigate regardless
+        // ignore - navigate regardless
       }
 
       if (typeof window !== "undefined") {
@@ -181,7 +180,7 @@ export function AssessmentEditor({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [assessmentId, subject, content, remainingAssessmentIds, router]);
 
-  // â”€â”€ SECURITY: Prevent copy-paste â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- SECURITY: Prevent copy-paste ----------------------------------------
   function blockPaste(event: React.ClipboardEvent) {
     event.preventDefault();
     toast.warning("Copy-pasting is not allowed during the assessment.");
@@ -237,45 +236,59 @@ export function AssessmentEditor({
   return (
     <div className="space-y-4">
       {/* Timer & progress */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-card p-4">
-        <div>
-          <p className="text-sm text-muted-foreground">Time remaining</p>
+      <div className="itbd-glow-border relative flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-2xl bg-black/40 p-4 backdrop-blur-md">
+        <span
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+        />
+        <div className="relative z-10">
+          <p className="text-sm text-white/50">Time remaining</p>
           <p
             className={`text-2xl font-semibold tabular-nums ${
-              secondsLeft <= 30 ? "text-destructive" : ""
+              secondsLeft <= 30 ? "text-red-400" : "text-white"
             }`}
           >
             {minutes}:{seconds}
           </p>
         </div>
-        <div className="text-right">
-          <p className="text-sm text-muted-foreground">Word count</p>
-          <p className="text-2xl font-semibold">{words}</p>
+        <div className="relative z-10 text-right">
+          <p className="text-sm text-white/50">Word count</p>
+          <p className="text-2xl font-semibold text-white">{words}</p>
         </div>
         {totalScenarios > 1 && (
-          <div className="text-right">
-            <p className="text-sm text-muted-foreground">Progress</p>
-            <p className="text-2xl font-semibold">
+          <div className="relative z-10 text-right">
+            <p className="text-sm text-white/50">Progress</p>
+            <p className="text-2xl font-semibold text-itbd-blue">
               {currentIndex + 1}/{totalScenarios}
             </p>
           </div>
         )}
       </div>
 
-      {/* Security notice */}
-      <div className="rounded-2xl border border-amber-300/60 bg-amber-50/60 p-3 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-300">
-        âš ï¸ <strong>Security notice:</strong> Copy-pasting is disabled. Switching
-        tabs or leaving this page will automatically submit your current
-        response and end the remaining scenarios.
+      {/* Security notice - orange is the brand's reserved emergency-flag
+          color, which fits a security/anti-cheating warning. */}
+      <div className="rounded-2xl border border-orange-500/30 bg-orange-500/10 p-3 text-sm text-orange-200">
+        <strong className="text-orange-300">Security notice:</strong>{" "}
+        Copy-pasting is disabled. Switching tabs or leaving this page will
+        automatically submit your current response and end the remaining
+        scenarios.
       </div>
 
-      <div className="space-y-3 rounded-2xl border bg-card p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="itbd-glow-border relative space-y-3 overflow-hidden rounded-2xl bg-black/40 p-4 backdrop-blur-md">
+        <span
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+        />
+        <div className="relative z-10 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <p className="text-sm font-medium text-muted-foreground">Subject</p>
-            <h3 className="text-lg font-semibold">Email subject line</h3>
+            <p className="text-sm font-medium text-white/50">Subject</p>
+            <h3 className="text-lg font-bold text-white">
+              Email subject line
+            </h3>
           </div>
-          <Badge>Required</Badge>
+          <span className="rounded-full border border-itbd-blue/40 bg-itbd-blue/10 px-2.5 py-0.5 text-xs font-semibold text-itbd-blue">
+            Required
+          </span>
         </div>
         <Input
           id="subject"
@@ -285,22 +298,24 @@ export function AssessmentEditor({
           onPaste={blockPaste}
           disabled={secondsLeft === 0 || submitting}
           maxLength={498}
-          className="h-12 text-base"
+          className="relative z-10 h-12 text-base"
         />
-        <p className="text-sm text-muted-foreground">
+        <p className="relative z-10 text-sm text-white/50">
           Add the subject before you draft the main response body.
         </p>
       </div>
 
-      <div className="space-y-3 rounded-2xl border bg-card p-4">
-        <div>
-          <p className="text-sm font-medium text-muted-foreground">
-            Email body
-          </p>
-          <h3 className="text-lg font-semibold">Main response</h3>
+      <div className="itbd-glow-border relative space-y-3 overflow-hidden rounded-2xl bg-black/40 p-4 backdrop-blur-md">
+        <span
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+        />
+        <div className="relative z-10">
+          <p className="text-sm font-medium text-white/50">Email body</p>
+          <h3 className="text-lg font-bold text-white">Main response</h3>
         </div>
         <Textarea
-          className="min-h-90 resize-y text-base leading-7"
+          className="relative z-10 min-h-90 resize-y text-base leading-7"
           placeholder="Write your professional email response here..."
           value={content}
           onChange={(event) => setContent(event.target.value)}
@@ -311,13 +326,13 @@ export function AssessmentEditor({
 
       {/* Actions */}
       <div className="flex justify-end">
-        <Button onClick={submit} disabled={secondsLeft === 0 || submitting}>
-          {submitting
-            ? "Submitting..."
-            : nextAssessmentId
-              ? "Submit & continue"
-              : "Submit response"}
-        </Button>
+        <DefaultButton
+          onClick={submit}
+          disabled={secondsLeft === 0 || submitting}
+          loading={submitting}
+        >
+          {nextAssessmentId ? "Submit & continue" : "Submit response"}
+        </DefaultButton>
       </div>
     </div>
   );

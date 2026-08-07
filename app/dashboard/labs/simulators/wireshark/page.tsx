@@ -1,4 +1,5 @@
 import { WiresharkSimulator } from "@/components/labs/simulators/wireshark/wireshark-simulator";
+import { SimulatorSessionTracker } from "@/components/labs/SimulatorSessionTracker";
 import { requireUser } from "@/lib/labs/auth";
 
 /**
@@ -12,6 +13,7 @@ export default async function WiresharkSimulatorPage() {
 
   return (
     <div className="-m-6 h-[calc(100%+3rem)]">
+      <SimulatorSessionTracker simulatorKey="wireshark" />
       <WiresharkSimulator />
     </div>
   );

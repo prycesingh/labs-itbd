@@ -1,4 +1,5 @@
 import { NetSimProSimulator } from "@/components/labs/simulators/netsim-pro/netsim-pro-simulator";
+import { SimulatorSessionTracker } from "@/components/labs/SimulatorSessionTracker";
 import { requireUser } from "@/lib/labs/auth";
 
 /**
@@ -11,6 +12,7 @@ export default async function NetSimProSimulatorPage() {
 
   return (
     <div className="-m-6 h-[calc(100%+3rem)]">
+      <SimulatorSessionTracker simulatorKey="netsim-pro" />
       <NetSimProSimulator />
     </div>
   );

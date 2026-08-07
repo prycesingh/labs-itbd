@@ -2,7 +2,6 @@ import { auth } from "@/auth";
 import { db } from "@/DB/drizzle";
 import { users } from "@/DB/schema";
 import { UsersTable } from "@/components/admin/users-table";
-import { Separator } from "@/components/ui/separator";
 import {
   GRANTABLE_ROLES,
   isAdminRole,
@@ -52,16 +51,17 @@ export default async function AdminUsersPage() {
   }));
 
   return (
-    <main className="flex h-full w-full flex-col">
-      <header>
-        <h1 className="text-3xl">User Management</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+    <main className="flex h-full w-full flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-wide text-white uppercase sm:text-3xl">
+          User <span className="text-itbd-blue">Management</span>
+        </h1>
+        <p className="mt-1 text-sm text-white/60">
           Grant or revoke roles and provision credential (password) access.
-          Credentials are admin-only — grant an admin role before provisioning a
-          password.
+          Credentials are admin-only &mdash; grant an admin role before
+          provisioning a password.
         </p>
-      </header>
-      <Separator className="my-4" />
+      </div>
       <UsersTable
         users={list}
         currentUserId={currentUserId}

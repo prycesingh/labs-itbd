@@ -1,4 +1,5 @@
 import { PurviewSimulator } from "@/components/labs/simulators/purview/purview-simulator";
+import { SimulatorSessionTracker } from "@/components/labs/SimulatorSessionTracker";
 import { requireUser } from "@/lib/labs/auth";
 
 /**
@@ -12,6 +13,7 @@ export default async function PurviewSimulatorPage() {
 
   return (
     <div className="-m-6 h-[calc(100%+3rem)]">
+      <SimulatorSessionTracker simulatorKey="purview" />
       <PurviewSimulator />
     </div>
   );

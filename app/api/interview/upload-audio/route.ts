@@ -3,7 +3,8 @@ import { db } from "@/DB/drizzle";
 import {
   candidateInterviewAnswers,
   candidateInterviewSessions,
-  interviewQuestions,
+  interviewModuleQuestionAssignments,
+  interviewQuestionBank,
 } from "@/DB/interviewSchema";
 import { getAudioStorageProvider } from "@/lib/interview/audioStorage";
 import {
@@ -103,13 +104,21 @@ export async function POST(request: NextRequest) {
     }
 
     const [question] = await db
-      .select({ id: interviewQuestions.id })
-      .from(interviewQuestions)
+      .select({ id: interviewQuestionBank.id })
+      .from(interviewModuleQuestionAssignments)
+      .innerJoin(
+        interviewQuestionBank,
+        eq(
+          interviewQuestionBank.id,
+          interviewModuleQuestionAssignments.questionId,
+        ),
+      )
       .where(
         and(
-          eq(interviewQuestions.id, questionId),
-          eq(interviewQuestions.moduleId, sessionRow.moduleId),
-          eq(interviewQuestions.isActive, true),
+          eq(interviewQuestionBank.id, questionId),
+          eq(interviewModuleQuestionAssignments.moduleId, sessionRow.moduleId),
+          eq(interviewModuleQuestionAssignments.isActive, true),
+          eq(interviewQuestionBank.isActive, true),
         ),
       )
       .limit(1);

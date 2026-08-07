@@ -1,4 +1,4 @@
-﻿import { desc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
 import { db } from "@/DB/drizzle";
 import { users } from "@/DB/schema";
@@ -8,11 +8,8 @@ import {
   emailAssessmentScenarios as scenarios,
   emailAssessmentSubmissions as submissions,
 } from "@/DB/emailAssessmentSchema";
+import DefaultButton from "@/components/app_componentes/customButtons";
 import { ManualScoreForm } from "@/components/emailAssessment/manual-score-form";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { requireRole } from "@/lib/emailAssessment/auth";
 
 export default async function EmailAssessmentsSubmissionsPage() {
@@ -48,52 +45,71 @@ export default async function EmailAssessmentsSubmissionsPage() {
   });
 
   return (
-    <main className="flex w-full flex-col">
-      <header className="flex flex-col">
-        <h1 className="text-3xl">Email Assessment Submissions</h1>
-      </header>
-      <Separator className="my-2 bg-white" />
-      <div className="mt-5 flex flex-col gap-4">
-      {records.map((record) => (
-        <Card key={record.submission.id}>
-          <CardHeader>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <CardTitle>{record.candidate.name ?? record.candidate.email}</CardTitle>
-                <CardDescription>
-                  {record.candidate.email} Â· {record.scenario.title}
-                </CardDescription>
+    <main className="flex w-full flex-col gap-6">
+      <h1 className="text-2xl font-bold tracking-wide text-white uppercase sm:text-3xl">
+        Email Assessment <span className="text-itbd-blue">Submissions</span>
+      </h1>
+
+      <div className="flex flex-col gap-4">
+        {records.map((record) => (
+          <div
+            key={record.submission.id}
+            className="itbd-glow-border relative overflow-hidden rounded-2xl bg-black/40 p-6 backdrop-blur-md"
+          >
+            <span
+              aria-hidden
+              className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+            />
+            <div className="relative z-10 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold text-white">
+                    {record.candidate.name ?? record.candidate.email}
+                  </h2>
+                  <p className="mt-1 text-sm text-white/60">
+                    {record.candidate.email} &middot; {record.scenario.title}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <ItbdBadge>{record.evaluation?.overallScore ?? "pending"} AI</ItbdBadge>
+                  <ItbdBadge>{scoreCountBySubmission.get(record.submission.id) ?? 0} manual</ItbdBadge>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <Badge>{record.evaluation?.overallScore ?? "pending"} AI</Badge>
-                <Badge>{scoreCountBySubmission.get(record.submission.id) ?? 0} manual</Badge>
+
+              <p className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm leading-relaxed text-white/80">
+                {record.submission.content}
+              </p>
+
+              <div className="flex justify-end">
+                <DefaultButton size="sm" asChild>
+                  <a href={`/api/emailAssessment/admin/reports/export?submissionId=${record.submission.id}`}>
+                    Export PDF
+                  </a>
+                </DefaultButton>
               </div>
+
+              <ManualScoreForm submissionId={record.submission.id} />
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="rounded-xl border bg-muted/30 p-4 text-sm leading-6">
-              {record.submission.content}
+          </div>
+        ))}
+
+        {records.length === 0 ? (
+          <div className="itbd-glow-border rounded-2xl bg-black/40 p-6 text-center backdrop-blur-md">
+            <h2 className="text-lg font-bold text-white">No submissions yet</h2>
+            <p className="mt-1 text-sm text-white/60">
+              Candidate submissions will appear here.
             </p>
-            <div className="flex justify-end">
-              <Button asChild variant="outline" size="sm">
-                <a href={`/api/emailAssessment/admin/reports/export?submissionId=${record.submission.id}`}>
-                  Export PDF
-                </a>
-              </Button>
-            </div>
-            <ManualScoreForm submissionId={record.submission.id} />
-          </CardContent>
-        </Card>
-      ))}
-      {records.length === 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>No submissions yet</CardTitle>
-            <CardDescription>Candidate submissions will appear here.</CardDescription>
-          </CardHeader>
-        </Card>
-      ) : null}
+          </div>
+        ) : null}
       </div>
     </main>
+  );
+}
+
+function ItbdBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-full border border-itbd-blue/40 bg-itbd-blue/10 px-2.5 py-0.5 text-xs font-semibold text-itbd-blue">
+      {children}
+    </span>
   );
 }

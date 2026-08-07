@@ -123,15 +123,30 @@ export default function MyEvaluationsPage() {
     fetchUserSessions();
   }, [fetchUserSessions]);
 
-  const downloadResults = (sess: UserSession) => {
-    const data = JSON.stringify(sess, null, 2);
-    const blob = new Blob([data], { type: "application/json" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${sess.moduleName}_${sess.id}.json`;
-    a.click();
-    window.URL.revokeObjectURL(url);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const downloadResults = async (sess: UserSession) => {
+    setDownloadingId(sess.id);
+    try {
+      const res = await fetch(`/api/interview/sessions/${sess.id}/pdf`);
+      if (!res.ok) {
+        throw new Error("Failed to generate results PDF");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${sess.moduleName.replace(/[^a-z0-9]+/gi, "-")}-results.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to download results";
+      toast.error("Download failed", { description: message });
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   const openSessionDetails = async (sess: UserSession) => {
@@ -170,15 +185,6 @@ export default function MyEvaluationsPage() {
 
   return (
     <main className="flex flex-col w-full gap-6">
-      <header className="space-y-1">
-        <h1 className="text-3xl font-bold">My Evaluations</h1>
-        <p className="text-sm text-muted-foreground">
-          View your completed interview modules and AI evaluation scores.
-        </p>
-      </header>
-
-      <Separator className="bg-white" />
-
       {sessions.length === 0 ? (
         <Card className="border-cyan-500/20 bg-black/20">
           <CardContent className="pt-6">
@@ -191,7 +197,7 @@ export default function MyEvaluationsPage() {
       ) : (
         <div className="space-y-4">
           <div className="text-sm text-muted-foreground">
-            {sessions.length} completed interview(s)
+            {sessions.length} interview attempt(s)
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -266,11 +272,18 @@ export default function MyEvaluationsPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => downloadResults(sess)}
+                      disabled={downloadingId === sess.id}
+                      onClick={() => {
+                        void downloadResults(sess);
+                      }}
                       className="gap-1"
                     >
-                      <Download className="h-3 w-3" />
-                      Download
+                      {downloadingId === sess.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Download className="h-3 w-3" />
+                      )}
+                      Download PDF
                     </Button>
                   </div>
                 </CardContent>
@@ -293,56 +306,61 @@ export default function MyEvaluationsPage() {
             </DialogDescription>
           </DialogHeader>
 
-          {selectedSession && selectedSession.evaluation && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-3 rounded-md bg-blue-500/10 border border-blue-500/20">
-                  <div className="text-xs font-medium text-muted-foreground">
-                    AI Score (%)
-                  </div>
-                  <div className="text-2xl font-bold text-blue-400 mt-1">
-                    {formatPercentageScore(
-                      selectedSession.evaluation.overallAiScore,
-                    )}{" "}
-                    / 100
-                  </div>
-                </div>
-
-                {selectedSession.evaluation.overallAdminScore !== undefined && (
-                  <div className="p-3 rounded-md bg-green-500/10 border border-green-500/20">
+          <div className="space-y-4">
+            {selectedSession && selectedSession.evaluation && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-3 rounded-md bg-blue-500/10 border border-blue-500/20">
                     <div className="text-xs font-medium text-muted-foreground">
-                      Admin Score (%)
+                      AI Score (%)
                     </div>
-                    <div className="text-2xl font-bold text-green-400 mt-1">
+                    <div className="text-2xl font-bold text-blue-400 mt-1">
                       {formatPercentageScore(
-                        selectedSession.evaluation.overallAdminScore,
+                        selectedSession.evaluation.overallAiScore,
                       )}{" "}
                       / 100
                     </div>
                   </div>
-                )}
-              </div>
 
-              {selectedSession.evaluation.aiStrengths && (
-                <div className="p-3 rounded-md bg-green-500/10 border border-green-500/20">
-                  <div className="text-xs font-medium mb-1">Strengths</div>
-                  <p className="text-sm text-gray-300">
-                    {selectedSession.evaluation.aiStrengths}
-                  </p>
+                  {selectedSession.evaluation.overallAdminScore !==
+                    undefined && (
+                    <div className="p-3 rounded-md bg-green-500/10 border border-green-500/20">
+                      <div className="text-xs font-medium text-muted-foreground">
+                        Admin Score (%)
+                      </div>
+                      <div className="text-2xl font-bold text-green-400 mt-1">
+                        {formatPercentageScore(
+                          selectedSession.evaluation.overallAdminScore,
+                        )}{" "}
+                        / 100
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
 
-              {selectedSession.evaluation.aiImprovementAreas && (
-                <div className="p-3 rounded-md bg-yellow-500/10 border border-yellow-500/20">
-                  <div className="text-xs font-medium mb-1">
-                    Areas for Improvement
+                {selectedSession.evaluation.aiStrengths && (
+                  <div className="p-3 rounded-md bg-green-500/10 border border-green-500/20">
+                    <div className="text-xs font-medium mb-1">Strengths</div>
+                    <p className="text-sm text-gray-300">
+                      {selectedSession.evaluation.aiStrengths}
+                    </p>
                   </div>
-                  <p className="text-sm text-gray-300">
-                    {selectedSession.evaluation.aiImprovementAreas}
-                  </p>
-                </div>
-              )}
+                )}
 
+                {selectedSession.evaluation.aiImprovementAreas && (
+                  <div className="p-3 rounded-md bg-yellow-500/10 border border-yellow-500/20">
+                    <div className="text-xs font-medium mb-1">
+                      Areas for Improvement
+                    </div>
+                    <p className="text-sm text-gray-300">
+                      {selectedSession.evaluation.aiImprovementAreas}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {(detailLoading || detailAnswers.length > 0) && (
               <div className="rounded-md border border-white/10 bg-black/30 p-3">
                 <div className="text-xs font-medium mb-3">Answer Breakdown</div>
 
@@ -351,10 +369,6 @@ export default function MyEvaluationsPage() {
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Loading answer details...
                   </div>
-                ) : detailAnswers.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No answer details available for this session yet.
-                  </p>
                 ) : (
                   <div className="space-y-3">
                     {detailAnswers.map((answer) => (
@@ -379,8 +393,16 @@ export default function MyEvaluationsPage() {
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            )}
+
+            {!detailLoading &&
+              detailAnswers.length === 0 &&
+              !selectedSession?.evaluation && (
+                <p className="text-sm text-muted-foreground">
+                  No answer details available for this session yet.
+                </p>
+              )}
+          </div>
         </DialogContent>
       </Dialog>
     </main>

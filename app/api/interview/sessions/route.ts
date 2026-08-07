@@ -6,8 +6,9 @@ import {
   aiInterviewEvaluations,
   candidateInterviewAnswers,
   candidateInterviewSessions,
+  interviewModuleQuestionAssignments,
   interviewModules,
-  interviewQuestions,
+  interviewQuestionBank,
   interviewQuestionStandardResponses,
   interviewSessionSummaries,
 } from "@/DB/interviewSchema";
@@ -115,6 +116,7 @@ export async function POST(request: NextRequest) {
       .select({
         id: interviewModules.id,
         interviewType: interviewModules.interviewType,
+        questionDisplayCount: interviewModules.questionDisplayCount,
       })
       .from(interviewModules)
       .where(
@@ -132,20 +134,51 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const questionRows = await db
+    const [existingSession] = await db
       .select({
-        id: interviewQuestions.id,
-        text: interviewQuestions.promptText,
-        order: interviewQuestions.questionOrder,
+        id: candidateInterviewSessions.id,
+        totalQuestions: candidateInterviewSessions.totalQuestions,
+        recordedCount: candidateInterviewSessions.recordedCount,
+        status: candidateInterviewSessions.status,
+        assignedQuestionIds: candidateInterviewSessions.assignedQuestionIds,
       })
-      .from(interviewQuestions)
+      .from(candidateInterviewSessions)
       .where(
         and(
-          eq(interviewQuestions.moduleId, moduleId),
-          eq(interviewQuestions.isActive, true),
+          eq(candidateInterviewSessions.candidateId, candidateId),
+          eq(candidateInterviewSessions.moduleId, moduleId),
+          inArray(candidateInterviewSessions.status, [
+            "draft",
+            "recording",
+            "recorded",
+            "processing",
+          ]),
         ),
       )
-      .orderBy(asc(interviewQuestions.questionOrder));
+      .limit(1);
+
+    const questionRows = await db
+      .select({
+        id: interviewQuestionBank.id,
+        text: interviewQuestionBank.promptText,
+        order: interviewModuleQuestionAssignments.questionOrder,
+      })
+      .from(interviewModuleQuestionAssignments)
+      .innerJoin(
+        interviewQuestionBank,
+        eq(
+          interviewQuestionBank.id,
+          interviewModuleQuestionAssignments.questionId,
+        ),
+      )
+      .where(
+        and(
+          eq(interviewModuleQuestionAssignments.moduleId, moduleId),
+          eq(interviewModuleQuestionAssignments.isActive, true),
+          eq(interviewQuestionBank.isActive, true),
+        ),
+      )
+      .orderBy(asc(interviewModuleQuestionAssignments.questionOrder));
 
     if (questionRows.length === 0) {
       return NextResponse.json(
@@ -154,17 +187,68 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (existingSession) {
+      const questionById = new Map(
+        questionRows.map((question) => [String(question.id), question]),
+      );
+
+      // Reuse the exact question set chosen when this session was created —
+      // never re-roll on resume, or a mid-attempt candidate can be handed a
+      // different random subset than the one they already partially answered.
+      const orderedQuestions = existingSession.assignedQuestionIds
+        .map((id) => questionById.get(id))
+        .filter((question): question is (typeof questionRows)[number] =>
+          Boolean(question),
+        );
+
+      return NextResponse.json(
+        {
+          sessionId: existingSession.id,
+          totalQuestions: existingSession.totalQuestions,
+          recordedCount: existingSession.recordedCount,
+          status: existingSession.status,
+          resumed: true,
+          questions: orderedQuestions.map((question, index) => ({
+            id: String(question.id),
+            index,
+            text: question.text,
+          })),
+        },
+        { status: 200 },
+      );
+    }
+
     const sessionId = randomUUID();
+    const totalQuestions = Math.min(
+      module.questionDisplayCount,
+      questionRows.length,
+    );
+
+    // Shuffle once, at creation, so repeated attempts see varied subsets of
+    // the assigned bank — but a single session's set is fixed from here on.
+    const shuffledQuestions = [...questionRows];
+    for (let i = shuffledQuestions.length - 1; i > 0; i -= 1) {
+      const randomIndex = Math.floor(Math.random() * (i + 1));
+      [shuffledQuestions[i], shuffledQuestions[randomIndex]] = [
+        shuffledQuestions[randomIndex],
+        shuffledQuestions[i],
+      ];
+    }
+    const selectedQuestions = shuffledQuestions.slice(0, totalQuestions);
+    const assignedQuestionIds = selectedQuestions.map((question) =>
+      String(question.id),
+    );
 
     await db.insert(candidateInterviewSessions).values({
       id: sessionId,
       candidateId,
       moduleId,
       interviewType: module.interviewType,
-      totalQuestions: questionRows.length,
+      totalQuestions,
       recordedCount: 0,
       processedCount: 0,
       status: "draft",
+      assignedQuestionIds,
       sessionState: {
         ownerUserId: session.user.id,
         currentQuestionIndex: 0,
@@ -177,11 +261,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         sessionId,
-        totalQuestions: questionRows.length,
+        totalQuestions,
         recordedCount: 0,
         processedCount: 0,
         status: "draft",
-        questions: questionRows.map((question, index) => ({
+        resumed: false,
+        questions: selectedQuestions.map((question, index) => ({
           id: String(question.id),
           index,
           text: question.text,
@@ -233,7 +318,17 @@ export async function GET(request: NextRequest) {
           interviewModules,
           eq(interviewModules.id, candidateInterviewSessions.moduleId),
         )
-        .where(eq(candidateInterviewSessions.candidateId, userId))
+        .where(
+          and(
+            eq(candidateInterviewSessions.candidateId, userId),
+            inArray(candidateInterviewSessions.status, [
+              "recorded",
+              "processing",
+              "completed",
+              "failed",
+            ]),
+          ),
+        )
         .orderBy(asc(candidateInterviewSessions.createdAt));
 
       if (sessionRows.length === 0) {
@@ -322,7 +417,13 @@ export async function GET(request: NextRequest) {
       .where(eq(candidateInterviewAnswers.sessionId, sessionId))
       .orderBy(asc(candidateInterviewAnswers.questionIndex));
 
-    const questionIds = answers.map((answer) => answer.questionId);
+    const assignedQuestionIds = sessionRow.assignedQuestionIds ?? [];
+    const questionIds = Array.from(
+      new Set([
+        ...answers.map((answer) => answer.questionId),
+        ...assignedQuestionIds,
+      ]),
+    );
     const aiEvalIds = answers
       .map((answer) => answer.aiEvaluationId)
       .filter((id): id is string => Boolean(id));
@@ -334,12 +435,12 @@ export async function GET(request: NextRequest) {
       questionIds.length > 0
         ? await db
             .select({
-              id: interviewQuestions.id,
-              promptText: interviewQuestions.promptText,
-              promptAudioPath: interviewQuestions.promptAudioPath,
+              id: interviewQuestionBank.id,
+              promptText: interviewQuestionBank.promptText,
+              promptAudioPath: interviewQuestionBank.promptAudioPath,
             })
-            .from(interviewQuestions)
-            .where(inArray(interviewQuestions.id, questionIds))
+            .from(interviewQuestionBank)
+            .where(inArray(interviewQuestionBank.id, questionIds))
         : [];
 
     const standardResponseRows =
@@ -455,9 +556,25 @@ export async function GET(request: NextRequest) {
         }
       : null;
 
+    // Fixed at session creation (see POST) and reused verbatim here so the
+    // live interview UI always re-hydrates the exact same question set,
+    // regardless of how many times the candidate resumes this session.
+    const sessionQuestions = assignedQuestionIds
+      .map((id) => questionById.get(id))
+      .filter((question): question is (typeof questionRows)[number] =>
+        Boolean(question),
+      )
+      .map((question, index) => ({
+        id: String(question.id),
+        index,
+        promptText: question.promptText,
+        promptAudioPath: question.promptAudioPath,
+      }));
+
     return NextResponse.json(
       {
         session: sessionRow,
+        sessionQuestions,
         answers: enrichedAnswers,
         summary: normalizedSummary,
       },

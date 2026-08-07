@@ -19,6 +19,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 type EvaluationItem = {
   answerId: string;
@@ -160,6 +161,33 @@ export function ResultsSummary({ sessionId }: ResultsSummaryProps) {
   const [evaluations, setEvaluations] = useState<EvaluationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  const downloadPdf = async () => {
+    setDownloadingPdf(true);
+    try {
+      const res = await fetch(`/api/interview/sessions/${sessionId}/pdf`);
+      if (!res.ok) {
+        throw new Error("Failed to generate results PDF");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "interview-results.pdf";
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (downloadError) {
+      const message =
+        downloadError instanceof Error
+          ? downloadError.message
+          : "Failed to download results";
+      toast.error("Download failed", { description: message });
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -474,10 +502,16 @@ export function ResultsSummary({ sessionId }: ResultsSummaryProps) {
 
       <div className="flex justify-end">
         <Button
-          className="bg-sky-500 text-white hover:bg-sky-400"
-          onClick={() => window.print()}
+          className="bg-itbd-blue text-white hover:brightness-95"
+          disabled={downloadingPdf}
+          onClick={() => {
+            void downloadPdf();
+          }}
         >
-          Print summary
+          {downloadingPdf ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : null}
+          Download PDF
         </Button>
       </div>
     </div>

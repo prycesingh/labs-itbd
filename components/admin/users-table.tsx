@@ -1,5 +1,8 @@
 "use client";
 
+import DefaultButton, {
+  GreenButton,
+} from "@/components/app_componentes/customButtons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -126,7 +129,11 @@ export function UsersTable({
 
   return (
     <>
-      <div className="rounded-lg border">
+      <div className="itbd-glow-border relative overflow-hidden rounded-2xl bg-black/40 backdrop-blur-md">
+        <span
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+        />
         <Table>
           <TableHeader>
             <TableRow>
@@ -144,25 +151,25 @@ export function UsersTable({
               return (
                 <TableRow key={u.id}>
                   <TableCell>
-                    <div className="font-medium">{u.name ?? "—"}</div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="font-medium text-white">{u.name ?? "—"}</div>
+                    <div className="text-xs text-white/50">
                       {u.email}
                     </div>
                   </TableCell>
 
                   <TableCell>
                     {locked ? (
-                      <Badge variant={u.isAdmin ? "default" : "secondary"}>
+                      <span className="rounded-full border border-itbd-blue/40 bg-itbd-blue/10 px-2.5 py-0.5 text-xs font-semibold text-itbd-blue">
                         {u.role}
                         {u.isSuperAdmin ? " (superadmin)" : ""}
-                      </Badge>
+                      </span>
                     ) : (
                       <Select
                         value={u.role}
                         disabled={busy}
                         onValueChange={(v) => changeRole(u.id, v)}
                       >
-                        <SelectTrigger className="w-[160px]">
+                        <SelectTrigger className="w-40">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -178,11 +185,11 @@ export function UsersTable({
 
                   <TableCell>
                     {u.hasCredentials ? (
-                      <Badge variant="outline">
+                      <span className="rounded-full border border-white/20 bg-white/5 px-2.5 py-0.5 text-xs font-semibold text-white/70">
                         {u.mustChangePassword ? "Temp (must change)" : "Enabled"}
-                      </Badge>
+                      </span>
                     ) : (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-xs text-white/50">
                         SSO only
                       </span>
                     )}
@@ -190,17 +197,16 @@ export function UsersTable({
 
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      {/* Provision creds — only for admins (creds imply admin) */}
+                      {/* Provision creds - only for admins (creds imply admin) */}
                       {u.isAdmin && !u.isSuperAdmin ? (
-                        <Button
+                        <GreenButton
                           size="sm"
-                          variant="outline"
                           disabled={busy}
                           onClick={() => provisionCredentials(u.id)}
                         >
                           <KeyRound className="mr-1 h-3.5 w-3.5" />
                           {u.hasCredentials ? "Reset" : "Grant"} password
-                        </Button>
+                        </GreenButton>
                       ) : null}
                       {u.hasCredentials && !u.isSuperAdmin ? (
                         <Button
@@ -251,7 +257,7 @@ export function UsersTable({
             </Button>
           </div>
           <DialogFooter>
-            <Button onClick={() => setTempPassword(null)}>Done</Button>
+            <DefaultButton onClick={() => setTempPassword(null)}>Done</DefaultButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>

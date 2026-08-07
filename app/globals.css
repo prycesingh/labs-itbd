@@ -168,3 +168,26 @@
     0 0 0 1px rgba(0, 173, 218, 0.35),
     0 0 30px -8px rgba(0, 173, 218, 0.45);
 }
+
+/* Custom scrubber thumb for AudioPlayer's <input type="range"> — the track
+   fill comes from an inline gradient (Tailwind-reachable), but the thumb
+   itself only responds to these vendor pseudo-elements, which className
+   can't target. */
+.itbd-scrubber::-webkit-slider-thumb {
+  appearance: none;
+  height: 12px;
+  width: 12px;
+  border-radius: 50%;
+  background: var(--itbd-blue);
+  box-shadow: 0 0 6px rgba(0, 173, 218, 0.6);
+  cursor: pointer;
+}
+.itbd-scrubber::-moz-range-thumb {
+  height: 12px;
+  width: 12px;
+  border: none;
+  border-radius: 50%;
+  background: var(--itbd-blue);
+  box-shadow: 0 0 6px rgba(0, 173, 218, 0.6);
+  cursor: pointer;
+}

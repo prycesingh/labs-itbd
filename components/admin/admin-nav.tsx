@@ -1,13 +1,37 @@
 "use client";
 
-import { cn } from "@/lib/utils";
-import { KeyRound, ShieldAlert, Users } from "lucide-react";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { motion } from "motion/react";
+import {
+  ArrowLeft,
+  KeyRound,
+  LogOut,
+  ShieldAlert,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { signOut } from "next-auth/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-type NavLink = { href: string; label: string; icon: React.ReactNode };
+type NavLink = { href: string; label: string; icon: LucideIcon };
 
+/**
+ * Admin panel sidebar — same shell as DashboardNav (shadcn Sidebar primitive,
+ * gradient/rounded rail, click-toggle collapse, ITBD-blue active bar + hover
+ * nudge), so /admin and /dashboard read as one product.
+ */
 export function AdminNav({
   user,
   isSuperAdmin,
@@ -20,80 +44,108 @@ export function AdminNav({
   const pathname = usePathname();
 
   const links: NavLink[] = [
-    {
-      href: "/admin/password",
-      label: "My Password",
-      icon: <KeyRound className="h-4 w-4" />,
-    },
+    { href: "/admin/password", label: "My Password", icon: KeyRound },
     ...(isSuperAdmin
-      ? [
-          {
-            href: "/admin/users",
-            label: "User Management",
-            icon: <Users className="h-4 w-4" />,
-          },
-        ]
+      ? [{ href: "/admin/users", label: "User Management", icon: Users }]
       : []),
   ];
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground">
-      <div className="border-b p-4">
-        <Link href="/admin" className="text-lg font-semibold text-primary">
-          Admin Panel
-        </Link>
-        <p className="mt-1 truncate text-xs text-muted-foreground">
-          {user.name ?? user.email}
-        </p>
-        {user.role ? (
-          <p className="text-[10px] uppercase text-muted-foreground">
-            {user.role}
-          </p>
-        ) : null}
-      </div>
+    <Sidebar
+      collapsible="icon"
+      className="overflow-hidden  rounded-tr-3xl  border-itbd-blue border-t top-30! h-[calc(100svh-7.5rem)]! **:data-[slot=sidebar-inner]:rounded-r-2xl **:data-[slot=sidebar-inner]:bg-[linear-gradient(45deg,transparent_25%,color-mix(in_srgb,var(--itbd-blue)_15%,transparent)_50%,transparent_65%)]"
+    >
+      <SidebarHeader className="flex-row items-center justify-end">
+        <SidebarTrigger />
+      </SidebarHeader>
 
       {mustChangePassword ? (
-        <div className="mx-3 mt-3 flex items-start gap-2 rounded-md border border-primary/40 bg-primary/10 p-2 text-xs text-foreground">
+        <div className="mx-3 mt-1 flex items-start gap-2 rounded-md border border-primary/40 bg-primary/10 p-2 text-xs text-foreground group-data-[collapsible=icon]:hidden">
           <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
           <span>Change your temporary password to continue.</span>
         </div>
       ) : null}
 
-      <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
-        {links.map((link) => {
-          const active =
-            pathname === link.href || pathname.startsWith(`${link.href}/`);
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={cn(
-                "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                active && "bg-sidebar-accent text-sidebar-accent-foreground",
-              )}
-            >
-              {link.icon}
-              {link.label}
-            </Link>
-          );
-        })}
-      </nav>
+      <SidebarContent className="no-scrollbar group-data-[collapsible=icon]:overflow-y-auto!">
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {links.map((link) => (
+                <SidebarMenuItem key={link.href}>
+                  <NavLinkButton
+                    href={link.href}
+                    label={link.label}
+                    icon={link.icon}
+                    active={
+                      pathname === link.href ||
+                      pathname.startsWith(`${link.href}/`)
+                    }
+                  />
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
 
-      <div className="border-t p-3">
-        <Link
-          href="/dashboard"
-          className="mb-1 block rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-        >
-          ← Back to Dashboard
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <NavLinkButton
+              href="/dashboard"
+              label="Back to Dashboard"
+              icon={ArrowLeft}
+            />
+          </SidebarMenuItem>
+        </SidebarMenu>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <motion.div
+              whileHover={{ x: 3 }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            >
+              <SidebarMenuButton onClick={() => signOut({ callbackUrl: "/" })}>
+                <LogOut />
+                <span>Sign out</span>
+              </SidebarMenuButton>
+            </motion.div>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+    </Sidebar>
+  );
+}
+
+/** A nav link with a hover nudge and, when active, a glowing ITBD-blue bar
+ *  on the leading edge — matches DashboardNav's active-link treatment. */
+function NavLinkButton({
+  href,
+  label,
+  icon: Icon,
+  active,
+}: {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  active?: boolean;
+}) {
+  return (
+    <motion.div
+      className="relative"
+      whileHover={{ x: 3 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+    >
+      {active ? (
+        <span className="absolute left-0 top-1/2 z-10 h-5 w-0.5 -translate-y-1/2 rounded-full bg-itbd-blue shadow-[0_0_8px_var(--itbd-blue)]" />
+      ) : null}
+      <SidebarMenuButton asChild isActive={active} tooltip={label}>
+        <Link href={href}>
+          <Icon className={active ? "text-itbd-blue" : undefined} />
+          <span>{label}</span>
         </Link>
-        <button
-          type="button"
-          onClick={() => signOut({ callbackUrl: "/" })}
-          className="w-full rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-        >
-          Sign out
-        </button>
-      </div>
-    </aside>
+      </SidebarMenuButton>
+    </motion.div>
   );
 }

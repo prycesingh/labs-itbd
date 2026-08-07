@@ -1,211 +1,54 @@
 "use client";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import {
+  LAB_CATALOG,
+  resolveBreadcrumbTrail,
+  SECTIONS,
+  type NavSection,
+} from "@/lib/dashboard-nav-data";
 import { isAdminRole, type Role } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import {
-  AnimatePresence,
-  motion,
-  useReducedMotion,
-  type Transition,
-  type Variants,
-} from "motion/react";
-import { signOut } from "next-auth/react";
-import {
-  AlertTriangle,
-  BarChart3,
-  BookMarked,
-  BookOpen,
-  CalendarClock,
-  CheckSquare,
-  ClipboardCheck,
-  Cloud,
-  DatabaseZap,
-  FileText,
-  GitBranch,
-  GraduationCap,
-  Home,
-  Inbox,
-  LayoutDashboard,
-  LayoutGrid,
-  ListChecks,
+  ChevronRight,
   LogOut,
-  MailPlus,
-  MessagesSquare,
-  MonitorPlay,
-  PanelLeftClose,
-  PanelLeftOpen,
   ShieldCheck,
-  Sparkles,
-  TerminalSquare,
   type LucideIcon,
 } from "lucide-react";
-import Image from "next/image";
+import { motion } from "motion/react";
+import { signOut } from "next-auth/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
-
-type NavLink = {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  adminOnly?: boolean;
-};
-type NavGroup = { section: string; links: NavLink[] };
-
-// `adminOnly` links are hidden from non-admin users. Every link has an icon so
-// the collapsed rail stays legible (Aceternity-style hover-to-expand).
-const NAV: NavGroup[] = [
-  {
-    section: "Interview",
-    links: [
-      {
-        href: "/dashboard/interview/PracticalLearning",
-        label: "Practical Learning",
-        icon: GraduationCap,
-      },
-      {
-        href: "/dashboard/interview/MyEvaluations",
-        label: "My Evaluations",
-        icon: ClipboardCheck,
-      },
-      {
-        href: "/dashboard/interview/Module",
-        label: "Modules",
-        icon: LayoutGrid,
-        adminOnly: true,
-      },
-      {
-        href: "/dashboard/interview/results",
-        label: "Results",
-        icon: BarChart3,
-        adminOnly: true,
-      },
-    ],
-  },
-  {
-    section: "Email Assessments",
-    links: [
-      {
-        href: "/dashboard/emailAssessments/take",
-        label: "Take Assessment",
-        icon: MailPlus,
-      },
-      {
-        href: "/dashboard/emailAssessments",
-        label: "Sessions",
-        icon: CalendarClock,
-        adminOnly: true,
-      },
-      {
-        href: "/dashboard/emailAssessments/scenarios",
-        label: "Scenarios",
-        icon: MessagesSquare,
-        adminOnly: true,
-      },
-      {
-        href: "/dashboard/emailAssessments/submissions",
-        label: "Submissions",
-        icon: Inbox,
-        adminOnly: true,
-      },
-      {
-        href: "/dashboard/emailAssessments/prompts",
-        label: "Prompts",
-        icon: Sparkles,
-        adminOnly: true,
-      },
-    ],
-  },
-  {
-    section: "Technical Lab",
-    links: [
-      {
-        href: "/dashboard/labs",
-        label: "Labs Home",
-        icon: LayoutDashboard,
-      },
-      {
-        href: "/dashboard/labs/glossary",
-        label: "Glossary",
-        icon: BookOpen,
-      },
-      {
-        href: "/dashboard/labs/quizzes",
-        label: "Practice Quizzes",
-        icon: ListChecks,
-      },
-      {
-        href: "/dashboard/labs/simulators",
-        label: "Simulators",
-        icon: MonitorPlay,
-      },
-      {
-        href: "/dashboard/labs/services-catalog",
-        label: "Services Catalog",
-        icon: DatabaseZap,
-      },
-      {
-        href: "/dashboard/labs/cloud-comparison",
-        label: "Cloud Comparison",
-        icon: Cloud,
-      },
-      {
-        href: "/dashboard/labs/gotchas",
-        label: "Common Gotchas",
-        icon: AlertTriangle,
-      },
-      {
-        href: "/dashboard/labs/cert-roadmap",
-        label: "Certification Roadmap",
-        icon: GraduationCap,
-      },
-      {
-        href: "/dashboard/labs/production-checklists",
-        label: "Production Checklists",
-        icon: CheckSquare,
-      },
-      {
-        href: "/dashboard/labs/kql-playground",
-        label: "KQL Playground",
-        icon: TerminalSquare,
-      },
-      {
-        href: "/dashboard/labs/troubleshoot-flowcharts",
-        label: "Troubleshooting Flowcharts",
-        icon: GitBranch,
-      },
-      {
-        href: "/dashboard/labs/articles",
-        label: "Articles",
-        icon: FileText,
-      },
-      {
-        href: "/dashboard/labs/admin/glossary",
-        label: "Glossary Admin",
-        icon: BookMarked,
-        adminOnly: true,
-      },
-      {
-        href: "/dashboard/labs/admin/seed",
-        label: "Content Import",
-        icon: DatabaseZap,
-        adminOnly: true,
-      },
-    ],
-  },
-];
-
-const EASE: Transition["ease"] = [0.22, 1, 0.36, 1];
-const COLLAPSED_W = 68;
-const EXPANDED_W = 256;
 
 /**
- * Dashboard sidebar — an Aceternity-style icon rail that expands on hover to
- * reveal labels. Icons are always visible; labels fade + slide in with the
- * width animation. The active route is marked by an ITBD-blue light bar that
- * glides between rows (shared-element `layoutId`). Fully role-gated: admin-only
- * links (and the Admin Panel) are hidden from non-admins. Reduced-motion users
- * get a static expanded rail with no width/slide animation.
+ * Dashboard sidebar — 3 flat top-level items (Lab Catalog, Communication Lab,
+ * Technical Lab). Communication Lab and Technical Lab open a dropdown flyout
+ * of their sub-links on click (shadcn sidebar-06 pattern) instead of a nested
+ * always-expanded menu, keeping the rail short. Built on the shadcn Sidebar
+ * primitive (click-toggle collapse/expand, mobile Sheet, cookie-persisted
+ * state). Role-gated: admin-only sub-links and the Admin Panel are hidden
+ * from non-admins.
  */
 export function DashboardNav({
   user,
@@ -213,259 +56,211 @@ export function DashboardNav({
   user: { name?: string | null; email?: string | null; role?: string };
 }) {
   const pathname = usePathname();
-  const reduce = useReducedMotion();
   const isAdmin = isAdminRole((user.role ?? null) as Role | null);
-  // `pinned` = user toggled the rail open to stay; `hovering` = transient hover.
-  // The rail is expanded when pinned OR hovered (or when reduced-motion).
-  const [pinned, setPinned] = useState(false);
-  const [hovering, setHovering] = useState(false);
-
-  const expanded = reduce ? true : pinned || hovering;
-
-  const groups = NAV.map((g) => ({
-    ...g,
-    links: g.links.filter((l) => (l.adminOnly ? isAdmin : true)),
-  })).filter((g) => g.links.length > 0);
+  const activeSectionKey =
+    resolveBreadcrumbTrail(pathname)?.section?.key ?? null;
 
   return (
-    <motion.aside
-      onHoverStart={() => setHovering(true)}
-      onHoverEnd={() => setHovering(false)}
-      initial={false}
-      animate={{ width: reduce ? EXPANDED_W : expanded ? EXPANDED_W : COLLAPSED_W }}
-      transition={reduce ? { duration: 0 } : { duration: 0.28, ease: EASE }}
-      className="relative z-20 flex h-screen shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
+    <Sidebar
+      collapsible="icon"
+      className={cn(
+        // Desktop container: fixed position under the header, rounded top-right
+        // corner, top border, diagonal blue-tinted gradient wash on its inner slot.
+        "md:overflow-hidden md:rounded-tr-3xl md:border-itbd-blue md:border-t md:top-30! md:h-[calc(100svh-7.5rem)]!",
+        "**:data-[slot=sidebar-inner]:rounded-r-2xl **:data-[slot=sidebar-inner]:bg-[linear-gradient(45deg,transparent_25%,color-mix(in_srgb,var(--itbd-blue)_15%,transparent)_50%,transparent_65%)]",
+        // Mobile off-canvas sheet has no "sidebar-inner" slot to target — it IS
+        // the SheetContent root, and it runs full viewport height (no single
+        // top edge to border/round) — so only the gradient wash carries over,
+        // applied directly to the sheet's own background.
+        "bg-[linear-gradient(45deg,transparent_25%,color-mix(in_srgb,var(--itbd-blue)_15%,transparent)_50%,transparent_65%)]",
+      )}
     >
-      {/* Brand header — ITBD logo + collapse/pin toggle */}
-      <div className="flex items-center gap-2 border-b border-sidebar-border p-3">
-        <Link
-          href="/dashboard"
-          className="flex min-w-0 flex-1 items-center"
-          title="Labs ITBD"
-        >
-          {/* Logo only — no box/border/shadow. Collapsed: mark (7.png).
-              Expanded: full ITBD wordmark. */}
-          {expanded ? (
-            <Image
-              src="/itbd_logo_img.png"
-              alt="Labs ITBD"
-              width={911}
-              height={344}
-              priority
-              className="h-8 w-auto max-w-40 object-contain object-left"
-            />
-          ) : (
-            <Image
-              src="/login-images/7.png"
-              alt="Labs ITBD"
-              width={40}
-              height={40}
-              priority
-              className="h-9 w-9 object-contain"
-            />
-          )}
-        </Link>
+      <SidebarHeader className="flex-row items-center justify-end">
+        <SidebarTrigger />
+      </SidebarHeader>
+      <SidebarContent className="no-scrollbar group-data-[collapsible=icon]:overflow-y-auto!">
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <NavLinkButton
+                  href={LAB_CATALOG.href}
+                  label={LAB_CATALOG.label}
+                  icon={LAB_CATALOG.icon}
+                  active={pathname === LAB_CATALOG.href}
+                />
+              </SidebarMenuItem>
 
-        {/* Pin / collapse toggle — only meaningful when expanded (hover or pin).
-            Hidden with reduced motion since the rail is always expanded then. */}
-        {!reduce && expanded ? (
-          <button
-            type="button"
-            onClick={() => setPinned((p) => !p)}
-            aria-label={pinned ? "Collapse sidebar" : "Keep sidebar open"}
-            title={pinned ? "Collapse sidebar" : "Keep sidebar open"}
-            className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            {pinned ? (
-              <PanelLeftClose className="h-4 w-4" />
-            ) : (
-              <PanelLeftOpen className="h-4 w-4" />
-            )}
-          </button>
-        ) : null}
-      </div>
-
-      {/* User */}
-      <div className="flex items-center gap-3 border-b border-sidebar-border px-4 py-3">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold uppercase">
-          {(user.name ?? user.email ?? "?").slice(0, 2)}
-        </span>
-        <ExpandLabel expanded={expanded} reduce={!!reduce}>
-          <div className="min-w-0">
-            <p className="truncate text-xs font-medium">
-              {user.name ?? user.email}
-            </p>
-            {user.role ? (
-              <p className="truncate text-[10px] uppercase tracking-wide text-muted-foreground">
-                {user.role}
-              </p>
-            ) : null}
-          </div>
-        </ExpandLabel>
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden p-3">
-        {/* Home / module picker. Exact-match so it is NOT active on sub-routes
-            like /dashboard/labs — gives the landing page a visible active row
-            (previously only the logo linked here, with no active state). */}
-        <ul className="space-y-0.5">
-          <NavRow
-            link={{ href: "/dashboard", label: "Dashboard", icon: Home }}
-            active={pathname === "/dashboard"}
-            expanded={expanded}
-            reduce={!!reduce}
-          />
-        </ul>
-
-        {groups.map((group) => (
-          <div key={group.section}>
-            <div className="h-4 px-2">
-              <ExpandLabel expanded={expanded} reduce={!!reduce}>
-                <span className="whitespace-nowrap text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {group.section}
-                </span>
-              </ExpandLabel>
-            </div>
-            <ul className="mt-1 space-y-0.5">
-              {group.links.map((link) => (
-                <NavRow
-                  key={link.href}
-                  link={link}
-                  active={pathname === link.href}
-                  expanded={expanded}
-                  reduce={!!reduce}
+              {SECTIONS.map((section) => (
+                <NavSectionMenuItem
+                  key={section.key}
+                  section={section}
+                  pathname={pathname}
+                  isAdmin={isAdmin}
+                  active={section.key === activeSectionKey}
                 />
               ))}
-            </ul>
-          </div>
-        ))}
-      </nav>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
 
-      {/* Admin panel — admins only */}
-      {isAdmin ? (
-        <div className="border-t border-sidebar-border p-3">
-          <NavRow
-            link={{ href: "/admin", label: "Admin Panel", icon: ShieldCheck }}
-            active={pathname.startsWith("/admin")}
-            expanded={expanded}
-            reduce={!!reduce}
-            emphasize
-          />
-        </div>
-      ) : null}
-
-      {/* Sign out */}
-      <div className="border-t border-sidebar-border p-3">
-        <motion.button
-          type="button"
-          onClick={() => signOut({ callbackUrl: "/" })}
-          whileHover={reduce ? undefined : { x: 3 }}
-          whileTap={reduce ? undefined : { scale: 0.98 }}
-          transition={{ type: "spring", stiffness: 400, damping: 30 }}
-          className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-        >
-          <LogOut className="h-5 w-5 shrink-0" />
-          <ExpandLabel expanded={expanded} reduce={!!reduce}>
-            <span className="whitespace-nowrap">Sign out</span>
-          </ExpandLabel>
-        </motion.button>
-      </div>
-    </motion.aside>
+      <SidebarFooter>
+        {isAdmin ? (
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <NavLinkButton
+                href="/admin"
+                label="Admin Panel"
+                icon={ShieldCheck}
+                active={pathname.startsWith("/admin")}
+                emphasize
+              />
+            </SidebarMenuItem>
+          </SidebarMenu>
+        ) : null}
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <motion.div
+              whileHover={{ x: 3 }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            >
+              <SidebarMenuButton onClick={() => signOut({ callbackUrl: "/" })}>
+                <LogOut />
+                <span>Sign out</span>
+              </SidebarMenuButton>
+            </motion.div>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+    </Sidebar>
   );
 }
 
-/** A label that fades + slides in when the rail expands, out when it collapses.
- *  Reduced motion → always shown, no transition. */
-function ExpandLabel({
-  expanded,
-  reduce,
-  children,
-}: {
-  expanded: boolean;
-  reduce: boolean;
-  children: React.ReactNode;
-}) {
-  if (reduce) return <>{children}</>;
-  return (
-    <AnimatePresence initial={false}>
-      {expanded ? (
-        <motion.div
-          initial={{ opacity: 0, x: -6 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -6 }}
-          transition={{ duration: 0.18, ease: EASE }}
-        >
-          {children}
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
-  );
-}
-
-/** A nav row: always-visible icon + expand-in label, with the shared-element
- *  ITBD-blue active bar and a hover nudge. */
-function NavRow({
-  link,
+/** A top-level section item (Communication Lab / Technical Lab) — clicking it
+ *  opens a dropdown flyout listing its sub-links, grouped by subgroup when a
+ *  section has more than one (e.g. Interview / Email Assessments). Admin-only
+ *  links are filtered out for non-admins. */
+function NavSectionMenuItem({
+  section,
+  pathname,
+  isAdmin,
   active,
-  expanded,
-  reduce,
+}: {
+  section: NavSection;
+  pathname: string;
+  isAdmin: boolean;
+  active: boolean;
+}) {
+  const { isMobile } = useSidebar();
+
+  const subgroups = section.subgroups
+    .map((sg) => ({
+      ...sg,
+      links: sg.links.filter((l) => (l.adminOnly ? isAdmin : true)),
+    }))
+    .filter((sg) => sg.links.length > 0);
+
+  if (subgroups.length === 0) return null;
+
+  const showSubgroupLabels = subgroups.length > 1;
+
+  return (
+    <DropdownMenu>
+      <SidebarMenuItem>
+        <motion.div
+          className="relative"
+          whileHover={{ x: 3 }}
+          whileTap={{ scale: 0.98 }}
+          transition={{ type: "spring", stiffness: 400, damping: 30 }}
+        >
+          {active ? (
+            <span className="absolute left-0 top-1/2 z-10 h-5 w-0.5 -translate-y-1/2 rounded-full bg-itbd-blue shadow-[0_0_8px_var(--itbd-blue)]" />
+          ) : null}
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton
+              isActive={active}
+              tooltip={section.label}
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+            >
+              <section.icon className={active ? "text-itbd-blue" : undefined} />
+              <span>{section.label}</span>
+              <ChevronRight className="ml-auto h-4 w-4" />
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+        </motion.div>
+        <DropdownMenuContent
+          side={isMobile ? "bottom" : "right"}
+          align={isMobile ? "end" : "start"}
+          sideOffset={8}
+          className="min-w-56 rounded-lg"
+        >
+          {subgroups.map((sg, i) => (
+            <DropdownMenuGroup key={sg.label}>
+              {i > 0 ? <DropdownMenuSeparator /> : null}
+              {showSubgroupLabels ? (
+                <DropdownMenuLabel>{sg.label}</DropdownMenuLabel>
+              ) : null}
+              {sg.links.map((link) => (
+                <DropdownMenuItem key={link.href} asChild>
+                  <Link
+                    href={link.href}
+                    data-active={pathname === link.href}
+                    className="data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium"
+                  >
+                    <link.icon className="h-4 w-4" />
+                    <span>{link.label}</span>
+                  </Link>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          ))}
+        </DropdownMenuContent>
+      </SidebarMenuItem>
+    </DropdownMenu>
+  );
+}
+
+/** A nav link with a hover nudge and, when active, a glowing ITBD-blue bar
+ *  on the leading edge — mirrors the accent treatment used elsewhere in the
+ *  app for the active route. */
+function NavLinkButton({
+  href,
+  label,
+  icon: Icon,
+  active,
   emphasize,
 }: {
-  link: NavLink;
+  href: string;
+  label: string;
+  icon: LucideIcon;
   active: boolean;
-  expanded: boolean;
-  reduce: boolean;
   emphasize?: boolean;
 }) {
-  const Icon = link.icon;
-  const glide: Transition = reduce
-    ? { duration: 0 }
-    : { type: "spring", stiffness: 500, damping: 40 };
-
   return (
-    <li>
-      <motion.div
-        whileHover={reduce ? undefined : { x: 3 }}
-        transition={{ type: "spring", stiffness: 400, damping: 30 }}
+    <motion.div
+      className="relative"
+      whileHover={{ x: 3 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+    >
+      {active ? (
+        <span className="absolute left-0 top-1/2 z-10 h-5 w-0.5 -translate-y-1/2 rounded-full bg-itbd-blue shadow-[0_0_8px_var(--itbd-blue)]" />
+      ) : null}
+      <SidebarMenuButton
+        asChild
+        isActive={active}
+        tooltip={label}
+        className={emphasize && !active ? "text-primary" : undefined}
       >
-        <Link
-          href={link.href}
-          title={link.label}
-          className={cn(
-            "relative flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors",
-            "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            active
-              ? "font-medium text-sidebar-accent-foreground"
-              : "text-sidebar-foreground/80",
-            emphasize && !active && "text-primary",
-          )}
-        >
-          {active ? (
-            <motion.span
-              layoutId="activeNav"
-              className="absolute inset-0 -z-10 rounded-md bg-sidebar-accent"
-              transition={glide}
-            />
-          ) : null}
-          {active ? (
-            <motion.span
-              layoutId="activeNavBar"
-              className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-itbd-blue shadow-[0_0_8px_var(--itbd-blue)]"
-              transition={glide}
-            />
-          ) : null}
+        <Link href={href}>
           <Icon
-            className={cn(
-              "h-5 w-5 shrink-0",
-              active || emphasize ? "text-itbd-blue" : "",
-            )}
+            className={active || emphasize ? "text-itbd-blue" : undefined}
           />
-          <ExpandLabel expanded={expanded} reduce={reduce}>
-            <span className="whitespace-nowrap">{link.label}</span>
-          </ExpandLabel>
+          <span>{label}</span>
         </Link>
-      </motion.div>
-    </li>
+      </SidebarMenuButton>
+    </motion.div>
   );
 }

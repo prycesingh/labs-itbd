@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { Button } from "@/components/ui/button";
+import DefaultButton from "@/components/app_componentes/customButtons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -62,14 +62,18 @@ export function ScenarioForm() {
     <form className="grid gap-4" onSubmit={form.handleSubmit(onSubmit)}>
       <div className="grid gap-4 md:grid-cols-3">
         <div className="space-y-2 md:col-span-2">
-          <Label htmlFor="title">Title</Label>
+          <Label htmlFor="title" className="text-white/70">
+            Title
+          </Label>
           <Input id="title" {...form.register("title")} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="difficulty">Difficulty</Label>
+          <Label htmlFor="difficulty" className="text-white/70">
+            Difficulty
+          </Label>
           <select
             id="difficulty"
-            className="h-10 w-full rounded-xl border bg-background px-3 text-sm"
+            className="h-10 w-full rounded-xl border border-white/10 bg-black/40 px-3 text-sm text-white focus:border-itbd-blue focus:outline-none"
             {...form.register("difficulty")}
           >
             <option value="beginner">Beginner</option>
@@ -79,18 +83,24 @@ export function ScenarioForm() {
         </div>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="category">Category</Label>
+        <Label htmlFor="category" className="text-white/70">
+          Category
+        </Label>
         <Input id="category" {...form.register("category")} />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="prompt">Prompt</Label>
+        <Label htmlFor="prompt" className="text-white/70">
+          Prompt
+        </Label>
         <Textarea id="prompt" className="min-h-32" {...form.register("prompt")} />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="scoringNotes">Scoring notes</Label>
+        <Label htmlFor="scoringNotes" className="text-white/70">
+          Scoring notes
+        </Label>
         <Textarea id="scoringNotes" {...form.register("scoringNotes")} />
       </div>
-      <Button disabled={submitting}>{submitting ? "Creating..." : "Create scenario"}</Button>
+      <DefaultButton loading={submitting}>Create scenario</DefaultButton>
     </form>
   );
 }

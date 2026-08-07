@@ -1,4 +1,5 @@
 import { SentinelSimulator } from "@/components/labs/simulators/sentinel/sentinel-simulator";
+import { SimulatorSessionTracker } from "@/components/labs/SimulatorSessionTracker";
 import { requireUser } from "@/lib/labs/auth";
 
 /**
@@ -12,6 +13,7 @@ export default async function SentinelSimulatorPage() {
 
   return (
     <div className="-m-6 h-[calc(100%+3rem)]">
+      <SimulatorSessionTracker simulatorKey="sentinel" />
       <SentinelSimulator />
     </div>
   );

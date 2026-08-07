@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
+import DefaultButton, {
+  GreenButton,
+} from "@/components/app_componentes/customButtons";
 
 const SESSION_KEY = "candidate-assessment-session";
 const TAKE_BASE = "/dashboard/emailAssessments/take";
@@ -120,58 +122,72 @@ export function StartAssessmentButton({
   return (
     <div className="space-y-6">
       {/* Instructions Panel */}
-      <div className="rounded-2xl border bg-card p-6 space-y-4">
-        <div className="flex items-center gap-2 border-b pb-3">
-          <FileText className="h-5 w-5 text-primary" />
-          <h3 className="font-semibold text-lg">Assessment Instructions</h3>
+      <div className="itbd-glow-border relative overflow-hidden rounded-2xl bg-black/40 p-6 backdrop-blur-md space-y-4">
+        <span
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+        />
+        <div className="relative z-10 flex items-center gap-2 border-b border-white/10 pb-3">
+          <FileText className="h-5 w-5 text-itbd-blue" />
+          <h3 className="text-lg font-bold tracking-wide text-white uppercase">
+            Assessment Instructions
+          </h3>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 text-sm">
+        <div className="relative z-10 grid gap-4 text-sm text-white/80 md:grid-cols-2">
           <div className="space-y-3">
             <div className="flex items-start gap-2">
-              <CheckCircle className="mt-0.5 h-4 w-4 text-emerald-500 shrink-0" />
+              <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-itbd-blue" />
               <p>
-                <strong>Total Duration:</strong> 30 minutes for the entire
-                session.
+                <strong className="text-white">Total Duration:</strong> 30
+                minutes for the entire session.
               </p>
             </div>
             <div className="flex items-start gap-2">
-              <CheckCircle className="mt-0.5 h-4 w-4 text-emerald-500 shrink-0" />
+              <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-itbd-blue" />
               <p>
-                <strong>Assessment Pool:</strong> 5 randomized scenarios (2
-                Beginner, 2 Intermediate, 1 Advanced).
+                <strong className="text-white">Assessment Pool:</strong> 5
+                randomized scenarios (2 Beginner, 2 Intermediate, 1 Advanced).
               </p>
             </div>
             <div className="flex items-start gap-2">
-              <CheckCircle className="mt-0.5 h-4 w-4 text-emerald-500 shrink-0" />
+              <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-itbd-blue" />
               <p>
-                <strong>Subject Line:</strong> Ensure you write both a subject
-                line and the email body for each scenario.
+                <strong className="text-white">Subject Line:</strong> Ensure
+                you write both a subject line and the email body for each
+                scenario.
               </p>
             </div>
           </div>
           <div className="space-y-3">
             <div className="flex items-start gap-2">
-              <CheckCircle className="mt-0.5 h-4 w-4 text-emerald-500 shrink-0" />
+              <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-itbd-blue" />
               <p>
-                <strong>Weighted Scoring:</strong> Marks vary by difficulty:
-                Beginner (1.5), Intermediate (2.0), Advanced (3.0).
+                <strong className="text-white">Weighted Scoring:</strong>{" "}
+                Marks vary by difficulty: Beginner (1.5), Intermediate (2.0),
+                Advanced (3.0).
               </p>
             </div>
             <div className="flex items-start gap-2">
-              <Shield className="mt-0.5 h-4 w-4 text-amber-500 shrink-0" />
+              <Shield className="mt-0.5 h-4 w-4 shrink-0 text-itbd-blue" />
               <p>
-                <strong>Anti-Cheating Protection:</strong> Copying or pasting
-                text into the input fields is completely disabled.
+                <strong className="text-white">
+                  Anti-Cheating Protection:
+                </strong>{" "}
+                Copying or pasting text into the input fields is completely
+                disabled.
               </p>
             </div>
           </div>
         </div>
 
-        {/* Security Warning Banner */}
-        <div className="flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-300">
-          <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+        {/* Security warning — orange is reserved for emergency-only flags per
+            brand guidelines; this is exactly that case. */}
+        <div className="relative z-10 flex gap-3 rounded-xl border border-orange-500/30 bg-orange-500/10 p-4 text-sm text-orange-200">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-orange-400" />
           <div className="space-y-1">
-            <p className="font-semibold">Security Protocol Notice</p>
+            <p className="font-semibold text-orange-300">
+              Security Protocol Notice
+            </p>
             <p className="leading-relaxed">
               Switching tabs, minimizing the browser window, or navigating away
               will
@@ -185,17 +201,13 @@ export function StartAssessmentButton({
 
       {/* Actions */}
       <div className="flex flex-wrap items-center gap-3">
-        <Button size="lg" onClick={startAssessment} disabled={loading}>
-          {loading
-            ? "Preparing scenarios..."
-            : existingSession
-              ? "Continue Session"
-              : "Start Assessment"}
-        </Button>
+        <DefaultButton size="lg" onClick={startAssessment} loading={loading}>
+          {existingSession ? "Continue Session" : "Start Assessment"}
+        </DefaultButton>
         {existingSession && (
-          <Button size="lg" variant="outline" onClick={startNewSession}>
+          <GreenButton size="lg" onClick={startNewSession}>
             Start New Session
-          </Button>
+          </GreenButton>
         )}
       </div>
     </div>

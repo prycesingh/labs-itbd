@@ -1,4 +1,5 @@
 import { PaloAltoSimulator } from "@/components/labs/simulators/network-paloalto/paloalto-simulator";
+import { SimulatorSessionTracker } from "@/components/labs/SimulatorSessionTracker";
 import { requireUser } from "@/lib/labs/auth";
 
 /**
@@ -12,6 +13,7 @@ export default async function PaloAltoSimulatorPage() {
 
   return (
     <div className="-m-6 h-[calc(100%+3rem)]">
+      <SimulatorSessionTracker simulatorKey="network-paloalto" />
       <PaloAltoSimulator />
     </div>
   );

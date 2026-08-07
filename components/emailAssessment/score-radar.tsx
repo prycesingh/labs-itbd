@@ -37,10 +37,10 @@ export function ScoreRadar({ scores }: { scores: CategoryScores }) {
     <div className="h-72">
       <ResponsiveContainer width="100%" height="100%">
         <RadarChart data={data}>
-          <PolarGrid />
-          <PolarAngleAxis dataKey="category" />
+          <PolarGrid stroke="rgba(255,255,255,0.1)" />
+          <PolarAngleAxis dataKey="category" tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 12 }} />
           <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} />
-          <Radar dataKey="score" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.28} />
+          <Radar dataKey="score" stroke="var(--itbd-blue)" fill="var(--itbd-blue)" fillOpacity={0.28} />
         </RadarChart>
       </ResponsiveContainer>
     </div>

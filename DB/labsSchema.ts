@@ -41,6 +41,9 @@ import { users } from "./schema";
 export const labsQuizAttemptStatusEnum = (name: string) =>
   mysqlEnum(name, ["in_progress", "completed"]);
 
+export const labsSimulatorSessionStatusEnum = (name: string) =>
+  mysqlEnum(name, ["active", "ended"]);
+
 // ─────────────────────────────────────────────
 // Glossary
 // ─────────────────────────────────────────────
@@ -375,5 +378,44 @@ export const labsSimulatorStates = mysqlTable(
   },
   (table) => ({
     pk: primaryKey({ columns: [table.userId, table.simulatorKey] }),
+  })
+);
+
+// ─────────────────────────────────────────────
+// Simulator time-tracking sessions (per-user, per-launch)
+// ─────────────────────────────────────────────
+/**
+ * One row per simulator "session" (mount to close), powering the dashboard's
+ * "time spent today/this week" stat tiles.
+ *
+ * Time is accrued via heartbeat, not a wall-clock start/end diff: the client
+ * pings roughly every 45s while the tab is visible + focused, and each
+ * heartbeat adds min(now - lastHeartbeatAt, a stale ceiling) to
+ * `accumulatedSeconds` before advancing `lastHeartbeatAt`. That means idle or
+ * backgrounded time never accrues, and a killed tab simply stops sending
+ * heartbeats — `accumulatedSeconds` is already the true bounded total with
+ * nothing left to reconcile, so the aggregation query only ever needs to sum
+ * this column (it never inspects `status`).
+ */
+export const labsSimulatorSessions = mysqlTable(
+  "labs_simulator_sessions",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    simulatorKey: varchar("simulator_key", { length: 60 }).notNull(),
+    status: labsSimulatorSessionStatusEnum("status").notNull().default("active"),
+    accumulatedSeconds: int("accumulated_seconds").notNull().default(0),
+    startedAt: timestamp("started_at").notNull().defaultNow(),
+    lastHeartbeatAt: timestamp("last_heartbeat_at").notNull().defaultNow(),
+    endedAt: timestamp("ended_at"),
+  },
+  (table) => ({
+    userIdx: index("labs_simulator_sessions_user_idx").on(table.userId),
+    userStartedIdx: index("labs_simulator_sessions_user_started_idx").on(
+      table.userId,
+      table.startedAt
+    ),
   })
 );

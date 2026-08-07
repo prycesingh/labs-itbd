@@ -7,7 +7,7 @@ import {
   candidateInterviewAnswers,
   candidateInterviewSessions,
   interviewModules,
-  interviewQuestions,
+  interviewQuestionBank,
   interviewQuestionStandardResponses,
   interviewSessionSummaries,
 } from "@/DB/interviewSchema";
@@ -241,12 +241,12 @@ export async function GET() {
         questionIds.length > 0
           ? await db
               .select({
-                id: interviewQuestions.id,
-                promptText: interviewQuestions.promptText,
-                promptAudioPath: interviewQuestions.promptAudioPath,
+                id: interviewQuestionBank.id,
+                promptText: interviewQuestionBank.promptText,
+                promptAudioPath: interviewQuestionBank.promptAudioPath,
               })
-              .from(interviewQuestions)
-              .where(inArray(interviewQuestions.id, questionIds))
+              .from(interviewQuestionBank)
+              .where(inArray(interviewQuestionBank.id, questionIds))
           : [];
     } catch (error) {
       console.warn(

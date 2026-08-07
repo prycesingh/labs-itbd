@@ -15,8 +15,9 @@ import {
   aiInterviewEvaluations,
   candidateInterviewAnswers,
   candidateInterviewSessions,
+  interviewModuleQuestionAssignments,
   interviewModules,
-  interviewQuestions,
+  interviewQuestionBank,
   interviewQuestionStandardResponses,
   interviewSessionSummaries,
 } from "@/DB/interviewSchema";
@@ -514,44 +515,58 @@ async function handleInterviewTranscription(
 
   callbacks.updateProgress(20);
 
-  const startedAt = Date.now();
-  const storage = getAudioStorageProvider();
-  const audioBuffer = await storage.getAudio(audioStoragePath);
-  const transcriptResult = await transcribeAudio(
-    audioBuffer,
-    answerId,
-    requestedLanguage,
-  );
+  try {
+    const startedAt = Date.now();
+    const storage = getAudioStorageProvider();
+    const audioBuffer = await storage.getAudio(audioStoragePath);
+    const transcriptResult = await transcribeAudio(
+      audioBuffer,
+      answerId,
+      requestedLanguage,
+    );
 
-  callbacks.updateProgress(80);
+    callbacks.updateProgress(80);
 
-  await db
-    .update(candidateInterviewAnswers)
-    .set({
-      transcriptStatus: "completed",
-      transcriptedText: transcriptResult.text,
-      transcriptProvider: transcriptResult.provider,
-      transcriptDetectedLanguage: transcriptResult.language,
-      transcriptConfidence: transcriptResult.confidence
-        ? transcriptResult.confidence.toString()
-        : null,
-      transcriptRawResponse: transcriptResult.rawResponse,
-      transcriptProcessingTimeMs: Date.now() - startedAt,
-    })
-    .where(eq(candidateInterviewAnswers.id, answerId));
+    await db
+      .update(candidateInterviewAnswers)
+      .set({
+        transcriptStatus: "completed",
+        transcriptedText: transcriptResult.text,
+        transcriptProvider: transcriptResult.provider,
+        transcriptDetectedLanguage: transcriptResult.language,
+        transcriptConfidence: transcriptResult.confidence
+          ? transcriptResult.confidence.toString()
+          : null,
+        transcriptRawResponse: transcriptResult.rawResponse,
+        transcriptProcessingTimeMs: Date.now() - startedAt,
+      })
+      .where(eq(candidateInterviewAnswers.id, answerId));
 
-  callbacks.updateProgress(100);
-  callbacks.updateResult?.({
-    answerId,
-    transcriptLength: transcriptResult.text.length,
-    language: transcriptResult.language,
-  });
+    callbacks.updateProgress(100);
+    callbacks.updateResult?.({
+      answerId,
+      transcriptLength: transcriptResult.text.length,
+      language: transcriptResult.language,
+    });
 
-  return {
-    success: true,
-    answerId,
-    transcriptLength: transcriptResult.text.length,
-  };
+    return {
+      success: true,
+      answerId,
+      transcriptLength: transcriptResult.text.length,
+    };
+  } catch (error) {
+    // Only mark the answer terminally failed once the job's own retries are
+    // exhausted — otherwise a mid-retry answer would get stuck at "failed"
+    // while the queue is still about to try again, hiding the eventual success.
+    const job = await getBackgroundJobById(jobId);
+    if (job && job.attempts >= job.maxAttempts) {
+      await db
+        .update(candidateInterviewAnswers)
+        .set({ transcriptStatus: "failed" })
+        .where(eq(candidateInterviewAnswers.id, answerId));
+    }
+    throw error;
+  }
 }
 
 async function handleInterviewEvaluation(
@@ -620,95 +635,117 @@ async function handleInterviewEvaluation(
 
   callbacks.updateProgress(20);
 
-  const [question] = await db
-    .select({
-      questionText: interviewQuestions.promptText,
-      moduleTitle: interviewModules.name,
-    })
-    .from(interviewQuestions)
-    .leftJoin(
-      interviewModules,
-      eq(interviewModules.id, interviewQuestions.moduleId),
-    )
-    .where(eq(interviewQuestions.id, answer.questionId))
-    .limit(1);
+  try {
+    const [question] = await db
+      .select({
+        questionText: interviewQuestionBank.promptText,
+        moduleTitle: interviewModules.name,
+      })
+      .from(interviewQuestionBank)
+      .leftJoin(
+        interviewModuleQuestionAssignments,
+        eq(
+          interviewModuleQuestionAssignments.questionId,
+          interviewQuestionBank.id,
+        ),
+      )
+      .leftJoin(
+        interviewModules,
+        eq(interviewModules.id, interviewModuleQuestionAssignments.moduleId),
+      )
+      .where(eq(interviewQuestionBank.id, answer.questionId))
+      .limit(1);
 
-  const standardResponseRows = await db
-    .select({
-      responseText: interviewQuestionStandardResponses.responseText,
-      responseOrder: interviewQuestionStandardResponses.responseOrder,
-    })
-    .from(interviewQuestionStandardResponses)
-    .where(
-      eq(interviewQuestionStandardResponses.questionId, answer.questionId),
+    const standardResponseRows = await db
+      .select({
+        responseText: interviewQuestionStandardResponses.responseText,
+        responseOrder: interviewQuestionStandardResponses.responseOrder,
+      })
+      .from(interviewQuestionStandardResponses)
+      .where(
+        eq(interviewQuestionStandardResponses.questionId, answer.questionId),
+      );
+
+    const questionText = question?.questionText ?? "Interview question";
+    const standardResponses = [...standardResponseRows]
+      .sort((left, right) => left.responseOrder - right.responseOrder)
+      .map((item) => item.responseText)
+      .filter((item) => item.trim().length > 0);
+    const startedAt = Date.now();
+
+    const evaluationResult = await evaluateAnswer(
+      answer.transcriptedText,
+      questionText,
+      resolvedAnswerId,
+      {
+        moduleTitle: question?.moduleTitle ?? undefined,
+        standardResponses,
+      },
     );
 
-  const questionText = question?.questionText ?? "Interview question";
-  const standardResponses = [...standardResponseRows]
-    .sort((left, right) => left.responseOrder - right.responseOrder)
-    .map((item) => item.responseText)
-    .filter((item) => item.trim().length > 0);
-  const startedAt = Date.now();
+    callbacks.updateProgress(75);
 
-  const evaluationResult = await evaluateAnswer(
-    answer.transcriptedText,
-    questionText,
-    resolvedAnswerId,
-    {
-      moduleTitle: question?.moduleTitle ?? undefined,
-      standardResponses,
-    },
-  );
+    const evaluationId = answer.aiEvaluationId ?? randomUUID();
 
-  callbacks.updateProgress(75);
-
-  const evaluationId = answer.aiEvaluationId ?? randomUUID();
-
-  if (answer.aiEvaluationId) {
-    await db
-      .update(aiInterviewEvaluations)
-      .set({
+    if (answer.aiEvaluationId) {
+      await db
+        .update(aiInterviewEvaluations)
+        .set({
+          modelUsed: evaluationResult.modelUsed,
+          promptVersion: "2.0",
+          evaluationJsonStructured: evaluationResult.evaluation,
+          tokensUsed: evaluationResult.tokensUsed,
+          processingTimeMs: Date.now() - startedAt,
+        })
+        .where(eq(aiInterviewEvaluations.id, answer.aiEvaluationId));
+    } else {
+      await db.insert(aiInterviewEvaluations).values({
+        id: evaluationId,
+        answerId: resolvedAnswerId,
+        sessionId: resolvedSessionId,
         modelUsed: evaluationResult.modelUsed,
         promptVersion: "2.0",
         evaluationJsonStructured: evaluationResult.evaluation,
         tokensUsed: evaluationResult.tokensUsed,
         processingTimeMs: Date.now() - startedAt,
+      });
+    }
+
+    await db
+      .update(candidateInterviewAnswers)
+      .set({
+        evaluationStatus: "completed",
+        aiEvaluationId: evaluationId,
       })
-      .where(eq(aiInterviewEvaluations.id, answer.aiEvaluationId));
-  } else {
-    await db.insert(aiInterviewEvaluations).values({
-      id: evaluationId,
+      .where(eq(candidateInterviewAnswers.id, resolvedAnswerId));
+
+    callbacks.updateProgress(100);
+    callbacks.updateResult?.({
       answerId: resolvedAnswerId,
-      sessionId: resolvedSessionId,
-      modelUsed: evaluationResult.modelUsed,
-      promptVersion: "2.0",
-      evaluationJsonStructured: evaluationResult.evaluation,
-      tokensUsed: evaluationResult.tokensUsed,
-      processingTimeMs: Date.now() - startedAt,
-    });
-  }
-
-  await db
-    .update(candidateInterviewAnswers)
-    .set({
-      evaluationStatus: "completed",
       aiEvaluationId: evaluationId,
-    })
-    .where(eq(candidateInterviewAnswers.id, resolvedAnswerId));
+      totalScore: evaluationResult.evaluation.total_score,
+    });
 
-  callbacks.updateProgress(100);
-  callbacks.updateResult?.({
-    answerId: resolvedAnswerId,
-    aiEvaluationId: evaluationId,
-    totalScore: evaluationResult.evaluation.total_score,
-  });
-
-  return {
-    success: true,
-    answerId: resolvedAnswerId,
-    aiEvaluationId: evaluationId,
-    totalScore: evaluationResult.evaluation.total_score,
-  };
+    return {
+      success: true,
+      answerId: resolvedAnswerId,
+      aiEvaluationId: evaluationId,
+      totalScore: evaluationResult.evaluation.total_score,
+    };
+  } catch (error) {
+    // Same reasoning as the transcription handler: only flip to terminal
+    // "failed" once retries are exhausted, so the orchestration loop's
+    // hasFailedJobs check can actually see it and stop the session from
+    // spinning at "processing" forever.
+    const job = await getBackgroundJobById(jobId);
+    if (job && job.attempts >= job.maxAttempts) {
+      await db
+        .update(candidateInterviewAnswers)
+        .set({ evaluationStatus: "failed" })
+        .where(eq(candidateInterviewAnswers.id, resolvedAnswerId));
+    }
+    throw error;
+  }
 }
 
 async function handleInterviewSessionSummary(

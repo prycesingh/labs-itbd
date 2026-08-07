@@ -2,7 +2,6 @@
 
 import { InterviewSession } from "@/components/interview/user/InterviewSession";
 import { ModuleSelector } from "@/components/interview/user/ModuleSelector";
-import { Separator } from "@/components/ui/separator";
 import { Loader2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -16,6 +15,7 @@ export default function PracticalLearningPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [totalQuestions, setTotalQuestions] = useState<number>(0);
   const [startingSession, setStartingSession] = useState(false);
+  const [resuming, setResuming] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -57,6 +57,7 @@ export default function PracticalLearningPage() {
       setTotalQuestions(
         Math.min(questionDisplayCount, Number(payload.totalQuestions ?? 0)),
       );
+      setResuming(Boolean(payload.resumed));
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to start session";
@@ -64,6 +65,7 @@ export default function PracticalLearningPage() {
       setSelectedModule(null);
       setSessionId(null);
       setTotalQuestions(0);
+      setResuming(false);
     } finally {
       setStartingSession(false);
     }
@@ -74,16 +76,6 @@ export default function PracticalLearningPage() {
 
   return (
     <main className="flex flex-col w-full gap-2">
-      <header>
-        <h1 className="text-3xl">Practice lab</h1>
-        <p className="text-sm text-muted-foreground">
-          Practice and improve your interview skills with our interactive
-          modules.
-        </p>
-      </header>
-
-      <Separator className="bg-white" />
-
       {!selectedModule ? (
         <ModuleSelector onModuleSelected={handleModuleSelected} />
       ) : startingSession || !sessionId || totalQuestions <= 0 ? (
@@ -91,11 +83,7 @@ export default function PracticalLearningPage() {
           <Loader2 className="h-8 w-8 animate-spin text-cyan-400" />
         </div>
       ) : (
-        <InterviewSession
-          sessionId={sessionId}
-          moduleId={selectedModule}
-          totalQuestions={totalQuestions}
-        />
+        <InterviewSession sessionId={sessionId} resuming={resuming} />
       )}
     </main>
   );

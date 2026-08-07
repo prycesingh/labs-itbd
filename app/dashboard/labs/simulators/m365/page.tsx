@@ -1,4 +1,5 @@
 import { M365Simulator } from "@/components/labs/simulators/m365/m365-simulator";
+import { SimulatorSessionTracker } from "@/components/labs/SimulatorSessionTracker";
 import { requireUser } from "@/lib/labs/auth";
 
 /**
@@ -12,6 +13,7 @@ export default async function M365SimulatorPage() {
 
   return (
     <div className="-m-6 h-[calc(100%+3rem)]">
+      <SimulatorSessionTracker simulatorKey="m365" />
       <M365Simulator />
     </div>
   );

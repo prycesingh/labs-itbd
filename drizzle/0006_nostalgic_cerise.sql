@@ -1,0 +1,1 @@
+ALTER TABLE `candidate_interview_sessions` ADD `assigned_question_ids` longtext NOT NULL;

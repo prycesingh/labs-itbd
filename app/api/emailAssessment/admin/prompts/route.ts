@@ -38,6 +38,81 @@ export async function GET() {
   return NextResponse.json({ promptVersion: activePrompt.promptVersion, rubric: activePrompt.rubric });
 }
 
+const createPromptSchema = z.object({
+  version: z.string().trim().min(1).max(64),
+  systemPrompt: z.string().trim().min(20),
+  evaluationPrompt: z.string().trim().min(20),
+  model: z.string().trim().min(3),
+  weights: categoryScoreSchema,
+});
+
+export async function POST(request: Request) {
+  const { user, response } = await requireApiUser(["admin"]);
+  if (response) return response;
+
+  const body = await request.json().catch(() => null);
+  const parsed = createPromptSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return jsonError("Invalid prompt settings.");
+  }
+
+  const [existingVersion] = await db
+    .select({ id: promptVersions.id })
+    .from(promptVersions)
+    .where(eq(promptVersions.version, parsed.data.version))
+    .limit(1);
+
+  if (existingVersion) {
+    return jsonError("A prompt version with that name already exists.", 409);
+  }
+
+  await db.update(rubrics).set({ active: false }).where(eq(rubrics.active, true));
+  await db.update(promptVersions).set({ active: false }).where(eq(promptVersions.active, true));
+
+  const rubricId = randomUUID();
+  await db.insert(rubrics).values({
+    id: rubricId,
+    version: parsed.data.version,
+    name: `Rubric ${parsed.data.version}`,
+    weights: parsed.data.weights,
+    active: true,
+  });
+
+  const promptVersionId = randomUUID();
+  await db.insert(promptVersions).values({
+    id: promptVersionId,
+    version: parsed.data.version,
+    systemPrompt: parsed.data.systemPrompt,
+    evaluationPrompt: parsed.data.evaluationPrompt,
+    rubricId,
+    model: parsed.data.model,
+    active: true,
+  });
+
+  await db.insert(auditLogs).values({
+    id: randomUUID(),
+    actorId: user!.id,
+    action: "scenario_updated",
+    entityType: "prompt_version",
+    entityId: promptVersionId,
+    metadata: {
+      version: parsed.data.version,
+      model: parsed.data.model,
+    },
+    ipAddress: requestIp(request),
+  });
+
+  const [promptVersion] = await db
+    .select()
+    .from(promptVersions)
+    .where(eq(promptVersions.id, promptVersionId))
+    .limit(1);
+  const [rubric] = await db.select().from(rubrics).where(eq(rubrics.id, rubricId)).limit(1);
+
+  return NextResponse.json({ promptVersion, rubric }, { status: 201 });
+}
+
 export async function PATCH(request: Request) {
   const { user, response } = await requireApiUser(["admin"]);
   if (response) return response;

@@ -3,9 +3,7 @@
 import Link from "next/link";
 import { useDeferredValue, useState } from "react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { GreenButton } from "@/components/app_componentes/customButtons";
 import { Input } from "@/components/ui/input";
 
 const MODULE_BASE = "/dashboard/emailAssessments";
@@ -44,22 +42,26 @@ export function AdminSessionDashboard({ sessions }: { sessions: AdminSessionRow[
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Session dashboard</CardTitle>
-        <CardDescription>
-          Search and review session-level results, weighted totals, and response status.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <div className="itbd-glow-border relative overflow-hidden rounded-2xl bg-black/40 p-6 backdrop-blur-md">
+      <span
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+      />
+      <div className="relative z-10 space-y-4">
+        <div>
+          <h2 className="text-lg font-bold text-white">Session dashboard</h2>
+          <p className="mt-1 text-sm text-white/60">
+            Search and review session-level results, weighted totals, and response status.
+          </p>
+        </div>
         <Input
           placeholder="Filter by session ID, email, or status"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
-        <div className="overflow-x-auto rounded-2xl border">
+        <div className="overflow-x-auto rounded-xl border border-white/10">
           <table className="min-w-full border-collapse text-sm">
-            <thead className="bg-muted/40 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground">
+            <thead className="bg-white/5 text-left text-xs uppercase tracking-[0.18em] text-white/50">
               <tr>
                 <th className="px-4 py-3">ID</th>
                 <th className="px-4 py-3">Candidate</th>
@@ -73,47 +75,49 @@ export function AdminSessionDashboard({ sessions }: { sessions: AdminSessionRow[
             </thead>
             <tbody>
               {filteredSessions.map((session) => (
-                <tr key={session.sessionIdentifier} className="border-t align-top">
+                <tr key={session.sessionIdentifier} className="border-t border-white/10 align-top text-white/80">
                   <td className="px-4 py-4">
-                    <p className="font-medium">{session.displayId}</p>
-                    <p className="text-xs text-muted-foreground truncate max-w-[120px]">
-                      {session.displayName.slice(0, 8)}â€¦
+                    <p className="font-medium text-white">{session.displayId}</p>
+                    <p className="max-w-30 truncate text-xs text-white/50">
+                      {session.displayName.slice(0, 8)}&hellip;
                     </p>
                   </td>
                   <td className="px-4 py-4">{session.candidateEmail}</td>
                   <td className="px-4 py-4">
                     {session.aiWeightedTotal != null ? (
-                      `${session.aiWeightedTotal.toFixed(2)} / 10${session.aiGrade ? ` Â· ${session.aiGrade}` : ""}`
+                      `${session.aiWeightedTotal.toFixed(2)} / 10${session.aiGrade ? ` · ${session.aiGrade}` : ""}`
                     ) : (
-                      <span className="text-muted-foreground">Pending</span>
+                      <span className="text-white/50">Pending</span>
                     )}
                   </td>
                   <td className="px-4 py-4">
                     {session.evaluatorScore != null ? (
-                      <span className="font-semibold text-primary">{session.evaluatorScore} / 10</span>
+                      <span className="font-semibold text-itbd-blue">{session.evaluatorScore} / 10</span>
                     ) : (
-                      <span className="text-muted-foreground">â€”</span>
+                      <span className="text-white/40">&mdash;</span>
                     )}
                   </td>
                   <td className="px-4 py-4">
-                    <span className="text-muted-foreground">
+                    <span className="text-white/50">
                       {session.submittedScenarios}/{session.totalScenarios} submitted
                     </span>
                   </td>
-                  <td className="px-4 py-4 text-muted-foreground text-xs">{session.startedAt}</td>
+                  <td className="px-4 py-4 text-xs text-white/50">{session.startedAt}</td>
                   <td className="px-4 py-4">
-                    <Badge className="w-fit">{session.statusLabel}</Badge>
+                    <span className="w-fit rounded-full border border-itbd-blue/40 bg-itbd-blue/10 px-2.5 py-0.5 text-xs font-semibold text-itbd-blue">
+                      {session.statusLabel}
+                    </span>
                   </td>
                   <td className="px-4 py-4">
-                    <Button asChild size="sm" variant="outline">
+                    <GreenButton size="sm" asChild>
                       <Link href={`${MODULE_BASE}/sessions/${session.sessionIdentifier}`}>View</Link>
-                    </Button>
+                    </GreenButton>
                   </td>
                 </tr>
               ))}
               {filteredSessions.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-4 py-8 text-center text-white/50">
                     No sessions matched the current filter.
                   </td>
                 </tr>
@@ -121,7 +125,7 @@ export function AdminSessionDashboard({ sessions }: { sessions: AdminSessionRow[
             </tbody>
           </table>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

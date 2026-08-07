@@ -1,4 +1,5 @@
 import { AvdSimulator } from "@/components/labs/simulators/avd/avd-simulator";
+import { SimulatorSessionTracker } from "@/components/labs/SimulatorSessionTracker";
 import { requireUser } from "@/lib/labs/auth";
 
 /**
@@ -12,6 +13,7 @@ export default async function AvdSimulatorPage() {
 
   return (
     <div className="-m-6 h-[calc(100%+3rem)]">
+      <SimulatorSessionTracker simulatorKey="avd" />
       <AvdSimulator />
     </div>
   );

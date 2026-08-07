@@ -1,4 +1,5 @@
 import { FortiGateSimulator } from "@/components/labs/simulators/network-fortigate/fortigate-simulator";
+import { SimulatorSessionTracker } from "@/components/labs/SimulatorSessionTracker";
 import { requireUser } from "@/lib/labs/auth";
 
 /**
@@ -12,6 +13,7 @@ export default async function FortiGateSimulatorPage() {
 
   return (
     <div className="-m-6 h-[calc(100%+3rem)]">
+      <SimulatorSessionTracker simulatorKey="network-fortigate" />
       <FortiGateSimulator />
     </div>
   );

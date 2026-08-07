@@ -44,9 +44,9 @@ const DIFFICULTY_STYLES: Record<
   ScenarioEditCardProps["scenario"]["difficulty"],
   string
 > = {
-  beginner: "border-emerald-400/40 bg-emerald-500/10 text-emerald-300",
-  intermediate: "border-amber-400/40 bg-amber-500/10 text-amber-300",
-  advanced: "border-rose-400/40 bg-rose-500/10 text-rose-300",
+  beginner: "border-white/20 bg-white/5 text-white/70",
+  intermediate: "border-itbd-blue/40 bg-itbd-blue/10 text-itbd-blue",
+  advanced: "border-orange-400/40 bg-orange-500/10 text-orange-300",
 };
 
 export function ScenarioEditCard({ scenario }: ScenarioEditCardProps) {
@@ -241,7 +241,7 @@ export function ScenarioEditCard({ scenario }: ScenarioEditCardProps) {
               <Label htmlFor={`difficulty-${scenario.id}`}>Difficulty</Label>
               <select
                 id={`difficulty-${scenario.id}`}
-                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                className="h-10 w-full rounded-md border border-white/10 bg-black/40 px-3 text-sm text-white focus:border-itbd-blue focus:outline-none"
                 {...form.register("difficulty")}
               >
                 <option value="beginner">Beginner</option>

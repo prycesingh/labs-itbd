@@ -2,6 +2,8 @@ import { auth } from "@/auth";
 import { db } from "@/DB/drizzle";
 import { users } from "@/DB/schema";
 import { AdminNav } from "@/components/admin/admin-nav";
+import { DashboardHeader } from "@/components/app_componentes/dashboard-header";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { isAdminRole, isSuperAdmin, type Role } from "@/lib/rbac";
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
@@ -36,17 +38,26 @@ export default async function AdminLayout({
   const mustChange = Boolean(rows[0]?.mustChangePassword);
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <AdminNav
+    <SidebarProvider className="flex h-screen min-h-0 flex-col overflow-hidden">
+      <DashboardHeader
         user={{
           name: session.user.name,
           email: session.user.email,
           role: role ?? undefined,
         }}
-        isSuperAdmin={isSuperAdmin(role)}
-        mustChangePassword={mustChange}
       />
-      <main className="flex-1 overflow-y-auto p-6">{children}</main>
-    </div>
+      <div className="flex min-h-0 flex-1">
+        <AdminNav
+          user={{
+            name: session.user.name,
+            email: session.user.email,
+            role: role ?? undefined,
+          }}
+          isSuperAdmin={isSuperAdmin(role)}
+          mustChangePassword={mustChange}
+        />
+        <SidebarInset className="overflow-y-auto p-6">{children}</SidebarInset>
+      </div>
+    </SidebarProvider>
   );
 }

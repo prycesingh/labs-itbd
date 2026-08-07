@@ -1,10 +1,7 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { GreenButton } from "@/components/app_componentes/customButtons";
 import { requireRole } from "@/lib/emailAssessment/auth";
 import { getSessionSummaries } from "@/lib/emailAssessment/session-results";
 import {
@@ -72,56 +69,50 @@ export default async function EmailAssessmentsSessionDetailPage({
   ].sort((left, right) => right.attempts - left.attempts);
 
   return (
-    <main className="flex w-full flex-col">
-      <header className="flex flex-col">
-        <h1 className="text-3xl">Email Assessment Session</h1>
-      </header>
-      <Separator className="my-2 bg-white" />
-      <div className="mt-5 flex flex-col gap-6">
-      {/* â”€â”€ Session header â”€â”€ */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge>{session.displayId}</Badge>
-                <Badge>{session.statusLabel}</Badge>
-                <Badge>{session.totalScenarios} scenarios</Badge>
-              </div>
-              <CardTitle>Session review</CardTitle>
+    <main className="flex w-full flex-col gap-6">
+      <h1 className="text-2xl font-bold tracking-wide text-white uppercase sm:text-3xl">
+        Email Assessment <span className="text-itbd-blue">Session</span>
+      </h1>
 
-              {/* â”€â”€ Candidate identity block â”€â”€ */}
-              <div className="grid gap-1 text-sm text-muted-foreground">
-                <p>
-                  <span className="font-medium text-foreground">Candidate ID:</span>{" "}
-                  <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{session.candidateId}</code>
-                </p>
-                <p>
-                  <span className="font-medium text-foreground">Session name:</span>{" "}
-                  <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{session.displayName}</code>
-                </p>
-                <p>
-                  <span className="font-medium text-foreground">Email:</span> {session.candidateEmail}
-                </p>
-              </div>
+      <ItbdCard>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <ItbdBadge>{session.displayId}</ItbdBadge>
+              <ItbdBadge>{session.statusLabel}</ItbdBadge>
+              <ItbdBadge>{session.totalScenarios} scenarios</ItbdBadge>
             </div>
-            <div className="flex items-center gap-2">
-              <CandidateStatsButton
-                candidateId={session.candidateId}
-                candidateName={session.displayName}
-                candidateEmail={session.candidateEmail}
-                gradeDistribution={gradeDistribution}
-                scenarioPerformance={scenarioPerformance}
-              />
-              <Button asChild variant="outline">
-                <Link href={MODULE_BASE}>Back to dashboard</Link>
-              </Button>
+            <h2 className="text-lg font-bold text-white">Session review</h2>
+
+            <div className="grid gap-1 text-sm text-white/60">
+              <p>
+                <span className="font-medium text-white">Candidate ID:</span>{" "}
+                <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs text-white/80">{session.candidateId}</code>
+              </p>
+              <p>
+                <span className="font-medium text-white">Session name:</span>{" "}
+                <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs text-white/80">{session.displayName}</code>
+              </p>
+              <p>
+                <span className="font-medium text-white">Email:</span> {session.candidateEmail}
+              </p>
             </div>
           </div>
-        </CardHeader>
+          <div className="flex items-center gap-2">
+            <CandidateStatsButton
+              candidateId={session.candidateId}
+              candidateName={session.displayName}
+              candidateEmail={session.candidateEmail}
+              gradeDistribution={gradeDistribution}
+              scenarioPerformance={scenarioPerformance}
+            />
+            <GreenButton asChild>
+              <Link href={MODULE_BASE}>Back to dashboard</Link>
+            </GreenButton>
+          </div>
+        </div>
 
-        {/* â”€â”€ Score metrics â”€â”€ */}
-        <CardContent className="grid gap-4 md:grid-cols-4">
+        <div className="mt-4 grid gap-4 md:grid-cols-4">
           <MetricCard
             label="AI total"
             value={session.aiWeightedTotal != null ? `${session.aiWeightedTotal.toFixed(2)} / 10` : "Pending"}
@@ -146,119 +137,111 @@ export default async function EmailAssessmentsSessionDetailPage({
             value={session.lastSubmittedAt?.toLocaleString() ?? "Pending"}
             hint={`${session.submittedScenarios}/${session.totalScenarios} submitted`}
           />
-        </CardContent>
+        </div>
 
-        {/* â”€â”€ Evaluator score editor â”€â”€ */}
-        <CardContent className="border-t pt-4">
-          <p className="mb-3 text-sm font-medium">Set evaluator (admin) session score</p>
+        <div className="mt-4 border-t border-white/10 pt-4">
+          <p className="mb-3 text-sm font-medium text-white/70">Set evaluator (admin) session score</p>
           <EvaluatorScoreForm
             sessionId={session.sessionIdentifier}
             initialScore={session.evaluatorScore}
             initialNotes={session.evaluatorNotes}
           />
           {session.evaluatorNotes && (
-            <p className="mt-3 text-sm text-muted-foreground">
-              <span className="font-medium">Notes:</span> {session.evaluatorNotes}
+            <p className="mt-3 text-sm text-white/60">
+              <span className="font-medium text-white">Notes:</span> {session.evaluatorNotes}
             </p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </ItbdCard>
 
-      {/* â”€â”€ Scenario score table â”€â”€ */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Scenario score table</CardTitle>
-          <CardDescription>
-            Each scenario keeps its rubric percentage and contributes weighted marks to the 10-point
-            total.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto rounded-2xl border">
-            <table className="min-w-full border-collapse text-sm">
-              <thead className="bg-muted/40 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3">Scenario</th>
-                  <th className="px-4 py-3">Difficulty</th>
-                  <th className="px-4 py-3">Subject</th>
-                  <th className="px-4 py-3">AI %</th>
-                  <th className="px-4 py-3">AI weighted</th>
-                  <th className="px-4 py-3">Copy penalty</th>
-                  <th className="px-4 py-3">AI detected</th>
-                  <th className="px-4 py-3">Status</th>
+      <ItbdCard>
+        <h2 className="text-lg font-bold text-white">Scenario score table</h2>
+        <p className="mt-1 text-sm text-white/60">
+          Each scenario keeps its rubric percentage and contributes weighted marks to the 10-point
+          total.
+        </p>
+        <div className="mt-4 overflow-x-auto rounded-xl border border-white/10">
+          <table className="min-w-full border-collapse text-sm">
+            <thead className="bg-white/5 text-left text-xs uppercase tracking-[0.18em] text-white/50">
+              <tr>
+                <th className="px-4 py-3">Scenario</th>
+                <th className="px-4 py-3">Difficulty</th>
+                <th className="px-4 py-3">Subject</th>
+                <th className="px-4 py-3">AI %</th>
+                <th className="px-4 py-3">AI weighted</th>
+                <th className="px-4 py-3">Copy penalty</th>
+                <th className="px-4 py-3">AI detected</th>
+                <th className="px-4 py-3">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {session.scenarios.map((scenario) => (
+                <tr key={scenario.assessmentId} className="border-t border-white/10 align-top text-white/80">
+                  <td className="px-4 py-4">
+                    <div className="font-medium text-white">{scenario.scenarioTitle}</div>
+                    <div className="text-white/50">{scenario.scenarioCategory}</div>
+                  </td>
+                  <td className="px-4 py-4 capitalize">{scenario.scenarioDifficulty}</td>
+                  <td className="px-4 py-4 text-white/50">
+                    {scenario.subject?.trim() ? scenario.subject : "No subject submitted"}
+                  </td>
+                  <td className="px-4 py-4">
+                    {scenario.evaluationOverallScore != null
+                      ? `${scenario.evaluationOverallScore} / 100`
+                      : "Pending"}
+                  </td>
+                  <td className="px-4 py-4">
+                    {scenario.aiWeightedScore != null
+                      ? `${scenario.aiWeightedScore.toFixed(2)} / ${scenario.scenarioMaxScore}`
+                      : "Pending"}
+                  </td>
+                  <td className="px-4 py-4">
+                    {scenario.copyPenalty > 0 ? (
+                      <span className="text-orange-400">&minus;{scenario.copyPenalty.toFixed(1)}</span>
+                    ) : (
+                      <span className="text-white/40">&mdash;</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-4">
+                    {scenario.aiDetected ? (
+                      <ItbdBadge tone="warning">Yes</ItbdBadge>
+                    ) : (
+                      <ItbdBadge tone="success">No</ItbdBadge>
+                    )}
+                  </td>
+                  <td className="px-4 py-4">
+                    <ItbdBadge>{scenario.assessmentStatus}</ItbdBadge>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {session.scenarios.map((scenario) => (
-                  <tr key={scenario.assessmentId} className="border-t align-top">
-                    <td className="px-4 py-4">
-                      <div className="font-medium">{scenario.scenarioTitle}</div>
-                      <div className="text-muted-foreground">{scenario.scenarioCategory}</div>
-                    </td>
-                    <td className="px-4 py-4">{scenario.scenarioDifficulty}</td>
-                    <td className="px-4 py-4 text-muted-foreground">
-                      {scenario.subject?.trim() ? scenario.subject : "No subject submitted"}
-                    </td>
-                    <td className="px-4 py-4">
-                      {scenario.evaluationOverallScore != null
-                        ? `${scenario.evaluationOverallScore} / 100`
-                        : "Pending"}
-                    </td>
-                    <td className="px-4 py-4">
-                      {scenario.aiWeightedScore != null
-                        ? `${scenario.aiWeightedScore.toFixed(2)} / ${scenario.scenarioMaxScore}`
-                        : "Pending"}
-                    </td>
-                    <td className="px-4 py-4">
-                      {scenario.copyPenalty > 0 ? (
-                        <span className="text-amber-600">âˆ’{scenario.copyPenalty.toFixed(1)}</span>
-                      ) : (
-                        <span className="text-muted-foreground">â€”</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-4">
-                      {scenario.aiDetected ? (
-                        <Badge className="bg-rose-100 text-rose-700 border-rose-300">Yes</Badge>
-                      ) : (
-                        <Badge className="bg-green-100 text-green-700 border-green-300">No</Badge>
-                      )}
-                    </td>
-                    <td className="px-4 py-4">
-                      <Badge>{scenario.assessmentStatus}</Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </ItbdCard>
 
-      {/* â”€â”€ Per-scenario detail cards â”€â”€ */}
       <div className="space-y-6">
         {session.scenarios.map((scenario) => (
-          <Card key={scenario.assessmentId}>
-            <CardHeader>
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge>{scenario.scenarioDifficulty}</Badge>
-                <Badge>{scenario.scenarioCategory}</Badge>
-                <Badge>Max {scenario.scenarioMaxScore}</Badge>
-              </div>
-              <CardTitle>{scenario.scenarioTitle}</CardTitle>
-              <CardDescription>{scenario.scenarioPrompt}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <ItbdCard key={scenario.assessmentId}>
+            <div className="flex flex-wrap items-center gap-2">
+              <ItbdBadge>{scenario.scenarioDifficulty}</ItbdBadge>
+              <ItbdBadge>{scenario.scenarioCategory}</ItbdBadge>
+              <ItbdBadge>Max {scenario.scenarioMaxScore}</ItbdBadge>
+            </div>
+            <h2 className="mt-3 text-lg font-bold text-white">{scenario.scenarioTitle}</h2>
+            <p className="mt-1 text-sm text-white/60">{scenario.scenarioPrompt}</p>
+
+            <div className="mt-4 space-y-4">
               <AiDetectionBadge detected={scenario.aiDetected} copyPenalty={scenario.copyPenalty} />
 
-              <div className="rounded-2xl border bg-muted/20 p-4">
-                <p className="text-sm font-medium text-muted-foreground">Subject line</p>
-                <p className="mt-2 text-base font-medium">
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                <p className="text-sm font-medium text-white/50">Subject line</p>
+                <p className="mt-2 text-base font-medium text-white">
                   {scenario.subject?.trim() ? scenario.subject : "No subject line submitted"}
                 </p>
               </div>
-              <div className="rounded-2xl border bg-muted/20 p-4">
-                <p className="text-sm font-medium text-muted-foreground">Candidate response</p>
-                <p className="mt-2 whitespace-pre-wrap leading-7">
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                <p className="text-sm font-medium text-white/50">Candidate response</p>
+                <p className="mt-2 whitespace-pre-wrap leading-relaxed text-white/80">
                   {scenario.content?.trim() ? scenario.content : "No response submitted."}
                 </p>
               </div>
@@ -294,9 +277,9 @@ export default async function EmailAssessmentsSessionDetailPage({
                 />
               </div>
               {scenario.evaluationVerdict ? (
-                <div className="rounded-2xl border bg-muted/20 p-4">
-                  <p className="text-sm font-medium text-muted-foreground">AI verdict</p>
-                  <p className="mt-2 text-sm leading-6">{scenario.evaluationVerdict}</p>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-sm font-medium text-white/50">AI verdict</p>
+                  <p className="mt-2 text-sm leading-relaxed text-white/80">{scenario.evaluationVerdict}</p>
                 </div>
               ) : null}
               <div className="grid gap-4 md:grid-cols-3">
@@ -305,42 +288,77 @@ export default async function EmailAssessmentsSessionDetailPage({
                 <FeedbackCard title="Improvements" items={scenario.improvements} />
               </div>
               {scenario.manualSummary ? (
-                <div className="rounded-2xl border bg-muted/20 p-4">
-                  <p className="text-sm font-medium text-muted-foreground">Latest manual summary</p>
-                  <p className="mt-2 text-sm leading-6">{scenario.manualSummary}</p>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-sm font-medium text-white/50">Latest manual summary</p>
+                  <p className="mt-2 text-sm leading-relaxed text-white/80">{scenario.manualSummary}</p>
                 </div>
               ) : null}
-            </CardContent>
-          </Card>
+            </div>
+          </ItbdCard>
         ))}
-      </div>
       </div>
     </main>
   );
 }
 
+/** Shared glow-border/blur card surface matching the rest of the app's brand. */
+function ItbdCard({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="itbd-glow-border relative overflow-hidden rounded-2xl bg-black/40 p-6 backdrop-blur-md">
+      <span
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+      />
+      <div className="relative z-10">{children}</div>
+    </div>
+  );
+}
+
+function ItbdBadge({
+  children,
+  tone = "default",
+}: {
+  children: React.ReactNode;
+  tone?: "default" | "success" | "warning";
+}) {
+  const toneClass =
+    tone === "success"
+      ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300"
+      : tone === "warning"
+        ? "border-orange-400/40 bg-orange-500/10 text-orange-300"
+        : "border-itbd-blue/40 bg-itbd-blue/10 text-itbd-blue";
+
+  return (
+    <span
+      className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold capitalize ${toneClass}`}
+    >
+      {children}
+    </span>
+  );
+}
+
 function MetricCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-2xl border bg-muted/20 p-4">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="mt-2 text-xl font-semibold tracking-tight">{value}</p>
-      {hint ? <p className="mt-2 text-sm text-muted-foreground">{hint}</p> : null}
+    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <p className="text-sm text-white/50">{label}</p>
+      <p className="mt-2 text-xl font-semibold text-white">{value}</p>
+      {hint ? <p className="mt-2 text-sm text-white/50">{hint}</p> : null}
     </div>
   );
 }
 
 function FeedbackCard({ title, items }: { title: string; items: string[] }) {
   return (
-    <div className="rounded-2xl border bg-muted/20 p-4">
-      <p className="text-sm font-medium text-muted-foreground">{title}</p>
+    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <p className="text-sm font-medium text-white/50">{title}</p>
       {items.length > 0 ? (
-        <ul className="mt-3 space-y-2 text-sm leading-6">
+        <ul className="mt-3 space-y-2 text-sm leading-relaxed text-white/80">
           {items.map((item) => (
             <li key={item}>{item}</li>
           ))}
         </ul>
       ) : (
-        <p className="mt-3 text-sm text-muted-foreground">No notes yet.</p>
+        <p className="mt-3 text-sm text-white/50">No notes yet.</p>
       )}
     </div>
   );
