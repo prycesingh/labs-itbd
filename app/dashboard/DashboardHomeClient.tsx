@@ -3,17 +3,7 @@
 import { HowItWorks } from "@/components/app_componentes/HowItWorks";
 import { LabCard } from "@/components/app_componentes/LabCard";
 import CountUp from "@/components/CountUp";
-import {
-  Cloud,
-  GitBranch,
-  GraduationCap,
-  LayoutGrid,
-  Mail,
-  MonitorSmartphone,
-  ServerCog,
-  ShieldCheck,
-  Users,
-} from "lucide-react";
+import { GraduationCap, Mail } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import Image from "next/image";
 
@@ -21,51 +11,51 @@ import Image from "next/image";
 // (order + titles). Only the first 10 are featured here; the rest are behind
 // "View all simulators".
 const FEATURED_SIMULATORS = [
-  { href: "/dashboard/labs/simulators/azure-vm", label: "Azure", icon: Cloud },
+  { href: "/dashboard/labs/simulators/azure-vm", label: "Azure", iconSrc: "/labs-logos/Azure.png" },
   {
     href: "/dashboard/labs/simulators/adds",
     label: "Active Directory",
-    icon: Users,
+    iconSrc: "/labs-logos/Active Directory.png",
   },
   {
     href: "/dashboard/labs/simulators/m365",
     label: "Microsoft 365",
-    icon: LayoutGrid,
+    iconSrc: "/labs-logos/M365.png",
   },
   {
     href: "/dashboard/labs/simulators/intune",
     label: "Intune",
-    icon: MonitorSmartphone,
+    iconSrc: "/labs-logos/microsoft-intune.png",
   },
   {
     href: "/dashboard/labs/simulators/avd",
     label: "Azure Virtual Desktop",
-    icon: ServerCog,
+    iconSrc: "/labs-logos/Azure Virtual Desktop_512x512.png",
   },
   {
     href: "/dashboard/labs/simulators/defender",
     label: "Defender XDR",
-    icon: ShieldCheck,
+    iconSrc: "/labs-logos/Defender_512x512.png",
   },
   {
     href: "/dashboard/labs/simulators/sentinel",
     label: "Sentinel",
-    icon: ShieldCheck,
+    iconSrc: "/labs-logos/Azure Sentinel_512x512.png",
   },
   {
     href: "/dashboard/labs/simulators/purview",
     label: "Purview",
-    icon: LayoutGrid,
+    iconSrc: "/labs-logos/purview color_512x512.png",
   },
   {
     href: "/dashboard/labs/simulators/winserver",
     label: "Windows Server",
-    icon: ServerCog,
+    iconSrc: "/labs-logos/Windows Server.png",
   },
   {
     href: "/dashboard/labs/simulators/azure-devops",
     label: "Azure DevOps",
-    icon: GitBranch,
+    iconSrc: "/labs-logos/azure-devops.png",
   },
 ];
 

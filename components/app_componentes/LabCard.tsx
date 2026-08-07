@@ -4,6 +4,7 @@ import DefaultButton from "@/components/app_componentes/customButtons";
 import { cn } from "@/lib/utils";
 import { ArrowRight, Cog, MessagesSquare, type LucideIcon } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState } from "react";
 
@@ -19,7 +20,7 @@ const ICONS = {
 
 export type LabCardIcon = keyof typeof ICONS;
 
-export type LabCardGridItem = { href: string; label: string; icon: LucideIcon };
+export type LabCardGridItem = { href: string; label: string; iconSrc: string };
 export type LabCardListItem = {
   href: string;
   label: string;
@@ -172,7 +173,14 @@ export function LabCard({
                       "linear-gradient(to right, transparent, var(--itbd-blue), transparent) 1",
                   }}
                 >
-                  <item.icon className={cn("h-15 w-15", accentText)} />
+                  <Image
+                    src={item.iconSrc}
+                    alt=""
+                    aria-hidden
+                    width={60}
+                    height={60}
+                    className="h-15 w-15 object-contain"
+                  />
                   <span className="line-clamp-2 text-[12px] leading-tight text-white/75">
                     {item.label}
                   </span>
