@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
+import DefaultButton from "@/components/app_componentes/customButtons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -44,23 +44,23 @@ export function GlossaryTermForm() {
     <form className="grid gap-4" onSubmit={form.handleSubmit(onSubmit)}>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="term">Term</Label>
+          <Label htmlFor="term" className="text-white/70">Term</Label>
           <Input id="term" {...form.register("term")} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="category">Category</Label>
+          <Label htmlFor="category" className="text-white/70">Category</Label>
           <Input id="category" placeholder="Identity, Azure, Security..." {...form.register("category")} />
         </div>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="definition">Definition</Label>
+        <Label htmlFor="definition" className="text-white/70">Definition</Label>
         <Textarea id="definition" className="min-h-24" {...form.register("definition")} />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="example">Example (optional)</Label>
+        <Label htmlFor="example" className="text-white/70">Example (optional)</Label>
         <Textarea id="example" {...form.register("example")} />
       </div>
-      <Button disabled={submitting}>{submitting ? "Adding..." : "Add term"}</Button>
+      <DefaultButton type="submit" loading={submitting}>Add term</DefaultButton>
     </form>
   );
 }

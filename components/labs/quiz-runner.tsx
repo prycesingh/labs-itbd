@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { toast } from "sonner";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import DefaultButton from "@/components/app_componentes/customButtons";
 import { cn } from "@/lib/utils";
@@ -27,6 +27,23 @@ type Summary = {
   scorePercent: number;
 };
 
+function ItbdCard({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div
+      className={cn(
+        "itbd-glow-border relative overflow-hidden rounded-2xl bg-black/40 p-6 backdrop-blur-md",
+        className,
+      )}
+    >
+      <span
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+      />
+      <div className="relative z-10">{children}</div>
+    </div>
+  );
+}
+
 export function QuizRunner({ certId }: { certId: string }) {
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -35,6 +52,7 @@ export function QuizRunner({ certId }: { certId: string }) {
   const [checkResult, setCheckResult] = useState<CheckResult | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(false);
+  const reduce = useReducedMotion();
 
   const currentQuestion = questions[currentIndex];
   const isMultiSelect = (checkResult?.correctIndexes.length ?? 0) > 1;
@@ -119,16 +137,14 @@ export function QuizRunner({ certId }: { certId: string }) {
 
   if (!attemptId) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Ready when you are</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <ItbdCard>
+        <h2 className="text-lg font-bold text-white">Ready when you are</h2>
+        <div className="mt-4">
           <DefaultButton onClick={start} loading={loading}>
             Start quiz
           </DefaultButton>
-        </CardContent>
-      </Card>
+        </div>
+      </ItbdCard>
     );
   }
 
@@ -141,78 +157,98 @@ export function QuizRunner({ certId }: { certId: string }) {
           : "Needs work — revisit the reference material and retake.";
 
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Quiz complete</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="text-5xl font-bold text-primary">{summary.scorePercent}%</div>
-          <p className="text-muted-foreground">
+      <motion.div
+        initial={reduce ? false : { opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <ItbdCard className="space-y-4">
+          <h2 className="text-lg font-bold text-white">Quiz complete</h2>
+          <motion.div
+            className="text-5xl font-bold text-itbd-blue"
+            initial={reduce ? false : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+          >
+            {summary.scorePercent}%
+          </motion.div>
+          <p className="text-white/60">
             {summary.correctCount} / {summary.totalQuestions} correct. {verdict}
           </p>
           <DefaultButton onClick={start} loading={loading}>
             Take again
           </DefaultButton>
-        </CardContent>
-      </Card>
+        </ItbdCard>
+      </motion.div>
     );
   }
 
   if (!currentQuestion) return null;
 
   return (
-    <Card>
-      <CardHeader>
-        <Progress value={((currentIndex + 1) / questions.length) * 100} />
-        <p className="pt-2 text-xs uppercase text-muted-foreground">
-          Question {currentIndex + 1} / {questions.length}
-          {isMultiSelect ? " — select all that apply" : ""}
-        </p>
-        <CardTitle className="text-base font-semibold">{currentQuestion.question}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          {currentQuestion.options.map((option, idx) => {
-            const isSelected = selected.includes(idx);
-            const isCorrectOption = checkResult?.correctIndexes.includes(idx);
-            const showResult = Boolean(checkResult);
+    <ItbdCard>
+      <Progress value={((currentIndex + 1) / questions.length) * 100} />
+      <p className="pt-2 text-xs text-white/50 uppercase">
+        Question {currentIndex + 1} / {questions.length}
+        {isMultiSelect ? " — select all that apply" : ""}
+      </p>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={currentQuestion.id}
+          initial={reduce ? false : { opacity: 0, x: 12 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={reduce ? undefined : { opacity: 0, x: -12 }}
+          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <h2 className="mt-2 text-base font-semibold text-white">{currentQuestion.question}</h2>
+          <div className="mt-4 space-y-2">
+            {currentQuestion.options.map((option, idx) => {
+              const isSelected = selected.includes(idx);
+              const isCorrectOption = checkResult?.correctIndexes.includes(idx);
+              const showResult = Boolean(checkResult);
 
-            return (
-              <button
-                key={idx}
-                type="button"
-                disabled={showResult}
-                onClick={() => toggleOption(idx)}
-                className={cn(
-                  "w-full rounded-md border px-4 py-2 text-left text-sm transition-colors",
-                  isSelected && !showResult && "border-primary bg-primary/10",
-                  showResult && isCorrectOption && "border-primary bg-primary/15 font-medium",
-                  showResult && isSelected && !isCorrectOption && "border-destructive bg-destructive/10",
-                )}
-              >
-                {option}
-              </button>
-            );
-          })}
-        </div>
-        {checkResult ? (
-          <div className="rounded-md border-l-4 border-primary bg-muted p-3 text-sm">
-            <span className="font-semibold">Explanation: </span>
-            {checkResult.explanation}
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  disabled={showResult}
+                  onClick={() => toggleOption(idx)}
+                  className={cn(
+                    "w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-left text-sm text-white/80 transition-colors",
+                    isSelected && !showResult && "border-itbd-blue bg-itbd-blue/10 text-white",
+                    showResult && isCorrectOption && "border-itbd-green/60 bg-itbd-green/10 font-medium text-white",
+                    showResult && isSelected && !isCorrectOption && "border-orange-400/60 bg-orange-500/10 text-white",
+                  )}
+                >
+                  {option}
+                </button>
+              );
+            })}
           </div>
-        ) : null}
-        <div className="flex gap-2">
-          {!checkResult ? (
-            <DefaultButton onClick={checkAnswer} loading={loading} disabled={selected.length === 0}>
-              Check answer
-            </DefaultButton>
-          ) : (
-            <DefaultButton onClick={next} loading={loading}>
-              {currentIndex + 1 >= questions.length ? "See results" : "Next question"}
-            </DefaultButton>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+          {checkResult ? (
+            <motion.div
+              initial={reduce ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="mt-4 rounded-xl border-l-4 border-itbd-blue bg-itbd-blue/5 p-3 text-sm text-white/80"
+            >
+              <span className="font-semibold text-white">Explanation: </span>
+              {checkResult.explanation}
+            </motion.div>
+          ) : null}
+        </motion.div>
+      </AnimatePresence>
+      <div className="mt-4 flex gap-2">
+        {!checkResult ? (
+          <DefaultButton onClick={checkAnswer} loading={loading} disabled={selected.length === 0}>
+            Check answer
+          </DefaultButton>
+        ) : (
+          <DefaultButton onClick={next} loading={loading}>
+            {currentIndex + 1 >= questions.length ? "See results" : "Next question"}
+          </DefaultButton>
+        )}
+      </div>
+    </ItbdCard>
   );
 }

@@ -193,27 +193,55 @@ function NavSectionMenuItem({
         <DropdownMenuContent
           side={isMobile ? "bottom" : "right"}
           align={isMobile ? "end" : "start"}
-          sideOffset={8}
-          className="min-w-56 rounded-lg"
+          sideOffset={12}
+          className="itbd-glow-border relative min-w-60 overflow-hidden rounded-xl border-white/10 bg-black/90 p-1.5 backdrop-blur-xl"
         >
+          <span
+            aria-hidden
+            className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+          />
+          <DropdownMenuLabel className="flex items-center gap-2 px-2 pt-1 pb-2 text-xs font-semibold tracking-widest text-white/40 uppercase">
+            <section.icon className="h-3.5 w-3.5 text-itbd-blue" />
+            {section.label}
+          </DropdownMenuLabel>
           {subgroups.map((sg, i) => (
             <DropdownMenuGroup key={sg.label}>
-              {i > 0 ? <DropdownMenuSeparator /> : null}
+              {i > 0 ? <DropdownMenuSeparator className="my-1.5 bg-white/10" /> : null}
               {showSubgroupLabels ? (
-                <DropdownMenuLabel>{sg.label}</DropdownMenuLabel>
+                <DropdownMenuLabel className="px-2 pt-1 text-[10px] font-semibold tracking-widest text-white/35 uppercase">
+                  {sg.label}
+                </DropdownMenuLabel>
               ) : null}
-              {sg.links.map((link) => (
-                <DropdownMenuItem key={link.href} asChild>
-                  <Link
-                    href={link.href}
-                    data-active={pathname === link.href}
-                    className="data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium"
-                  >
-                    <link.icon className="h-4 w-4" />
-                    <span>{link.label}</span>
-                  </Link>
-                </DropdownMenuItem>
-              ))}
+              {sg.links.map((link) => {
+                const linkActive = pathname === link.href;
+                return (
+                  <DropdownMenuItem key={link.href} asChild className="p-0 focus:bg-transparent">
+                    <Link
+                      href={link.href}
+                      data-active={linkActive}
+                      className={cn(
+                        "group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-white/70 transition-colors",
+                        "hover:bg-itbd-blue/10 hover:text-white",
+                        linkActive && "bg-itbd-blue/10 font-medium text-itbd-blue",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white/5 text-white/50 transition-colors",
+                          "group-hover:bg-itbd-blue/15 group-hover:text-itbd-blue",
+                          linkActive && "bg-itbd-blue/15 text-itbd-blue",
+                        )}
+                      >
+                        <link.icon className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="flex-1">{link.label}</span>
+                      {linkActive ? (
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-itbd-blue shadow-[0_0_6px_var(--itbd-blue)]" />
+                      ) : null}
+                    </Link>
+                  </DropdownMenuItem>
+                );
+              })}
             </DropdownMenuGroup>
           ))}
         </DropdownMenuContent>

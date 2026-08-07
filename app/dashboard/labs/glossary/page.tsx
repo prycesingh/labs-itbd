@@ -11,10 +11,12 @@ export default async function LabsGlossaryPage() {
   const terms = await db.select().from(glossaryTerms).orderBy(asc(glossaryTerms.term));
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold">Glossary</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-2xl font-bold tracking-wide text-white uppercase sm:text-3xl">
+          <span className="text-itbd-blue">Glossary</span>
+        </h1>
+        <p className="mt-1 text-sm text-white/60">
           {terms.length} terms across cloud, identity, security, networking, and Microsoft 365.
         </p>
       </div>

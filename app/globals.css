@@ -134,6 +134,37 @@
   scrollbar-width: none;
 }
 
+/* ---- Global thin scrollbar, ITBD-branded ---- */
+/* Firefox: standard properties. Thumb in ITBD Blue, track blends into the
+   dark foundation so the bar reads as a subtle blue hairline, not chrome. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 173, 218, 0.5) rgba(255, 255, 255, 0.05);
+}
+
+/* WebKit (Chrome/Edge/Safari): pseudo-elements are the only way to size and
+   color the thumb/track/corner. */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(0, 173, 218, 0.5);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 173, 218, 0.8);
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* ---- Infinite horizontal marquee ---- */
 /* The track duplicates its content, so translating by -50% lands exactly on the
    start of the second copy — a seamless, truly infinite loop with no JS. */

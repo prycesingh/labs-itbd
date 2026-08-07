@@ -14,10 +14,12 @@ export default async function LabsGotchasPage() {
     .orderBy(asc(gotchas.sortOrder), asc(gotchas.title));
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold">Common Gotchas</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-2xl font-bold tracking-wide text-white uppercase sm:text-3xl">
+          Common <span className="text-itbd-blue">Gotchas</span>
+        </h1>
+        <p className="mt-1 text-sm text-white/60">
           {gotchaEntries.length} real-world symptom → cause → fix write-ups across Azure, ADDS, M365, identity, and
           more.
         </p>

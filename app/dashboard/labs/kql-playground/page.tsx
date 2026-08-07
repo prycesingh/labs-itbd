@@ -14,10 +14,12 @@ export default async function LabsKqlPlaygroundPage() {
     .orderBy(asc(kqlPlaygroundQueries.sortOrder), asc(kqlPlaygroundQueries.title));
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold">KQL Playground</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-2xl font-bold tracking-wide text-white uppercase sm:text-3xl">
+          KQL <span className="text-itbd-blue">Playground</span>
+        </h1>
+        <p className="mt-1 text-sm text-white/60">
           {queries.length} beginner-to-advanced Kusto queries for Sentinel and Log Analytics hunting, with
           explanations.
         </p>

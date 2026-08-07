@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +32,7 @@ const STEP_TYPE_BADGE: Record<string, string> = {
 export function TroubleshootFlowchartsBrowser({ steps }: { steps: TroubleshootFlowchartStep[] }) {
   const [query, setQuery] = useState("");
   const [expandedFlows, setExpandedFlows] = useState<Record<string, boolean>>({});
+  const reduce = useReducedMotion();
 
   const flows = useMemo(() => {
     const byFlow = new Map<string, TroubleshootFlowchartStep[]>();
@@ -69,53 +70,88 @@ export function TroubleshootFlowchartsBrowser({ steps }: { steps: TroubleshootFl
         placeholder="Search flows — e.g. VPN, replication, RDP, AKS pods..."
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        className="border-white/10 bg-black/40 text-white placeholder:text-white/40 focus-visible:border-itbd-blue focus-visible:ring-itbd-blue/30"
       />
       {filtered.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">
+        <p className="py-8 text-center text-sm text-white/50">
           No flows match. Try a different word or clear the filter.
         </p>
       ) : (
         <div className="space-y-3">
-          {filtered.map((flow) => {
+          {filtered.map((flow, i) => {
             const isOpen = expandedFlows[flow.flowName] ?? false;
             return (
-              <div key={flow.flowName} className="rounded-lg border">
+              <motion.div
+                key={flow.flowName}
+                className="itbd-glow-border relative overflow-hidden rounded-2xl bg-black/40 backdrop-blur-md"
+                initial={reduce ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: reduce ? 0 : Math.min(i, 12) * 0.03 }}
+              >
+                <span
+                  aria-hidden
+                  className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+                />
                 <button
                   type="button"
                   onClick={() => toggleFlow(flow.flowName)}
-                  className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
+                  className="relative z-10 flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
                 >
-                  <span className="font-semibold">{flow.flowName}</span>
+                  <span className="font-semibold text-white">{flow.flowName}</span>
                   <span className="flex items-center gap-2">
-                    <Badge variant="outline">{flow.steps.length} steps</Badge>
-                    <span className={cn("transition-transform", isOpen && "rotate-90")}>▸</span>
+                    <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-semibold text-white/60 uppercase">
+                      {flow.steps.length} steps
+                    </span>
+                    <span className={cn("text-white/60 transition-transform", isOpen && "rotate-90")}>▸</span>
                   </span>
                 </button>
-                {isOpen ? (
-                  <div className="space-y-2 border-t p-4">
-                    {flow.steps.map((step) => (
-                      <div
-                        key={step.id}
-                        className={cn("rounded-md p-3", STEP_TYPE_STYLES[step.stepType] ?? "border-l-4 bg-muted/40")}
-                      >
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs font-medium text-muted-foreground">
-                            Step {step.stepIndex}
-                          </span>
-                          <Badge variant="outline" className="text-[10px] uppercase">
-                            {STEP_TYPE_BADGE[step.stepType] ?? step.stepType}
-                          </Badge>
-                        </div>
-                        <p className="mt-1 font-medium">{step.title}</p>
-                        <p
-                          className="mt-1 text-sm text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1"
-                          dangerouslySetInnerHTML={{ __html: step.description }}
-                        />
+                <AnimatePresence initial={false}>
+                  {isOpen ? (
+                    <motion.div
+                      key="content"
+                      initial={reduce ? false : { height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={reduce ? undefined : { height: 0, opacity: 0 }}
+                      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                      className="relative z-10 overflow-hidden"
+                    >
+                      <div className="space-y-2 border-t border-white/10 p-4">
+                        {flow.steps.map((step, stepIndex) => (
+                          <motion.div
+                            key={step.id}
+                            initial={reduce ? false : { opacity: 0, y: 14 }}
+                            animate={{
+                              opacity: 1,
+                              y: 0,
+                              transition: {
+                                duration: 0.45,
+                                delay: reduce ? 0 : 0.25 + Math.min(stepIndex, 10) * 0.12,
+                                ease: [0.22, 1, 0.36, 1],
+                              },
+                            }}
+                            className={cn(
+                              "rounded-md p-3 transition-shadow hover:shadow-lg hover:shadow-black/30",
+                              STEP_TYPE_STYLES[step.stepType] ?? "border-l-4 bg-white/5",
+                            )}
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs font-medium text-white/60">Step {step.stepIndex}</span>
+                              <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-semibold text-white/60 uppercase">
+                                {STEP_TYPE_BADGE[step.stepType] ?? step.stepType}
+                              </span>
+                            </div>
+                            <p className="mt-1 font-medium text-white">{step.title}</p>
+                            <p
+                              className="mt-1 text-sm text-white/60 [&_code]:rounded [&_code]:bg-white/10 [&_code]:px-1 [&_code]:text-white/80"
+                              dangerouslySetInnerHTML={{ __html: step.description }}
+                            />
+                          </motion.div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+              </motion.div>
             );
           })}
         </div>

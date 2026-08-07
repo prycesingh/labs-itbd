@@ -21,10 +21,12 @@ export default async function LabsQuizTakePage({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold">{cert.code}</h1>
-        <p className="text-muted-foreground">{cert.name}</p>
+        <h1 className="text-2xl font-bold tracking-wide text-white uppercase sm:text-3xl">
+          <span className="text-itbd-blue">{cert.code}</span>
+        </h1>
+        <p className="mt-1 text-sm text-white/60">{cert.name}</p>
       </div>
       <QuizRunner certId={cert.id} />
     </div>

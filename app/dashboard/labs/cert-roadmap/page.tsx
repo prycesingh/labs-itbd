@@ -21,10 +21,12 @@ export default async function LabsCertRoadmapPage() {
   }));
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold">Certification Roadmap</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-2xl font-bold tracking-wide text-white uppercase sm:text-3xl">
+          Certification <span className="text-itbd-blue">Roadmap</span>
+        </h1>
+        <p className="mt-1 text-sm text-white/60">
           {certs.length} Microsoft certifications across fundamentals, associate, and expert tracks, with study time,
           exam format, and related skills.
         </p>

@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 type GlossaryTermRowProps = {
@@ -36,15 +35,15 @@ export function GlossaryTermRow({ term }: GlossaryTermRowProps) {
   }
 
   return (
-    <div className="flex items-start justify-between gap-3 border-b py-3 last:border-b-0">
+    <div className="flex items-start justify-between gap-3 border-b border-white/10 py-3 last:border-b-0">
       <div>
         <div className="flex items-center gap-2">
-          <span className="font-medium">{term.term}</span>
-          <Badge variant="outline" className="text-[10px] uppercase">
+          <span className="font-medium text-white">{term.term}</span>
+          <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-semibold text-white/60 uppercase">
             {term.category}
-          </Badge>
+          </span>
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">{term.definition}</p>
+        <p className="mt-1 text-sm text-white/60">{term.definition}</p>
       </div>
       <Button
         type="button"
@@ -53,6 +52,7 @@ export function GlossaryTermRow({ term }: GlossaryTermRowProps) {
         disabled={deleting}
         onClick={onDelete}
         aria-label={`Delete ${term.term}`}
+        className="hover:text-orange-300"
       >
         <X className="h-4 w-4" />
       </Button>

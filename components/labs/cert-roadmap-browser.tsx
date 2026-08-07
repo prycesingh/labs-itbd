@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
 
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 type CertRoadmapEntry = {
   id: string;
@@ -26,6 +26,7 @@ type CertRoadmapEntry = {
 export function CertRoadmapBrowser({ certs }: { certs: CertRoadmapEntry[] }) {
   const [query, setQuery] = useState("");
   const [activeTrack, setActiveTrack] = useState("All");
+  const reduce = useReducedMotion();
 
   const tracks = useMemo(() => {
     const seen = new Set<string>();
@@ -52,84 +53,109 @@ export function CertRoadmapBrowser({ certs }: { certs: CertRoadmapEntry[] }) {
         placeholder="Search certs — e.g. AZ-104, security, associate, KQL..."
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        className="border-white/10 bg-black/40 text-white placeholder:text-white/40 focus-visible:border-itbd-blue focus-visible:ring-itbd-blue/30"
       />
       <div className="flex flex-wrap gap-2">
         {tracks.map((t) => (
-          <button key={t} type="button" onClick={() => setActiveTrack(t)}>
-            <Badge variant={t === activeTrack ? "default" : "outline"} className="cursor-pointer">
-              {t}
-            </Badge>
+          <button
+            key={t}
+            type="button"
+            onClick={() => setActiveTrack(t)}
+            className={cn(
+              "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+              t === activeTrack
+                ? "border-itbd-blue/40 bg-itbd-blue/10 text-itbd-blue"
+                : "border-white/15 text-white/60 hover:border-white/30 hover:text-white",
+            )}
+          >
+            {t}
           </button>
         ))}
       </div>
       {filtered.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">
+        <p className="py-8 text-center text-sm text-white/50">
           No certifications match. Try a different word or clear the filter.
         </p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
-          {filtered.map((c) => (
-            <Card key={c.id}>
-              <CardHeader>
-                <div className="flex flex-wrap items-center gap-2">
-                  <CardTitle>
-                    {c.certCode} — {c.certName}
-                  </CardTitle>
+          {filtered.map((c, i) => (
+            <motion.div
+              key={c.id}
+              className="itbd-glow-border relative overflow-hidden rounded-2xl bg-black/40 p-5 backdrop-blur-md"
+              initial={reduce ? false : { opacity: 0, y: 16 }}
+              whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.3 }}
+              transition={{ duration: 0.4, delay: reduce ? 0 : Math.min(i, 12) * 0.03 }}
+            >
+              <span
+                aria-hidden
+                className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+              />
+              <div className="relative z-10 space-y-3 text-sm">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-semibold text-white">
+                      {c.certCode} — {c.certName}
+                    </h3>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    <span className="rounded-full border border-itbd-blue/40 bg-itbd-blue/10 px-3 py-1 text-xs font-semibold text-itbd-blue">
+                      {c.level}
+                    </span>
+                    <span className="rounded-full border border-itbd-blue/40 bg-itbd-blue/10 px-3 py-1 text-xs font-semibold text-itbd-blue uppercase">
+                      {c.track}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-white/60">{c.description}</p>
                 </div>
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  <Badge variant="outline">{c.level}</Badge>
-                  <Badge variant="outline" className="uppercase">
-                    {c.track}
-                  </Badge>
-                </div>
-                <CardDescription>{c.description}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-white/60">
                   {c.studyTime ? (
                     <>
-                      <dt className="font-medium text-foreground">Study time</dt>
+                      <dt className="font-medium text-white">Study time</dt>
                       <dd>{c.studyTime}</dd>
                     </>
                   ) : null}
                   {c.examFormat ? (
                     <>
-                      <dt className="font-medium text-foreground">Exam format</dt>
+                      <dt className="font-medium text-white">Exam format</dt>
                       <dd>{c.examFormat}</dd>
                     </>
                   ) : null}
                   {c.passingScore ? (
                     <>
-                      <dt className="font-medium text-foreground">Passing score</dt>
+                      <dt className="font-medium text-white">Passing score</dt>
                       <dd>{c.passingScore}</dd>
                     </>
                   ) : null}
                   {c.pricing ? (
                     <>
-                      <dt className="font-medium text-foreground">Pricing</dt>
+                      <dt className="font-medium text-white">Pricing</dt>
                       <dd>{c.pricing}</dd>
                     </>
                   ) : null}
                 </dl>
                 {c.skills.length > 0 ? (
                   <div>
-                    <p className="mb-1 text-xs font-medium text-muted-foreground">Skills covered</p>
+                    <p className="mb-1 text-xs font-medium text-white/60">Skills covered</p>
                     <div className="flex flex-wrap gap-1.5">
                       {c.skills.map((skill) => (
-                        <Badge key={skill} variant="secondary" className="text-[10px]">
+                        <span
+                          key={skill}
+                          className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-semibold text-white/60"
+                        >
                           {skill}
-                        </Badge>
+                        </span>
                       ))}
                     </div>
                   </div>
                 ) : null}
                 {c.tips ? (
-                  <p className="text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">Tips:</span> {c.tips}
+                  <p className="text-xs text-white/60">
+                    <span className="font-medium text-white/80">Tips:</span> {c.tips}
                   </p>
                 ) : null}
-              </CardContent>
-            </Card>
+              </div>
+            </motion.div>
           ))}
         </div>
       )}

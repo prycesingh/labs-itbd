@@ -83,16 +83,18 @@ export default async function LabsSimulatorsPage() {
   await requireUser();
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold">Simulators</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-2xl font-bold tracking-wide text-white uppercase sm:text-3xl">
+          <span className="text-itbd-blue">Simulators</span>
+        </h1>
+        <p className="mt-1 text-sm text-white/60">
           Hands-on practice environments modeled on real admin consoles. More suites roll out over time.
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {SIMULATORS.map((sim) => (
-          <SimulatorLaunchCard key={sim.title} {...sim} />
+        {SIMULATORS.map((sim, i) => (
+          <SimulatorLaunchCard key={sim.title} {...sim} index={i} />
         ))}
       </div>
     </div>
