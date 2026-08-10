@@ -67,7 +67,7 @@ export function LabCard({
 }: {
   icon: LabCardIcon;
   title: string;
-  description: string;
+  description?: string;
   accent?: "blue" | "green";
   className?: string;
   href?: string;
@@ -144,18 +144,18 @@ export function LabCard({
               accentText,
             )}
           >
-            <Icon className="h-18 w-18" />
+            <Icon className="h-10 w-10 sm:h-12 sm:w-12 md:h-14 md:w-14 lg:h-18 lg:w-18" />
           </span>
           <div className="flex flex-col">
             <h3
               className={cn(
-                "text-3xl font-bold tracking-wide uppercase",
+                "text-lg font-bold tracking-wide uppercase sm:text-xl md:text-2xl lg:text-3xl",
                 accentText,
               )}
             >
               {title}
             </h3>
-            <p className=" text-sm leading-relaxed text-white/70">
+            <p className="text-xs leading-relaxed text-white/70 sm:text-sm">
               {description}
             </p>
           </div>
@@ -236,24 +236,24 @@ export function LabCard({
           </ul>
         ) : null}
 
-        {/* CTA pinned to the bottom. Blue per brand. Links through the
-            dashboard's auth gate when a destination is set; otherwise a
-            styled placeholder. */}
-        <div className="mt-auto pt-5 text-center">
-          <Link
-            href={finalHref ?? "#"}
-            aria-disabled={!finalHref}
-            className={cn(
-              "group/cta relative inline-flex items-center gap-2 overflow-hidden rounded-full border px-5 py-2 text-sm font-semibold transition-all duration-300",
-              accent === "green"
-                ? "border-itbd-green/50 text-itbd-green hover:border-itbd-green hover:shadow-[0_0_20px_-4px_var(--itbd-green)]"
-                : "border-itbd-blue/50 text-itbd-blue hover:border-itbd-blue hover:shadow-[0_0_20px_-4px_var(--itbd-blue)]",
-            )}
-          >
-            {ctaLabel}
-            <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover/cta:translate-x-1" />
-          </Link>
-        </div>
+        {/* CTA pinned to the bottom. Blue per brand. Only rendered when a
+            destination exists — no dead `#` placeholder link. */}
+        {finalHref ? (
+          <div className="mt-auto pt-5 text-center">
+            <Link
+              href={finalHref}
+              className={cn(
+                "group/cta relative inline-flex items-center gap-2 overflow-hidden rounded-full border px-5 py-2 text-sm font-semibold transition-all duration-300",
+                accent === "green"
+                  ? "border-itbd-green/50 text-itbd-green hover:border-itbd-green hover:shadow-[0_0_20px_-4px_var(--itbd-green)]"
+                  : "border-itbd-blue/50 text-itbd-blue hover:border-itbd-blue hover:shadow-[0_0_20px_-4px_var(--itbd-blue)]",
+              )}
+            >
+              {ctaLabel}
+              <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover/cta:translate-x-1" />
+            </Link>
+          </div>
+        ) : null}
       </div>
     </motion.div>
   );

@@ -61,7 +61,7 @@ export function HeroHeadline({ className }: { className?: string }) {
 
   return (
     <div className={cn("flex min-w-0 flex-col justify-center", className)}>
-      <h1 className="flex flex-col gap-1 text-4xl leading-[0.95] font-extrabold tracking-tight whitespace-nowrap uppercase sm:text-5xl lg:text-6xl xl:text-7xl">
+      <h1 className="flex flex-col gap-1 text-3xl leading-[0.95] font-extrabold tracking-tight uppercase sm:text-4xl md:text-5xl xl:text-6xl 2xl:text-7xl">
         {reduce
           ? // Static, fully readable fallback — all three words stacked.
             LINES.map((line) => (

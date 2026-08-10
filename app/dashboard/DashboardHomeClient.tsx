@@ -11,7 +11,11 @@ import Image from "next/image";
 // (order + titles). Only the first 10 are featured here; the rest are behind
 // "View all simulators".
 const FEATURED_SIMULATORS = [
-  { href: "/dashboard/labs/simulators/azure-vm", label: "Azure", iconSrc: "/labs-logos/Azure.png" },
+  {
+    href: "/dashboard/labs/simulators/azure-vm",
+    label: "Azure",
+    iconSrc: "/labs-logos/Azure.png",
+  },
   {
     href: "/dashboard/labs/simulators/adds",
     label: "Active Directory",
