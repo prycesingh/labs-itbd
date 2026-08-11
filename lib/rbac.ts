@@ -115,6 +115,11 @@ export const ROUTE_RULES: readonly RouteRule[] = [
     allow: ADMIN_ROLES,
     note: "Interview results admin",
   },
+  {
+    prefix: "/dashboard/interview/AttemptOverrides",
+    allow: ADMIN_ROLES,
+    note: "Per-user practice attempt overrides admin",
+  },
 
   // Email-assessment admin. NOTE: /dashboard/emailAssessments/take is the
   // learner route and must stay open — it is excluded by listing the specific

@@ -8,6 +8,7 @@ import {
   candidateInterviewSessions,
   interviewModuleQuestionAssignments,
   interviewModules,
+  interviewPracticeAttemptOverrides,
   interviewQuestionBank,
   interviewQuestionStandardResponses,
   interviewSessionSummaries,
@@ -19,11 +20,12 @@ import {
   normalizeTotalScore,
   totalScoreToPercentage,
 } from "@/lib/interview/evaluationMetrics";
+import { startOfToday } from "@/lib/labs/date";
 import {
   createSessionSchema,
   updateSessionStatusSchema,
 } from "@/lib/validation/interview";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -156,6 +158,67 @@ export async function POST(request: NextRequest) {
         ),
       )
       .limit(1);
+
+    if (!existingSession) {
+      const today = startOfToday().toISOString();
+
+      const [failureCountRow] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(candidateInterviewSessions)
+        .where(
+          and(
+            eq(candidateInterviewSessions.candidateId, candidateId),
+            eq(candidateInterviewSessions.moduleId, moduleId),
+            eq(candidateInterviewSessions.status, "failed"),
+            gte(candidateInterviewSessions.createdAt, today),
+          ),
+        );
+
+      if (Number(failureCountRow?.count ?? 0) >= 3) {
+        return NextResponse.json(
+          {
+            error:
+              "Too many failed attempts today. This module is locked until tomorrow.",
+          },
+          { status: 429 },
+        );
+      }
+
+      const [override] = await db
+        .select({ dailyLimit: interviewPracticeAttemptOverrides.dailyLimit })
+        .from(interviewPracticeAttemptOverrides)
+        .where(
+          and(
+            eq(interviewPracticeAttemptOverrides.userId, candidateId),
+            eq(interviewPracticeAttemptOverrides.moduleId, moduleId),
+          ),
+        )
+        .limit(1);
+
+      const dailyLimit = override?.dailyLimit ?? 1;
+
+      const [attemptCountRow] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(candidateInterviewSessions)
+        .where(
+          and(
+            eq(candidateInterviewSessions.candidateId, candidateId),
+            eq(candidateInterviewSessions.moduleId, moduleId),
+            ne(candidateInterviewSessions.status, "failed"),
+            gte(candidateInterviewSessions.createdAt, today),
+          ),
+        );
+
+      if (Number(attemptCountRow?.count ?? 0) >= dailyLimit) {
+        return NextResponse.json(
+          {
+            error:
+              "Daily practice limit reached for this module. Try again tomorrow.",
+          },
+          { status: 429 },
+        );
+      }
+    }
 
     const questionRows = await db
       .select({

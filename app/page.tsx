@@ -99,14 +99,12 @@ export default async function Home() {
               icon="technical"
               title="Technical Lab"
               accent="blue"
-              description="Hands-on technical exercises and simulations to enhance your practical skills."
               className="xl:flex-1"
             />
             <LabCard
               icon="communication"
               title="Communication Lab"
               accent="green"
-              description="Interactive communication scenarios to improve your interpersonal and professional skills."
               className="xl:flex-1"
             />
           </div>
@@ -114,7 +112,7 @@ export default async function Home() {
               itself stays content-sized and vertically centered (not stretched).
               Runs parallel to the content column from md up (not stacked
               below it), matching the desktop design at every width. */}
-          <div className="md:col-start-2 md:row-span-3 md:row-start-1 xl:col-start-4">
+          <div className="min-w-0 md:col-start-2 md:row-span-3 md:row-start-1 xl:col-start-4">
             <LoginCard
               signInAction={signInWithMicrosoft}
               onAdminSubmit={signInWithCredentials}

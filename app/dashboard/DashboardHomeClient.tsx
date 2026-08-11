@@ -89,6 +89,30 @@ function splitDuration(totalSeconds: number): { value: number; unit: string } {
   return { value: Math.floor((totalSeconds % 3600) / 60), unit: "M" };
 }
 
+/** Thin divider between stat tiles: horizontal fade on mobile (stacked), vertical fade at sm+ (row). */
+function StatDivider() {
+  return (
+    <>
+      <div
+        aria-hidden
+        className="my-2 h-px w-full sm:hidden"
+        style={{
+          backgroundImage:
+            "linear-gradient(to right, transparent 0%, var(--itbd-blue) 50%, transparent 100%)",
+        }}
+      />
+      <div
+        aria-hidden
+        className="hidden w-px self-stretch sm:block"
+        style={{
+          backgroundImage:
+            "linear-gradient(to bottom, transparent 0%, var(--itbd-blue) 50%, transparent 100%)",
+        }}
+      />
+    </>
+  );
+}
+
 function StatTile({
   value,
   unit,
@@ -99,12 +123,12 @@ function StatTile({
   label: string;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center py-8 px-5 text-center">
-      <p className="flex items-baseline text-6xl font-semibold text-white">
+    <div className="flex flex-col items-center justify-center px-5 py-4 text-center sm:px-5 sm:py-8">
+      <p className="flex items-baseline text-4xl font-semibold text-white sm:text-6xl">
         <CountUp to={value} duration={1.5} />{" "}
-        {unit ? <span className="text-4xl">{unit}</span> : null}
+        {unit ? <span className="text-2xl sm:text-4xl">{unit}</span> : null}
       </p>
-      <p className="mt-1 text-xs text-itbd-blue">{label}</p>
+      <p className="mt-1 text-[10px] text-itbd-blue sm:text-xs">{label}</p>
     </div>
   );
 }
@@ -123,19 +147,19 @@ export function DashboardHomeClient({
   return (
     <div className="space-y-8">
       <motion.div
-        className="flex justify-between items-center gap-6"
+        className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between"
         initial={reduce ? false : { opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 1.5, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="space-y-2 p-5">
-          <h1 className="text-2xl leading-[0.95] font-bold tracking-normal sm:text-5xl">
+        <div className="min-w-0 space-y-2 p-0 sm:p-2 md:p-5">
+          <h1 className="text-3xl leading-[0.95] font-bold tracking-normal sm:text-5xl">
             LAB
           </h1>
-          <h1 className="text-2xl leading-[0.95] font-bold tracking-normal sm:text-5xl">
+          <h1 className="text-3xl leading-[0.95] font-bold tracking-normal sm:text-5xl">
             CATALOG
           </h1>
-          <p className="text-md tracking-widest text-itbd-blue">
+          <p className="text-sm tracking-widest text-itbd-blue sm:text-base">
             Explore. Practice. <br /> Improve. Excel.
           </p>
         </div>
@@ -150,7 +174,7 @@ export function DashboardHomeClient({
             channel: opaque from ~29%-71% width, ~24%-82% height) — cropped
             out here via a clipping wrapper + fill/object-cover so only the
             glow and its soft fade show, not the hard-edged box. */}
-        <div className="relative hidden aspect-696/540 w-72 shrink-0 md:block lg:w-96">
+        <div className="relative mx-auto hidden aspect-696/540 w-56 shrink-0 lg:block lg:w-72 xl:w-96">
           <motion.div
             className="absolute inset-0 overflow-hidden"
             animate={reduce ? undefined : { y: [0, -8, 0] }}
@@ -188,7 +212,7 @@ export function DashboardHomeClient({
             not three separate boxes). No fill/rounding — just top and bottom
             hairlines, each fading to transparent at both ends. */}
         <div
-          className="relative flex shrink-0 items-stretch self-center px-2 bg-slate-800/25 rounded-2xl"
+          className="relative flex w-full shrink-0 flex-col items-stretch self-center rounded-2xl border border-white/10 bg-slate-800/25 px-2 py-3 sm:flex-row sm:py-0 md:w-auto"
           style={{
             borderImage:
               "linear-gradient(to right, transparent, var(--itbd-blue), transparent) 1",
@@ -197,27 +221,13 @@ export function DashboardHomeClient({
           }}
         >
           <StatTile value={totalSimulators} label="Total Modules" />
-          <div
-            aria-hidden
-            className="w-px self-stretch my-3"
-            style={{
-              background:
-                "linear-gradient(to bottom, transparent, var(--itbd-blue), transparent)",
-            }}
-          />
+          <StatDivider />
           <StatTile
             value={splitDuration(weekSeconds).value}
             unit={splitDuration(weekSeconds).unit}
             label="Spent This Week"
           />
-          <div
-            aria-hidden
-            className="w-px self-stretch my-3"
-            style={{
-              background:
-                "linear-gradient(to bottom, transparent, var(--itbd-blue), transparent)",
-            }}
-          />
+          <StatDivider />
           <StatTile
             value={splitDuration(todaySeconds).value}
             unit={splitDuration(todaySeconds).unit}
@@ -226,7 +236,7 @@ export function DashboardHomeClient({
         </div>
       </motion.div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-2">
         <LabCard
           icon="technical"
           title="Technical Lab"

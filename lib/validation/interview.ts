@@ -396,3 +396,17 @@ export const updateStandardResponseSchema = z.object({
 export type UpdateStandardResponseInput = z.infer<
   typeof updateStandardResponseSchema
 >;
+
+// ─────────────────────────────────────────────
+// PRACTICE ATTEMPT OVERRIDE SCHEMAS
+// ─────────────────────────────────────────────
+
+export const createPracticeOverrideSchema = z.object({
+  userId: z.string().trim().min(1, "User is required"),
+  moduleId: z.string().uuid("Invalid module ID"),
+  dailyLimit: z.coerce.number().int().min(1).max(365),
+});
+
+export type CreatePracticeOverrideInput = z.infer<
+  typeof createPracticeOverrideSchema
+>;

@@ -20,6 +20,7 @@ import {
   boolean,
   customType,
   decimal,
+  foreignKey,
   index,
   int,
   json,
@@ -263,6 +264,54 @@ export const candidateInterviewSessions = mysqlTable(
     ),
     index("interview_sessions_module_idx").on(table.moduleId, table.status),
     index("interview_sessions_created_idx").on(table.createdAt),
+    index("interview_sessions_candidate_module_created_idx").on(
+      table.candidateId,
+      table.moduleId,
+      table.createdAt,
+    ),
+  ],
+);
+
+/**
+ * Per-user, per-module override of the default daily practice-attempt limit
+ * (default is 1/day, enforced in code). One row per (userId, moduleId) pair;
+ * deleting the row reverts that user to the default limit for that module.
+ */
+export const interviewPracticeAttemptOverrides = mysqlTable(
+  "interview_practice_attempt_overrides",
+  {
+    id: varchar({ length: 36 }).notNull(),
+    userId: varchar("user_id", { length: 255 }).notNull(),
+    moduleId: varchar("module_id", { length: 36 }).notNull(),
+    dailyLimit: int("daily_limit").notNull(),
+    createdBy: varchar("created_by", { length: 255 }).notNull(),
+    createdAt: timestamp("created_at", { mode: "string" })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: timestamp("updated_at", { mode: "string" })
+      .onUpdateNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.id], name: "ipao_id" }),
+    unique("ipao_id_unique").on(table.id),
+    unique("ipao_user_module_unique").on(table.userId, table.moduleId),
+    index("ipao_user_idx").on(table.userId),
+    index("ipao_module_idx").on(table.moduleId),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.id],
+      name: "ipao_user_fk",
+    })
+      .onDelete("cascade")
+      .onUpdate("cascade"),
+    foreignKey({
+      columns: [table.moduleId],
+      foreignColumns: [interviewModules.id],
+      name: "ipao_module_fk",
+    })
+      .onDelete("cascade")
+      .onUpdate("cascade"),
   ],
 );
 

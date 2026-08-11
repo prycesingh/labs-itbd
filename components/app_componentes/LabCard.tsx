@@ -103,7 +103,7 @@ export function LabCard({
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => setHovered(false)}
       className={cn(
-        "itbd-glow-border relative flex h-full w-full flex-col overflow-hidden rounded-2xl bg-black/40 p-5 backdrop-blur-md sm:p-6",
+        "itbd-glow-border relative flex w-full flex-col overflow-hidden rounded-2xl bg-black/40 p-5 backdrop-blur-md sm:p-6",
         className,
       )}
       initial={reduce ? false : { opacity: 0, y: 24 }}
@@ -135,21 +135,16 @@ export function LabCard({
         />
       )}
 
-      <div className="relative z-10 flex h-full flex-col">
+      <div className="relative z-10 flex flex-col">
         {/* Icon + title */}
         <div className="flex gap-3">
-          <span
-            className={cn(
-              "flex shrink-0 items-center justify-center",
-              accentText,
-            )}
-          >
-            <Icon className="h-10 w-10 sm:h-12 sm:w-12 md:h-14 md:w-14 lg:h-18 lg:w-18" />
+          <span className={cn("flex shrink-0 items-center justify-center", accentText)}>
+            <Icon className="h-10 w-10 sm:h-12 sm:w-12 md:h-14 md:w-14 lg:h-16 lg:w-16" />
           </span>
-          <div className="flex flex-col">
+          <div className="flex min-w-0 flex-col">
             <h3
               className={cn(
-                "text-lg font-bold tracking-wide uppercase sm:text-xl md:text-2xl lg:text-3xl",
+                "text-lg font-bold tracking-wide uppercase sm:text-lg md:text-xl lg:text-2xl",
                 accentText,
               )}
             >
@@ -162,7 +157,7 @@ export function LabCard({
         </div>
 
         {variant === "grid" && gridItems && gridItems.length > 0 ? (
-          <ul className="mt-5 grid grid-cols-5 gap-2">
+          <ul className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
             {gridItems.map((item) => (
               <li key={item.href}>
                 <Link
