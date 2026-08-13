@@ -98,6 +98,11 @@ export const SECTIONS: NavSection[] = [
             icon: MailPlus,
           },
           {
+            href: "/dashboard/emailAssessments/my-evaluations",
+            label: "My Evaluations",
+            icon: ClipboardCheck,
+          },
+          {
             href: "/dashboard/emailAssessments",
             label: "Sessions",
             icon: CalendarClock,

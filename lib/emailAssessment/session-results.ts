@@ -84,6 +84,11 @@ export type SessionSummary = {
   totalScenarios: number;
   submittedScenarios: number;
   evaluatedScenarios: number;
+  /** Scenarios that have a final contribution to the score: a completed AI
+   *  evaluation, or an expired/failed assessment (which contributes 0 and will
+   *  never be evaluated). Once this equals totalScenarios the session's score
+   *  is final, even if some scenarios were auto-submitted with no answer. */
+  finalizedScenarios: number;
   manualReviewedScenarios: number;
   statusLabel: "Started" | "In Progress" | "Evaluating" | "Completed" | "Expired" | "Needs Review";
   aiWeightedEarned: number;
@@ -94,6 +99,16 @@ export type SessionSummary = {
   manualGrade: ReturnType<typeof sessionGradeFromScore> | null;
   evaluatorScore: number | null;
   evaluatorNotes: string | null;
+  /** True when at least one scenario in this session was auto-submitted
+   *  (tab-switch/minimize/navigate-away penalty) and scored as 0 rather than
+   *  actually answered. Drives the candidate-facing "auto-submission" notice. */
+  hasAutoSubmittedScenarios: boolean;
+  autoSubmittedScenarioCount: number;
+  /** The single score candidates should see: the assessor's session-level
+   *  override when one exists, otherwise the AI weighted total. Null until the
+   *  session is finalized (all scenarios evaluated or auto-scored). */
+  totalScore: number | null;
+  totalGrade: ReturnType<typeof sessionGradeFromScore> | null;
   scenarios: SessionScenarioResult[];
 };
 
@@ -221,6 +236,14 @@ export async function getSessionSummaries(options: SessionSummaryOptions = {}) {
     const sessionIdentifier = row.assessment.sessionId ?? row.assessment.id;
     const latestManual =
       row.submission?.id != null ? latestManualBySubmission.get(row.submission.id) ?? null : null;
+    const isEvaluated = row.evaluation?.status === "completed";
+    // Expired/failed assessments never get an evaluation (no submission was
+    // ever finished), so they must count as a FINAL 0 rather than block the
+    // session's total forever. Only genuinely in-flight scenarios (in_progress,
+    // submitted, evaluating) should keep the total in a "Pending" state.
+    const isAutoScoredZero =
+      !isEvaluated && (row.assessment.status === "expired" || row.assessment.status === "failed");
+    const isFinalized = isEvaluated || isAutoScoredZero;
 
     const scenarioResult: SessionScenarioResult = {
       assessmentId: row.assessment.id,
@@ -282,7 +305,8 @@ export async function getSessionSummaries(options: SessionSummaryOptions = {}) {
         lastSubmittedAt: row.submission?.submittedAt ?? null,
         totalScenarios: 1,
         submittedScenarios: row.submission ? 1 : 0,
-        evaluatedScenarios: row.evaluation?.status === "completed" ? 1 : 0,
+        evaluatedScenarios: isEvaluated ? 1 : 0,
+        finalizedScenarios: isFinalized ? 1 : 0,
         manualReviewedScenarios: latestManual ? 1 : 0,
         statusLabel: "Started",
         aiWeightedEarned: scenarioResult.aiWeightedScore ?? 0,
@@ -293,6 +317,10 @@ export async function getSessionSummaries(options: SessionSummaryOptions = {}) {
         manualGrade: null,
         evaluatorScore: null,
         evaluatorNotes: null,
+        hasAutoSubmittedScenarios: isAutoScoredZero,
+        autoSubmittedScenarioCount: isAutoScoredZero ? 1 : 0,
+        totalScore: null,
+        totalGrade: null,
         scenarios: [scenarioResult],
       });
       continue;
@@ -309,8 +337,11 @@ export async function getSessionSummaries(options: SessionSummaryOptions = {}) {
           : row.submission.submittedAt
         : current.lastSubmittedAt ?? row.submission?.submittedAt ?? null;
     current.submittedScenarios += row.submission ? 1 : 0;
-    current.evaluatedScenarios += row.evaluation?.status === "completed" ? 1 : 0;
+    current.evaluatedScenarios += isEvaluated ? 1 : 0;
+    current.finalizedScenarios += isFinalized ? 1 : 0;
     current.manualReviewedScenarios += latestManual ? 1 : 0;
+    current.hasAutoSubmittedScenarios = current.hasAutoSubmittedScenarios || isAutoScoredZero;
+    current.autoSubmittedScenarioCount += isAutoScoredZero ? 1 : 0;
     current.aiWeightedEarned = roundToTwo(current.aiWeightedEarned + (scenarioResult.aiWeightedScore ?? 0));
     current.manualWeightedEarned = roundToTwo(
       current.manualWeightedEarned + (scenarioResult.manualWeightedScore ?? 0)
@@ -338,8 +369,10 @@ export async function getSessionSummaries(options: SessionSummaryOptions = {}) {
         const rightIndex = right.sessionIndex ?? Number.MAX_SAFE_INTEGER;
         return leftIndex - rightIndex;
       });
+      // Finalized (not merely "evaluated") gates the total: expired/failed
+      // scenarios contribute a final 0 and don't block completion.
       const aiWeightedTotal =
-        summary.evaluatedScenarios === summary.totalScenarios
+        summary.finalizedScenarios === summary.totalScenarios
           ? roundToTwo(summary.aiWeightedEarned)
           : null;
       const manualWeightedTotal =
@@ -348,6 +381,10 @@ export async function getSessionSummaries(options: SessionSummaryOptions = {}) {
           : null;
 
       const evalRecord = evaluatorScoreMap.get(summary.sessionIdentifier) ?? null;
+      const evaluatorScore = evalRecord?.score ?? null;
+      // Candidate-facing single "Total score": the assessor's session-level
+      // override wins when present, otherwise the AI weighted total.
+      const totalScore = evaluatorScore ?? aiWeightedTotal;
 
       const nextSummary: SessionSummary = {
         ...summary,
@@ -356,8 +393,10 @@ export async function getSessionSummaries(options: SessionSummaryOptions = {}) {
         aiGrade: aiWeightedTotal != null ? sessionGradeFromScore(aiWeightedTotal) : null,
         manualWeightedTotal,
         manualGrade: manualWeightedTotal != null ? sessionGradeFromScore(manualWeightedTotal) : null,
-        evaluatorScore: evalRecord?.score ?? null,
+        evaluatorScore,
         evaluatorNotes: evalRecord?.notes ?? null,
+        totalScore,
+        totalGrade: totalScore != null ? sessionGradeFromScore(totalScore) : null,
         statusLabel: buildStatusLabel({
           evaluatedScenarios: summary.evaluatedScenarios,
           submittedScenarios: summary.submittedScenarios,

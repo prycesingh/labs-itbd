@@ -49,28 +49,15 @@ export default async function EmailAssessmentResultPage({
 
       <ItbdCard>
         <div className="flex flex-wrap items-center gap-2">
-          <ItbdBadge>{session.displayId}</ItbdBadge>
           <ItbdBadge>{session.statusLabel}</ItbdBadge>
           <ItbdBadge>{session.totalScenarios} scenarios</ItbdBadge>
         </div>
         <h2 className="mt-3 text-lg font-bold text-white">Session results</h2>
-        <p className="mt-1 text-sm text-white/60">
-          Session name: {session.displayName}
-        </p>
-        <div className="mt-4 grid gap-4 md:grid-cols-4">
+        <div className="mt-4 grid gap-4 md:grid-cols-3">
           <ResultMetric
-            label="AI total"
-            value={session.aiWeightedTotal != null ? `${session.aiWeightedTotal.toFixed(2)} / 10` : "Pending"}
-            hint={session.aiGrade ? `Grade ${session.aiGrade}` : "Waiting for all scenario evaluations"}
-          />
-          <ResultMetric
-            label="Manual total"
-            value={
-              session.manualWeightedTotal != null
-                ? `${session.manualWeightedTotal.toFixed(2)} / 10`
-                : `${session.manualReviewedScenarios}/${session.totalScenarios} reviewed`
-            }
-            hint={session.manualGrade ? `Grade ${session.manualGrade}` : "Manual review is optional"}
+            label="Total score"
+            value={session.totalScore != null ? `${session.totalScore.toFixed(2)} / 10` : "Pending"}
+            hint={session.totalGrade ? `Grade ${session.totalGrade}` : "Waiting for all scenario evaluations"}
           />
           <ResultMetric
             label="Submitted"
@@ -87,6 +74,14 @@ export default async function EmailAssessmentResultPage({
             hint={`Started ${session.startedAt.toLocaleString()}`}
           />
         </div>
+        {session.hasAutoSubmittedScenarios ? (
+          <p className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/60">
+            Auto-submission occurred: {session.autoSubmittedScenarioCount} of{" "}
+            {session.totalScenarios} scenario{session.autoSubmittedScenarioCount === 1 ? "" : "s"}{" "}
+            were auto-submitted (switching tabs, minimizing, or navigating away during the session
+            ends it early) and scored as 0 toward the total above.
+          </p>
+        ) : null}
       </ItbdCard>
 
       <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
@@ -120,16 +115,19 @@ export default async function EmailAssessmentResultPage({
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-white/50">
                   <span>
-                    AI:{" "}
-                    {scenario.aiWeightedScore != null
-                      ? `${scenario.aiWeightedScore.toFixed(2)} / ${scenario.scenarioMaxScore}`
-                      : "Pending"}
-                  </span>
-                  <span>
-                    Raw:{" "}
-                    {scenario.evaluationOverallScore != null
-                      ? `${scenario.evaluationOverallScore} / 100`
-                      : "Pending"}
+                    Score:{" "}
+                    {(() => {
+                      const value = scenario.manualWeightedScore ?? scenario.aiWeightedScore;
+                      if (value != null) return `${value.toFixed(2)} / ${scenario.scenarioMaxScore}`;
+                      if (
+                        scenario.evaluationStatus == null &&
+                        (scenario.assessmentStatus === "expired" ||
+                          scenario.assessmentStatus === "failed")
+                      ) {
+                        return `0 / ${scenario.scenarioMaxScore} (auto-submitted)`;
+                      }
+                      return "Pending";
+                    })()}
                   </span>
                 </div>
               </Link>
@@ -164,35 +162,36 @@ export default async function EmailAssessmentResultPage({
                   {selectedScenario.content?.trim() ? selectedScenario.content : "No response submitted."}
                 </p>
               </div>
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2">
+                {(() => {
+                  const scenarioScore =
+                    selectedScenario.manualWeightedScore ?? selectedScenario.aiWeightedScore;
+                  const isAutoScoredZero =
+                    selectedScenario.evaluationStatus == null &&
+                    (selectedScenario.assessmentStatus === "expired" ||
+                      selectedScenario.assessmentStatus === "failed");
+
+                  return (
+                    <ResultMetric
+                      label="Score"
+                      value={
+                        scenarioScore != null
+                          ? `${scenarioScore.toFixed(2)} / ${selectedScenario.scenarioMaxScore}`
+                          : isAutoScoredZero
+                            ? `0 / ${selectedScenario.scenarioMaxScore}`
+                            : "Pending"
+                      }
+                      hint={isAutoScoredZero ? "Auto-submitted, scored as 0" : undefined}
+                    />
+                  );
+                })()}
                 <ResultMetric
-                  label="AI percentage"
-                  value={
-                    selectedScenario.evaluationOverallScore != null
-                      ? `${selectedScenario.evaluationOverallScore} / 100`
-                      : "Pending"
-                  }
-                />
-                <ResultMetric
-                  label="Weighted marks"
-                  value={
-                    selectedScenario.aiWeightedScore != null
-                      ? `${selectedScenario.aiWeightedScore.toFixed(2)} / ${selectedScenario.scenarioMaxScore}`
-                      : "Pending"
-                  }
-                  hint="Converted from the rubric percentage"
-                />
-                <ResultMetric
-                  label="Manual review"
-                  value={
-                    selectedScenario.manualWeightedScore != null
-                      ? `${selectedScenario.manualWeightedScore.toFixed(2)} / ${selectedScenario.scenarioMaxScore}`
-                      : "Pending"
-                  }
+                  label="Submitted"
+                  value={selectedScenario.submittedAt ? "Yes" : "No"}
                   hint={
-                    selectedScenario.manualOverallScore != null
-                      ? `${selectedScenario.manualOverallScore} / 100`
-                      : "Latest assessor score"
+                    selectedScenario.submittedAt
+                      ? selectedScenario.submittedAt.toLocaleString()
+                      : undefined
                   }
                 />
               </div>
@@ -240,10 +239,6 @@ export default async function EmailAssessmentResultPage({
               <h2 className="text-lg font-bold text-white">Assessor feedback</h2>
               <p className="mt-1 text-sm text-white/60">Latest manual review for this scenario.</p>
               <div className="mt-4 space-y-3">
-                <p className="font-medium text-white">
-                  {selectedScenario.manualOverallScore}/100
-                  {selectedScenario.manualGrade ? ` · Grade ${selectedScenario.manualGrade}` : ""}
-                </p>
                 <p className="text-sm text-white/60">{selectedScenario.manualSummary}</p>
                 {selectedScenario.manualImprovementAreas.length > 0 ? (
                   <FeedbackList title="Manual improvements" items={selectedScenario.manualImprovementAreas} />

@@ -313,7 +313,6 @@ export function ResultsSummary({ sessionId }: ResultsSummaryProps) {
     );
   }
 
-  const aiScore = scoreSummary.aiOverall;
   const finalScore = scoreSummary.finalOverall;
   const strengths = asStringList(data.summary?.aiStrengths);
   const improvementAreas = asStringList(data.summary?.aiImprovementAreas);
@@ -345,12 +344,11 @@ export function ResultsSummary({ sessionId }: ResultsSummaryProps) {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:min-w-90">
-              <ScoreCard label="AI score" value={aiScore} accent="sky" />
+            <div className="grid gap-3 sm:grid-cols-1 lg:min-w-90">
               <ScoreCard
-                label="Final score"
+                label="Total score"
                 value={finalScore}
-                accent="emerald"
+                accent="sky"
                 placeholder="Pending"
               />
             </div>
@@ -358,10 +356,7 @@ export function ResultsSummary({ sessionId }: ResultsSummaryProps) {
         </CardContent>
       </Card>
 
-      <DimensionSummaryCard
-        aiDimensions={scoreSummary.aiDimensions}
-        finalDimensions={scoreSummary.finalDimensions}
-      />
+      <DimensionSummaryCard finalDimensions={scoreSummary.finalDimensions} />
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <Card className="border-white/15 bg-black/25 shadow-[0_8px_32px_-4px_rgba(0,0,0,0.6)] backdrop-blur-lg">
@@ -424,8 +419,8 @@ export function ResultsSummary({ sessionId }: ResultsSummaryProps) {
               </div>
               <p className="mt-2 text-sm text-slate-300">
                 {mergedAnswers.some((answer) => answer.adminEvaluation)
-                  ? `Final score blends AI and admin-reviewed dimension scores.`
-                  : "Admin review not yet available."}
+                  ? "This score reflects the admin-reviewed evaluation."
+                  : "This score is AI-evaluated. It may be updated after admin review."}
               </p>
             </div>
 
@@ -451,10 +446,7 @@ export function ResultsSummary({ sessionId }: ResultsSummaryProps) {
                     </div>
                     <div className="mt-2 flex flex-wrap gap-4 text-xs text-slate-400">
                       <span>
-                        AI score: {answer.aiEvaluation?.total_score ?? "n/a"}
-                      </span>
-                      <span>
-                        Final score:{" "}
+                        Score:{" "}
                         {answer.adminEvaluation?.total_score ??
                           answer.aiEvaluation?.total_score ??
                           "n/a"}
@@ -462,10 +454,6 @@ export function ResultsSummary({ sessionId }: ResultsSummaryProps) {
                     </div>
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       {EVALUATION_DIMENSION_ORDER.map((key) => {
-                        const aiValue = getDimensionScore(
-                          answer.aiEvaluation?.dimensions,
-                          key,
-                        );
                         const finalValue = getDimensionScore(
                           answer.adminEvaluation?.dimensions ??
                             answer.aiEvaluation?.dimensions,
@@ -482,10 +470,7 @@ export function ResultsSummary({ sessionId }: ResultsSummaryProps) {
                             </div>
                             <div className="mt-1 flex items-center justify-between text-sm">
                               <span className="text-slate-300">
-                                AI {aiValue ?? "-"}
-                              </span>
-                              <span className="text-emerald-300">
-                                Final {finalValue ?? "-"}
+                                {finalValue ?? "-"}
                               </span>
                             </div>
                           </div>
@@ -547,10 +532,8 @@ function ScoreCard({
 }
 
 function DimensionSummaryCard({
-  aiDimensions,
   finalDimensions,
 }: {
-  aiDimensions: DimensionMap;
   finalDimensions: DimensionMap;
 }) {
   return (
@@ -562,7 +545,7 @@ function DimensionSummaryCard({
               Dimension Summary
             </div>
             <div className="mt-1 text-lg text-white">
-              AI vs final reviewed breakdown
+              Reviewed score breakdown
             </div>
           </div>
         </div>
@@ -577,17 +560,9 @@ function DimensionSummaryCard({
                 {EVALUATION_DIMENSION_LABELS[key]}
               </div>
               <div className="mt-3 flex items-center justify-between text-sm text-slate-300">
-                <span>AI</span>
+                <span>Score</span>
                 <span className="text-sky-300">
-                  {getDimensionScore(aiDimensions, key)?.toFixed(2) ?? "-"}
-                </span>
-              </div>
-              <div className="mt-1 flex items-center justify-between text-sm text-slate-300">
-                <span>Final</span>
-                <span className="text-emerald-300">
-                  {getDimensionScore(finalDimensions, key)?.toFixed(2) ??
-                    getDimensionScore(aiDimensions, key)?.toFixed(2) ??
-                    "-"}
+                  {getDimensionScore(finalDimensions, key)?.toFixed(2) ?? "-"}
                 </span>
               </div>
             </div>

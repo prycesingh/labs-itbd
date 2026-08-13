@@ -21,9 +21,10 @@ import { useRef, useState, useTransition } from "react";
  * The card fills its parent (h-full/w-full) so it occupies the whole grid cell
  * it's placed in; it stays responsive (single column on mobile, full cell at md+).
  *
- * NOTE: there is no credentials provider wired in this app — the admin form is
- * presentational and calls `onAdminSubmit` if provided, otherwise no-ops. Real
- * SSO is the only working path (the front button).
+ * The admin form submits via `onAdminSubmit`, a server action that returns
+ * `{ error }` on rejected credentials (unknown user, wrong password, non-admin
+ * role, or SSO-only account with no password hash) or resolves via redirect on
+ * success. `AdminContent` surfaces that error inline instead of failing silently.
  */
 export function LoginCard({
   signInAction,
@@ -31,7 +32,10 @@ export function LoginCard({
   className,
 }: {
   signInAction: () => Promise<void>;
-  onAdminSubmit?: (username: string, password: string) => void | Promise<void>;
+  onAdminSubmit?: (
+    username: string,
+    password: string,
+  ) => Promise<{ error: string } | void>;
   className?: string;
 }) {
   const reduce = useReducedMotion();
@@ -301,12 +305,29 @@ function AdminContent({
   active,
 }: {
   onBack: () => void;
-  onAdminSubmit?: (username: string, password: string) => void | Promise<void>;
+  onAdminSubmit?: (
+    username: string,
+    password: string,
+  ) => Promise<{ error: string } | void>;
   active: boolean;
 }) {
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!onAdminSubmit) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await onAdminSubmit(username.trim(), password.trim());
+      if (result?.error) {
+        setError(result.error);
+      }
+    });
+  };
 
   return (
     <CardShell>
@@ -332,13 +353,7 @@ function AdminContent({
         </div>
       </div>
 
-      <form
-        className="mt-6 flex flex-col gap-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          onAdminSubmit?.(username.trim(), password.trim());
-        }}
-      >
+      <form className="mt-6 flex flex-col gap-4" onSubmit={handleSubmit}>
         <input
           type="text"
           placeholder="Username or Email"
@@ -374,6 +389,12 @@ function AdminContent({
           </button>
         </div>
 
+        {error && (
+          <p role="alert" className="text-sm font-medium text-red-400">
+            {error}
+          </p>
+        )}
+
         <div className="flex items-center justify-between text-xs text-white/60">
           <label className="flex items-center gap-2">
             <input
@@ -396,13 +417,15 @@ function AdminContent({
             on ITBD Blue for AA contrast at this weight. */}
         <button
           type="submit"
+          disabled={pending}
           tabIndex={active ? 0 : -1}
           className={cn(
             "mt-2 w-full rounded-xl bg-itbd-blue py-3.5 text-sm font-bold uppercase tracking-widest text-black transition",
             "hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-itbd-blue",
+            pending && "cursor-not-allowed opacity-70",
           )}
         >
-          Sign in
+          {pending ? "Signing in…" : "Sign in"}
         </button>
       </form>
 

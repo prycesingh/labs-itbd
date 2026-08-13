@@ -236,23 +236,15 @@ export default function MyEvaluationsPage() {
                   {sess.evaluation && (
                     <div className="space-y-2 p-2 rounded-md bg-blue-500/10 border border-blue-500/20">
                       <div className="text-xs font-medium text-blue-400">
-                        AI Score (%)
+                        Total Score (%)
                       </div>
                       <div className="text-2xl font-bold text-blue-400">
-                        {formatPercentageScore(sess.evaluation.overallAiScore)}{" "}
+                        {formatPercentageScore(
+                          sess.evaluation.overallAdminScore ??
+                            sess.evaluation.overallAiScore,
+                        )}{" "}
                         / 100
                       </div>
-                      {sess.evaluation.overallAdminScore !== undefined && (
-                        <div className="text-xs mt-2 pt-2 border-t border-blue-500/20">
-                          <div className="text-green-400 font-medium">
-                            Admin Score:{" "}
-                            {formatPercentageScore(
-                              sess.evaluation.overallAdminScore,
-                            )}{" "}
-                            / 100
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )}
 
@@ -309,33 +301,19 @@ export default function MyEvaluationsPage() {
           <div className="space-y-4">
             {selectedSession && selectedSession.evaluation && (
               <>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   <div className="p-3 rounded-md bg-blue-500/10 border border-blue-500/20">
                     <div className="text-xs font-medium text-muted-foreground">
-                      AI Score (%)
+                      Total Score (%)
                     </div>
                     <div className="text-2xl font-bold text-blue-400 mt-1">
                       {formatPercentageScore(
-                        selectedSession.evaluation.overallAiScore,
+                        selectedSession.evaluation.overallAdminScore ??
+                          selectedSession.evaluation.overallAiScore,
                       )}{" "}
                       / 100
                     </div>
                   </div>
-
-                  {selectedSession.evaluation.overallAdminScore !==
-                    undefined && (
-                    <div className="p-3 rounded-md bg-green-500/10 border border-green-500/20">
-                      <div className="text-xs font-medium text-muted-foreground">
-                        Admin Score (%)
-                      </div>
-                      <div className="text-2xl font-bold text-green-400 mt-1">
-                        {formatPercentageScore(
-                          selectedSession.evaluation.overallAdminScore,
-                        )}{" "}
-                        / 100
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {selectedSession.evaluation.aiStrengths && (
@@ -381,9 +359,11 @@ export default function MyEvaluationsPage() {
                           {answer.questionText || "Question"}
                         </div>
                         <div className="mt-2 text-xs text-muted-foreground">
-                          AI Score: {formatPercentageScore(answer.aiScore)} /
-                          100 | Admin Score:{" "}
-                          {formatPercentageScore(answer.adminScore)} / 100
+                          Score:{" "}
+                          {formatPercentageScore(
+                            answer.adminScore ?? answer.aiScore,
+                          )}{" "}
+                          / 100
                         </div>
                         <p className="mt-2 text-sm text-gray-300">
                           {answer.transcript || "Transcript unavailable"}

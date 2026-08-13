@@ -6,6 +6,7 @@ import { HeroHeadline } from "@/components/app_componentes/HeroHeadline";
 import { LabCard } from "@/components/app_componentes/LabCard";
 import { LoginCard } from "@/components/app_componentes/loginCard";
 import CurvedLoop from "@/components/CurvedLoop";
+import { AuthError } from "next-auth";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 
@@ -24,13 +25,28 @@ export default async function Home() {
   // Break-glass admin credential login (bypasses SSO). Only succeeds for a user
   // whose `users` row has a bcrypt password hash provisioned via the admin
   // bootstrap script; SSO-only users can never authenticate here.
-  async function signInWithCredentials(username: string, password: string) {
+  async function signInWithCredentials(
+    username: string,
+    password: string,
+  ): Promise<{ error: string } | void> {
     "use server";
-    await signIn("credentials", {
-      username,
-      password,
-      redirectTo: "/dashboard",
-    });
+    try {
+      await signIn("credentials", {
+        username,
+        password,
+        redirectTo: "/dashboard",
+      });
+    } catch (error) {
+      // A successful signIn() throws Next's internal redirect signal — let
+      // that (and anything else that isn't an auth failure) propagate so the
+      // redirect still happens. Only a genuine AuthError means the
+      // credentials were rejected (unknown user, wrong password, non-admin
+      // role, or no password hash provisioned for SSO-only accounts).
+      if (error instanceof AuthError) {
+        return { error: "Invalid username or password." };
+      }
+      throw error;
+    }
   }
 
   return (

@@ -49,7 +49,7 @@ export function HowItWorks({ className }: { className?: string }) {
 
       <div className="shrink-0 lg:w-40">
         <h2 className="text-2xl font-bold tracking-wide text-white uppercase">
-          <span className="block">How To</span>
+          <span className="block">How It</span>
           <span className="block text-itbd-blue">Works</span>
         </h2>
       </div>
@@ -69,7 +69,7 @@ export function HowItWorks({ className }: { className?: string }) {
         {STEPS.map((step, i) => (
           <motion.div
             key={step.title}
-            className="flex flex-1 items-start gap-2"
+            className="flex min-w-0 flex-1 items-start gap-2"
             initial={reduce ? false : { opacity: 0, y: 12 }}
             whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.3 }}
@@ -94,7 +94,7 @@ export function HowItWorks({ className }: { className?: string }) {
                 aria-hidden
                 width={1366}
                 height={768}
-                className="mt-1 hidden h-13 w-auto shrink-0 object-contain sm:block"
+                className="mt-1 hidden h-8 w-auto shrink-0 object-contain lg:block xl:h-13"
               />
             ) : null}
           </motion.div>
