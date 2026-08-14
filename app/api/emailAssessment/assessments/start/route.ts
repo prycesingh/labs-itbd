@@ -1,18 +1,18 @@
 import { randomUUID } from "crypto";
-import { desc, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { db } from "@/DB/drizzle";
 import {
   emailAssessmentAssessments as assessments,
+  emailAssessmentAttemptOverrides as attemptOverrides,
   emailAssessmentAuditLogs as auditLogs,
   emailAssessmentScenarios as scenarios,
-  emailAssessmentSubmissions as submissions,
 } from "@/DB/emailAssessmentSchema";
 import { jsonError, requestIp, requireApiUser } from "@/lib/emailAssessment/auth";
 import { addMinutes } from "@/lib/emailAssessment/date";
-import { canRetake } from "@/lib/emailAssessment/retakes";
+import { startOfToday } from "@/lib/labs/date";
 import { enforceRateLimit, rateLimitResponse } from "@/lib/emailAssessment/rate-limit";
 import { SESSION_SCENARIO_DISTRIBUTION, SESSION_TIME_MINUTES } from "@/lib/emailAssessment/scoring";
 
@@ -78,23 +78,29 @@ export async function POST(request: Request) {
       }
     }
 
-    // Check retake cooldown
-    const [latestSubmission] = await db
-      .select({ submittedAt: submissions.submittedAt })
-      .from(submissions)
-      .where(eq(submissions.candidateId, user!.id))
-      .orderBy(desc(submissions.submittedAt))
+    // Check daily session-start limit (default 1/day, overridable per user).
+    const [override] = await db
+      .select({ dailyLimit: attemptOverrides.dailyLimit })
+      .from(attemptOverrides)
+      .where(eq(attemptOverrides.userId, user!.id))
       .limit(1);
 
-    const retake = canRetake(latestSubmission?.submittedAt);
+    const dailyLimit = override?.dailyLimit ?? 1;
+    const today = startOfToday().toISOString();
 
-    if (!retake.allowed && !isBypass) {
+    const [sessionsTodayRow] = await db
+      .select({ count: sql<number>`count(distinct ${assessments.sessionId})` })
+      .from(assessments)
+      .where(
+        sql`${assessments.candidateId} = ${user!.id} AND ${assessments.createdAt} >= ${today}`
+      );
+
+    if (!isBypass && Number(sessionsTodayRow?.count ?? 0) >= dailyLimit) {
       return NextResponse.json(
         {
-          error: "Retakes are available after the cooldown period.",
-          nextEligibleAt: retake.nextEligibleAt,
+          error: "Daily assessment limit reached. Try again tomorrow.",
         },
-        { status: 409 }
+        { status: 429 }
       );
     }
 

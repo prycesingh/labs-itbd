@@ -114,6 +114,16 @@ export async function POST(request: NextRequest) {
     const { candidateId: candidateIdInput, moduleId } = parsed.data;
     const candidateId = candidateIdInput || session.user.id;
 
+    if (
+      candidateId !== session.user.id &&
+      !isAdminRole(session.user.role as Role | undefined)
+    ) {
+      return NextResponse.json(
+        { error: "Access denied: cannot create a session for another user" },
+        { status: 403 },
+      );
+    }
+
     const [module] = await db
       .select({
         id: interviewModules.id,
@@ -174,18 +184,11 @@ export async function POST(request: NextRequest) {
           ),
         );
 
-      if (Number(failureCountRow?.count ?? 0) >= 3) {
-        return NextResponse.json(
-          {
-            error:
-              "Too many failed attempts today. This module is locked until tomorrow.",
-          },
-          { status: 429 },
-        );
-      }
-
       const [override] = await db
-        .select({ dailyLimit: interviewPracticeAttemptOverrides.dailyLimit })
+        .select({
+          dailyLimit: interviewPracticeAttemptOverrides.dailyLimit,
+          lockoutThreshold: interviewPracticeAttemptOverrides.lockoutThreshold,
+        })
         .from(interviewPracticeAttemptOverrides)
         .where(
           and(
@@ -194,6 +197,18 @@ export async function POST(request: NextRequest) {
           ),
         )
         .limit(1);
+
+      const lockoutThreshold = override?.lockoutThreshold ?? 3;
+
+      if (Number(failureCountRow?.count ?? 0) >= lockoutThreshold) {
+        return NextResponse.json(
+          {
+            error:
+              "Too many failed attempts today. This module is locked until tomorrow.",
+          },
+          { status: 429 },
+        );
+      }
 
       const dailyLimit = override?.dailyLimit ?? 1;
 

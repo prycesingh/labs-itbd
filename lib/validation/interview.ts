@@ -405,6 +405,7 @@ export const createPracticeOverrideSchema = z.object({
   userId: z.string().trim().min(1, "User is required"),
   moduleId: z.string().uuid("Invalid module ID"),
   dailyLimit: z.coerce.number().int().min(1).max(365),
+  lockoutThreshold: z.coerce.number().int().min(1).max(365).optional(),
 });
 
 export type CreatePracticeOverrideInput = z.infer<

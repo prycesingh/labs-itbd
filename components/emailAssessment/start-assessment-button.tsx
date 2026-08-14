@@ -85,15 +85,9 @@ export function StartAssessmentButton({
         response.status,
         result,
       );
-      if (result?.nextEligibleAt) {
-        toast.error(
-          `Retake available after ${new Date(result.nextEligibleAt).toLocaleString()}.`,
-        );
-      } else {
-        toast.error(
-          result?.error ?? `Unable to start assessment (${response.status}).`,
-        );
-      }
+      toast.error(
+        result?.error ?? `Unable to start assessment (${response.status}).`,
+      );
       return;
     }
 

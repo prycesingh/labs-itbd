@@ -152,6 +152,33 @@ export const emailAssessmentScenarios = mysqlTable(
 );
 
 // ─────────────────────────────────────────────
+// Attempt Overrides
+// ─────────────────────────────────────────────
+/**
+ * Per-user override of the default daily session-start limit (default is
+ * 1/day, enforced in code). A "session" here is the whole 5-scenario bundle,
+ * not an individual scenario, so this is keyed by userId alone — unlike
+ * Interview's override, there is no per-scenario dimension. Deleting the row
+ * reverts that user to the default limit.
+ */
+export const emailAssessmentAttemptOverrides = mysqlTable(
+  "email_assessment_attempt_overrides",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    dailyLimit: int("daily_limit").notNull(),
+    createdBy: varchar("created_by", { length: 255 }).notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (table) => ({
+    userIdx: uniqueIndex("ea_attempt_overrides_user_idx").on(table.userId),
+  })
+);
+
+// ─────────────────────────────────────────────
 // Assessments
 // ─────────────────────────────────────────────
 export const emailAssessmentAssessments = mysqlTable(

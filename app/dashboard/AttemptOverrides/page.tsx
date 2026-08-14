@@ -1,4 +1,4 @@
-import AttemptOverridesPage from "@/components/interview/admin/AttemptOverridesPage";
+import AttemptOverridesPage from "@/components/admin/AttemptOverridesPage";
 import { requireAdminPage } from "@/lib/admin/guard";
 
 export default async function Page() {

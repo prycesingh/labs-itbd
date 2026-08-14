@@ -115,12 +115,6 @@ export const ROUTE_RULES: readonly RouteRule[] = [
     allow: ADMIN_ROLES,
     note: "Interview results admin",
   },
-  {
-    prefix: "/dashboard/interview/AttemptOverrides",
-    allow: ADMIN_ROLES,
-    note: "Per-user practice attempt overrides admin",
-  },
-
   // Email-assessment admin. NOTE: /dashboard/emailAssessments/take is the
   // learner route and must stay open — it is excluded by listing the specific
   // admin sub-paths and the base index rule below (which uses an exact/segment
@@ -154,6 +148,14 @@ export const ROUTE_RULES: readonly RouteRule[] = [
     prefix: "/dashboard/emailAssessments",
     allow: ADMIN_ROLES,
     note: "Email-assessment Sessions index (admin landing)",
+  },
+
+  // Shared cross-module admin surface (covers both Interview and
+  // Email Assessment practice-attempt overrides).
+  {
+    prefix: "/dashboard/AttemptOverrides",
+    allow: ADMIN_ROLES,
+    note: "Per-user practice attempt overrides admin (Interview + Email Assessment)",
   },
 
   // Catch-all: any authenticated user may reach the rest of the dashboard.

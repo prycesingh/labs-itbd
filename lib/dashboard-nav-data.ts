@@ -81,12 +81,6 @@ export const SECTIONS: NavSection[] = [
             icon: BarChart3,
             adminOnly: true,
           },
-          {
-            href: "/dashboard/interview/AttemptOverrides",
-            label: "Attempt Overrides",
-            icon: ShieldAlert,
-            adminOnly: true,
-          },
         ],
       },
       {
@@ -124,6 +118,17 @@ export const SECTIONS: NavSection[] = [
             href: "/dashboard/emailAssessments/prompts",
             label: "Prompts",
             icon: Sparkles,
+            adminOnly: true,
+          },
+        ],
+      },
+      {
+        label: "Admin",
+        links: [
+          {
+            href: "/dashboard/AttemptOverrides",
+            label: "Attempt Overrides",
+            icon: ShieldAlert,
             adminOnly: true,
           },
         ],

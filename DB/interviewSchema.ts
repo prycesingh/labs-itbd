@@ -276,6 +276,8 @@ export const candidateInterviewSessions = mysqlTable(
  * Per-user, per-module override of the default daily practice-attempt limit
  * (default is 1/day, enforced in code). One row per (userId, moduleId) pair;
  * deleting the row reverts that user to the default limit for that module.
+ * lockoutThreshold optionally overrides the default 3-failed-attempts lockout
+ * for that same (userId, moduleId) pair; null means "use the default of 3".
  */
 export const interviewPracticeAttemptOverrides = mysqlTable(
   "interview_practice_attempt_overrides",
@@ -284,6 +286,7 @@ export const interviewPracticeAttemptOverrides = mysqlTable(
     userId: varchar("user_id", { length: 255 }).notNull(),
     moduleId: varchar("module_id", { length: 36 }).notNull(),
     dailyLimit: int("daily_limit").notNull(),
+    lockoutThreshold: int("lockout_threshold"),
     createdBy: varchar("created_by", { length: 255 }).notNull(),
     createdAt: timestamp("created_at", { mode: "string" })
       .default(sql`CURRENT_TIMESTAMP`)

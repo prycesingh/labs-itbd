@@ -205,34 +205,7 @@ export default async function EmailAssessmentResultPage({
                 AI feedback for this scenario will appear as soon as the evaluation finishes.
               </p>
             </ItbdCard>
-          ) : (
-            <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-              <ItbdCard>
-                <h2 className="text-lg font-bold text-white">Rubric view</h2>
-                <p className="mt-1 text-sm text-white/60">
-                  The rubric percentages stay the same and then roll into the weighted session total.
-                </p>
-                <div className="mt-4">
-                  {selectedScenario.categoryScores ? (
-                    <ScoreRadar scores={selectedScenario.categoryScores} />
-                  ) : (
-                    <p className="text-sm text-white/50">
-                      No rubric breakdown is available yet.
-                    </p>
-                  )}
-                </div>
-              </ItbdCard>
-              <ItbdCard>
-                <h2 className="text-lg font-bold text-white">Feedback</h2>
-                <p className="mt-1 text-sm text-white/60">{selectedScenario.evaluationVerdict}</p>
-                <div className="mt-4 grid gap-6 md:grid-cols-3">
-                  <FeedbackList title="Strengths" items={selectedScenario.strengths} />
-                  <FeedbackList title="Weaknesses" items={selectedScenario.weaknesses} />
-                  <FeedbackList title="Improvements" items={selectedScenario.improvements} />
-                </div>
-              </ItbdCard>
-            </div>
-          )}
+          ) : null}
 
           {selectedScenario.manualSummary ? (
             <ItbdCard>
@@ -248,6 +221,35 @@ export default async function EmailAssessmentResultPage({
           ) : null}
         </div>
       </div>
+
+      {selectedScenario.evaluationStatus === "completed" ? (
+        <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+          <ItbdCard className="h-fit">
+            <h2 className="text-lg font-bold text-white">Rubric view</h2>
+            <p className="mt-1 text-sm text-white/60">
+              The rubric percentages stay the same and then roll into the weighted session total.
+            </p>
+            <div className="mt-4">
+              {selectedScenario.categoryScores ? (
+                <ScoreRadar scores={selectedScenario.categoryScores} />
+              ) : (
+                <p className="text-sm text-white/50">
+                  No rubric breakdown is available yet.
+                </p>
+              )}
+            </div>
+          </ItbdCard>
+          <ItbdCard>
+            <h2 className="text-lg font-bold text-white">Feedback</h2>
+            <p className="mt-1 text-sm text-white/60">{selectedScenario.evaluationVerdict}</p>
+            <div className="mt-4 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              <FeedbackList title="Strengths" items={selectedScenario.strengths} />
+              <FeedbackList title="Weaknesses" items={selectedScenario.weaknesses} />
+              <FeedbackList title="Improvements" items={selectedScenario.improvements} />
+            </div>
+          </ItbdCard>
+        </div>
+      ) : null}
     </main>
   );
 }
