@@ -140,7 +140,16 @@ function buildStatusLabel(
     return "Completed";
   }
 
-  if (summary.scenarios.some((scenario) => scenario.assessmentStatus === "expired")) {
+  const now = Date.now();
+  const hasExpiredOrStale = summary.scenarios.some(
+    (scenario) =>
+      scenario.assessmentStatus === "expired" ||
+      (scenario.assessmentStatus === "in_progress" &&
+        !scenario.submittedAt &&
+        scenario.dueAt.getTime() < now)
+  );
+
+  if (hasExpiredOrStale) {
     return "Expired";
   }
 
@@ -232,17 +241,43 @@ export async function getSessionSummaries(options: SessionSummaryOptions = {}) {
   const latestManualBySubmission = await getLatestManualScores(submissionIds);
   const sessionsById = new Map<string, SessionSummary>();
 
+  // A tab-switch/minimize ends the WHOLE session, not just the scenario the
+  // candidate was on — the client marks every remaining scenario "expired" via
+  // fire-and-forget sendBeacon calls during page teardown, which can be lost.
+  // If any sibling scenario in a session already made it to "expired", the
+  // rest are functionally over too, even if their own beacon never landed or
+  // their shared dueAt hasn't technically elapsed yet.
+  const sessionsWithExpiry = new Set<string>();
+  for (const row of rows) {
+    if (row.assessment.status === "expired") {
+      sessionsWithExpiry.add(row.assessment.sessionId ?? row.assessment.id);
+    }
+  }
+
   for (const row of rows) {
     const sessionIdentifier = row.assessment.sessionId ?? row.assessment.id;
     const latestManual =
       row.submission?.id != null ? latestManualBySubmission.get(row.submission.id) ?? null : null;
     const isEvaluated = row.evaluation?.status === "completed";
-    // Expired/failed assessments never get an evaluation (no submission was
-    // ever finished), so they must count as a FINAL 0 rather than block the
-    // session's total forever. Only genuinely in-flight scenarios (in_progress,
-    // submitted, evaluating) should keep the total in a "Pending" state.
+    // A scenario that never got a submission is abandoned once either its own
+    // due time has passed, or a sibling scenario in the same session already
+    // expired (the session-ending event just didn't reach this row's beacon).
+    // Without this read-time fallback, a lost beacon leaves the assessment
+    // stuck "in_progress" forever and the session's score permanently
+    // "Pending" even though the session is clearly over.
+    const isStaleUnsubmitted =
+      row.assessment.status === "in_progress" &&
+      !row.submission &&
+      (row.assessment.dueAt.getTime() < Date.now() || sessionsWithExpiry.has(sessionIdentifier));
+    // Expired/failed/stale assessments never get an evaluation (no submission
+    // was ever finished), so they must count as a FINAL 0 rather than block the
+    // session's total forever. Only genuinely in-flight scenarios still within
+    // their time window should keep the total in a "Pending" state.
     const isAutoScoredZero =
-      !isEvaluated && (row.assessment.status === "expired" || row.assessment.status === "failed");
+      !isEvaluated &&
+      (row.assessment.status === "expired" ||
+        row.assessment.status === "failed" ||
+        isStaleUnsubmitted);
     const isFinalized = isEvaluated || isAutoScoredZero;
 
     const scenarioResult: SessionScenarioResult = {
