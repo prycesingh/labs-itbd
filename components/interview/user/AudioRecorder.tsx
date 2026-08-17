@@ -33,6 +33,12 @@ export function AudioRecorder({
   const [isRecording, setIsRecording] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [duration, setDuration] = useState(0);
+  // Real decoded duration of the recorded blob, once AudioPlayer resolves it.
+  // The interval-driven `duration` above is a live in-progress counter and
+  // can drift a second off the actual capture length (setInterval ticks
+  // aren't perfectly aligned with when the recorder actually stops) — once
+  // the blob exists, this is the accurate value and is what's displayed.
+  const [actualDuration, setActualDuration] = useState<number | null>(null);
   const [attemptNumber, setAttemptNumber] = useState(1);
   const [uploading, setUploading] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -53,6 +59,7 @@ export function AudioRecorder({
   useEffect(() => {
     setRecordedBlob(null);
     setDuration(0);
+    setActualDuration(null);
     setAttemptNumber(1);
     setIsRecording(false);
   }, [questionId]);
@@ -121,6 +128,7 @@ export function AudioRecorder({
 
     setRecordedBlob(null);
     setDuration(0);
+    setActualDuration(null);
 
     if (attemptNumber < maxAttempts) {
       setAttemptNumber(attemptNumber + 1);
@@ -142,11 +150,13 @@ export function AudioRecorder({
         .trim();
       const fileExt = baseMimeType.split("/")[1] ?? "webm";
 
+      const uploadDuration = actualDuration ?? duration;
+
       formData.append("sessionId", sessionId);
       formData.append("questionId", questionId);
       formData.append("questionIndex", questionIndex.toString());
       formData.append("audio", recordedBlob, `recording.${fileExt}`);
-      formData.append("audioDuration", (duration * 1000).toString());
+      formData.append("audioDuration", (uploadDuration * 1000).toString());
       formData.append("audioMimeType", baseMimeType);
 
       const response = await fetch("/api/interview/upload-audio", {
@@ -175,10 +185,11 @@ export function AudioRecorder({
 
       toast.success("Answer recorded successfully");
       if (onUploadSuccess) {
-        onUploadSuccess(recordedBlob, duration);
+        onUploadSuccess(recordedBlob, uploadDuration);
       }
       setRecordedBlob(null);
       setDuration(0);
+      setActualDuration(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Upload failed";
       toast.error(message);
@@ -276,9 +287,16 @@ export function AudioRecorder({
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
               <p className="mb-2 text-sm font-medium text-white/80">
                 Recording Duration:{" "}
-                <span className="text-itbd-blue">{formatTime(duration)}</span>
+                <span className="text-itbd-blue">
+                  {formatTime(Math.round(actualDuration ?? duration))}
+                </span>
               </p>
-              {recordedUrl && <AudioPlayer src={recordedUrl} />}
+              {recordedUrl && (
+                <AudioPlayer
+                  src={recordedUrl}
+                  onDurationChange={setActualDuration}
+                />
+              )}
             </div>
 
             <div className="flex gap-2">

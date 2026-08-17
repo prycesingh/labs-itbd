@@ -12,7 +12,23 @@ import {
   View,
   renderToBuffer,
 } from "@react-pdf/renderer";
+import fs from "node:fs";
 import path from "node:path";
+
+// Embedded as a base64 data URI (read once at module load) rather than passed
+// as a raw filesystem path — @react-pdf/renderer's image resolver tries a
+// fetch()-based path before falling back to fs reads, which can throw fatally
+// in server environments without outbound network access and abort the whole
+// PDF render.
+const LOGO_DATA_URI = (() => {
+  try {
+    const logoPath = path.join(process.cwd(), "public", "itbd_logo_img.png");
+    return `data:image/png;base64,${fs.readFileSync(logoPath).toString("base64")}`;
+  } catch (error) {
+    console.warn("Failed to load PDF logo asset", error);
+    return null;
+  }
+})();
 
 // ITBD brand tokens (see CLAUDE.md — closed palette, no ad-hoc hex outside this set).
 const ITBD_BLUE = "#00ADDA";
@@ -227,8 +243,6 @@ function DimensionGrid({
 }
 
 function ResultsPdfDocument({ data }: { data: ResultsPdfData }) {
-  const logoPath = path.join(process.cwd(), "public", "itbd_logo_img.png");
-
   return (
     <Document
       title={`${data.moduleName} — Interview Results`}
@@ -236,7 +250,7 @@ function ResultsPdfDocument({ data }: { data: ResultsPdfData }) {
     >
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
-          <Image src={logoPath} style={styles.logo} />
+          {LOGO_DATA_URI && <Image src={LOGO_DATA_URI} style={styles.logo} />}
           <View style={styles.headerMeta}>
             <Text style={styles.title}>Interview Results</Text>
             <Text style={styles.subtitle}>{data.candidateName}</Text>

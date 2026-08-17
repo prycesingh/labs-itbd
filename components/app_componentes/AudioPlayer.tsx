@@ -13,9 +13,12 @@ import { useEffect, useRef, useState } from "react";
 export function AudioPlayer({
   src,
   className,
+  onDurationChange,
 }: {
   src: string;
   className?: string;
+  /** Fires once the real decoded duration (seconds) of `src` is known. */
+  onDurationChange?: (seconds: number) => void;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -77,11 +80,13 @@ export function AudioPlayer({
             el.currentTime = Number.MAX_SAFE_INTEGER;
           } else {
             setDuration(el.duration);
+            onDurationChange?.(el.duration);
           }
         }}
         onDurationChange={(e) => {
           if (Number.isFinite(e.currentTarget.duration)) {
             setDuration(e.currentTarget.duration);
+            onDurationChange?.(e.currentTarget.duration);
           }
         }}
         onSeeked={(e) => {
@@ -90,6 +95,7 @@ export function AudioPlayer({
           const el = e.currentTarget;
           if (Number.isFinite(el.duration)) {
             setDuration(el.duration);
+            onDurationChange?.(el.duration);
           }
           el.currentTime = 0;
         }}

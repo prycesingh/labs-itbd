@@ -130,7 +130,8 @@ export default function MyEvaluationsPage() {
     try {
       const res = await fetch(`/api/interview/sessions/${sess.id}/pdf`);
       if (!res.ok) {
-        throw new Error("Failed to generate results PDF");
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.error ?? "Failed to generate results PDF");
       }
 
       const blob = await res.blob();
