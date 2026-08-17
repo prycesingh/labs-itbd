@@ -125,11 +125,6 @@ export const ROUTE_RULES: readonly RouteRule[] = [
     note: "Email-assessment scenarios admin",
   },
   {
-    prefix: "/dashboard/emailAssessments/submissions",
-    allow: ADMIN_ROLES,
-    note: "Email-assessment submissions admin",
-  },
-  {
     prefix: "/dashboard/emailAssessments/prompts",
     allow: ADMIN_ROLES,
     note: "Email-assessment prompts admin",

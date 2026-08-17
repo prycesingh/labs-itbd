@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { GreenButton } from "@/components/app_componentes/customButtons";
 import { requireRole } from "@/lib/emailAssessment/auth";
 import { getSessionSummaries } from "@/lib/emailAssessment/session-results";
+import { ManualScoreForm } from "@/components/emailAssessment/manual-score-form";
 import {
   AiDetectionBadge,
   CandidateStatsButton,
@@ -293,6 +294,17 @@ export default async function EmailAssessmentsSessionDetailPage({
                   <p className="mt-2 text-sm leading-relaxed text-white/80">{scenario.manualSummary}</p>
                 </div>
               ) : null}
+
+              {scenario.submissionId ? (
+                <div className="border-t border-white/10 pt-4">
+                  <p className="mb-3 text-sm font-medium text-white/70">Manual score for this scenario</p>
+                  <ManualScoreForm submissionId={scenario.submissionId} />
+                </div>
+              ) : (
+                <p className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/50">
+                  No submission was received for this scenario — nothing to manually score.
+                </p>
+              )}
             </div>
           </ItbdCard>
         ))}

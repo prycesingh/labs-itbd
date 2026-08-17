@@ -12,7 +12,6 @@ import {
   GitBranch,
   GraduationCap,
   Home,
-  Inbox,
   LayoutDashboard,
   LayoutGrid,
   ListChecks,
@@ -106,12 +105,6 @@ export const SECTIONS: NavSection[] = [
             href: "/dashboard/emailAssessments/scenarios",
             label: "Scenarios",
             icon: MessagesSquare,
-            adminOnly: true,
-          },
-          {
-            href: "/dashboard/emailAssessments/submissions",
-            label: "Submissions",
-            icon: Inbox,
             adminOnly: true,
           },
           {
