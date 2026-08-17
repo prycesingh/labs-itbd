@@ -140,6 +140,11 @@ export const ROUTE_RULES: readonly RouteRule[] = [
     note: "Learner route — any authenticated user (must precede the base rule)",
   },
   {
+    prefix: "/dashboard/emailAssessments/my-evaluations",
+    allow: undefined,
+    note: "Candidate's own past results — any authenticated user (must precede the base rule)",
+  },
+  {
     prefix: "/dashboard/emailAssessments",
     allow: ADMIN_ROLES,
     note: "Email-assessment Sessions index (admin landing)",
