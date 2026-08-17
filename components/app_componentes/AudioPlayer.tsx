@@ -25,6 +25,10 @@ export function AudioPlayer({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const discoveringDuration = useRef(false);
+  // Set when Play is clicked while the duration-discovery seek (below) is
+  // still pending, so onSeeked can start playback once currentTime is
+  // actually back at 0 instead of wherever the discovery seek left it.
+  const playPending = useRef(false);
 
   // A new `src` (different question/recording) always starts paused at 0 —
   // reset local state so a stale scrubber position from the previous audio
@@ -34,12 +38,24 @@ export function AudioPlayer({
     setCurrentTime(0);
     setDuration(0);
     discoveringDuration.current = false;
+    playPending.current = false;
   }, [src]);
 
   const togglePlay = () => {
     const el = audioRef.current;
     if (!el) return;
     if (el.paused) {
+      // The duration-discovery seek (onLoadedMetadata below) briefly leaves
+      // currentTime at the end of the track while it scans for the real
+      // duration. Starting playback during that window plays from the end
+      // (or wherever the scan currently is) instead of the beginning, then
+      // gets yanked back to 0 once the seek resolves — the "starts from the
+      // middle" bug. Defer the actual play() until onSeeked confirms we're
+      // back at 0.
+      if (discoveringDuration.current) {
+        playPending.current = true;
+        return;
+      }
       void el.play();
     } else {
       el.pause();
@@ -98,6 +114,10 @@ export function AudioPlayer({
             onDurationChange?.(el.duration);
           }
           el.currentTime = 0;
+          if (playPending.current) {
+            playPending.current = false;
+            void el.play();
+          }
         }}
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
         onPlay={() => setPlaying(true)}
