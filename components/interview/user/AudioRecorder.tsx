@@ -151,12 +151,17 @@ export function AudioRecorder({
       const fileExt = baseMimeType.split("/")[1] ?? "webm";
 
       const uploadDuration = actualDuration ?? duration;
+      // actualDuration comes from the <audio> element's decoded duration (a
+      // float, e.g. 8.234s) — must round to a whole millisecond or the
+      // server's z.number().int() check on audioDuration rejects the upload
+      // with "Invalid upload payload" on every submission.
+      const uploadDurationMs = Math.round(uploadDuration * 1000);
 
       formData.append("sessionId", sessionId);
       formData.append("questionId", questionId);
       formData.append("questionIndex", questionIndex.toString());
       formData.append("audio", recordedBlob, `recording.${fileExt}`);
-      formData.append("audioDuration", (uploadDuration * 1000).toString());
+      formData.append("audioDuration", uploadDurationMs.toString());
       formData.append("audioMimeType", baseMimeType);
 
       const response = await fetch("/api/interview/upload-audio", {
