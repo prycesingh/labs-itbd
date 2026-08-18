@@ -2,10 +2,18 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { BarChart3, X } from "lucide-react";
+import { BarChart3 } from "lucide-react";
 
 import DefaultButton from "@/components/app_componentes/customButtons";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 const API_BASE = "/api/emailAssessment";
 
@@ -154,110 +162,94 @@ export function CandidateStatsButton({
   const [open, setOpen] = useState(false);
 
   return (
-    <>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DefaultButton onClick={() => setOpen(true)} className="gap-2">
         <BarChart3 className="h-4 w-4" />
         View Candidate Stats
       </DefaultButton>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 text-left backdrop-blur-sm">
-          <div className="itbd-glow-border relative w-full max-w-3xl overflow-hidden rounded-2xl bg-black/80 p-6 backdrop-blur-md">
-            <span
-              aria-hidden
-              className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
-            />
-            <div className="relative z-10">
-              <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-4">
-                <div>
-                  <h3 className="text-xl font-bold tracking-tight text-white">
-                    Candidate Performance Analytics
-                  </h3>
-                  <p className="mt-0.5 text-sm text-white/60">
-                    Historical stats for {candidateName} ({candidateEmail})
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  aria-label="Close"
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 text-white/60 transition hover:border-itbd-blue hover:text-itbd-blue"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+      <DialogContent className="itbd-glow-border max-h-[85vh] max-w-3xl overflow-hidden border-white/10 bg-black/90 text-left backdrop-blur-md">
+        <span
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+        />
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold tracking-tight text-white">
+            Candidate Performance Analytics
+          </DialogTitle>
+          <DialogDescription className="text-sm text-white/60">
+            Historical stats for {candidateName} ({candidateEmail})
+          </DialogDescription>
+        </DialogHeader>
 
-              <div className="grid max-h-[60vh] gap-6 overflow-y-auto pr-2 md:grid-cols-2">
-                <div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-5">
-                  <div>
-                    <h4 className="text-base font-semibold text-white">Grade Distribution</h4>
-                    <p className="text-xs text-white/50">
-                      Weighted grades across all completed sessions.
-                    </p>
+        <div className="grid max-h-[60vh] gap-6 overflow-y-auto pr-2 md:grid-cols-2">
+          <div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-5">
+            <div>
+              <h4 className="text-base font-semibold text-white">Grade Distribution</h4>
+              <p className="text-xs text-white/50">
+                Weighted grades across all completed sessions.
+              </p>
+            </div>
+            <div className="space-y-3">
+              {Object.entries(gradeDistribution).length === 0 ? (
+                <p className="text-sm text-white/50 italic">
+                  No completed session grades yet.
+                </p>
+              ) : (
+                Object.entries(gradeDistribution).map(([grade, count]) => (
+                  <div
+                    key={grade}
+                    className="flex items-center justify-between rounded-lg border border-white/10 bg-black/30 p-3"
+                  >
+                    <span className="font-medium text-white">Grade {grade}</span>
+                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/70">
+                      {count}
+                    </span>
                   </div>
-                  <div className="space-y-3">
-                    {Object.entries(gradeDistribution).length === 0 ? (
-                      <p className="text-sm text-white/50 italic">
-                        No completed session grades yet.
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-5">
+            <div>
+              <h4 className="text-base font-semibold text-white">Scenario Performance</h4>
+              <p className="text-xs text-white/50">
+                Average weighted score contribution per scenario.
+              </p>
+            </div>
+            <div className="space-y-3">
+              {scenarioPerformance.length === 0 ? (
+                <p className="text-sm text-white/50 italic">No scenarios evaluated yet.</p>
+              ) : (
+                scenarioPerformance.map((item) => (
+                  <div
+                    key={item.title}
+                    className="space-y-1 rounded-lg border border-white/10 bg-black/30 p-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="max-w-50 truncate text-sm font-medium text-white">
+                        {item.title}
                       </p>
-                    ) : (
-                      Object.entries(gradeDistribution).map(([grade, count]) => (
-                        <div
-                          key={grade}
-                          className="flex items-center justify-between rounded-lg border border-white/10 bg-black/30 p-3"
-                        >
-                          <span className="font-medium text-white">Grade {grade}</span>
-                          <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/70">
-                            {count}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-5">
-                  <div>
-                    <h4 className="text-base font-semibold text-white">Scenario Performance</h4>
+                      <span className="rounded-full border border-itbd-blue/40 bg-itbd-blue/10 px-1.5 py-0 text-[10px] font-semibold text-itbd-blue capitalize">
+                        {item.difficulty}
+                      </span>
+                    </div>
                     <p className="text-xs text-white/50">
-                      Average weighted score contribution per scenario.
+                      {item.attempts} attempts &middot; avg{" "}
+                      {(item.weightedTotal / item.attempts).toFixed(2)} / {item.maxScore}
                     </p>
                   </div>
-                  <div className="space-y-3">
-                    {scenarioPerformance.length === 0 ? (
-                      <p className="text-sm text-white/50 italic">No scenarios evaluated yet.</p>
-                    ) : (
-                      scenarioPerformance.map((item) => (
-                        <div
-                          key={item.title}
-                          className="space-y-1 rounded-lg border border-white/10 bg-black/30 p-3"
-                        >
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="max-w-50 truncate text-sm font-medium text-white">
-                              {item.title}
-                            </p>
-                            <span className="rounded-full border border-itbd-blue/40 bg-itbd-blue/10 px-1.5 py-0 text-[10px] font-semibold text-itbd-blue capitalize">
-                              {item.difficulty}
-                            </span>
-                          </div>
-                          <p className="text-xs text-white/50">
-                            {item.attempts} attempts &middot; avg{" "}
-                            {(item.weightedTotal / item.attempts).toFixed(2)} / {item.maxScore}
-                          </p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 flex justify-end border-t border-white/10 pt-4">
-                <DefaultButton onClick={() => setOpen(false)}>Close</DefaultButton>
-              </div>
+                ))
+              )}
             </div>
           </div>
         </div>
-      )}
-    </>
+
+        <DialogFooter className="border-t border-white/10 pt-4">
+          <DefaultButton onClick={() => setOpen(false)}>Close</DefaultButton>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
