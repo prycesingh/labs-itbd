@@ -123,10 +123,10 @@ function StatTile({
   label: string;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center px-5 py-4 text-center sm:px-5 sm:py-8">
-      <p className="flex items-baseline text-4xl font-semibold text-white sm:text-6xl">
+    <div className="flex flex-col items-center justify-center px-3 py-4 text-center sm:px-4 sm:py-8 xl:px-5">
+      <p className="flex items-baseline text-3xl font-semibold text-white sm:text-4xl xl:text-6xl">
         <CountUp to={value} duration={1.5} />{" "}
-        {unit ? <span className="text-2xl sm:text-4xl">{unit}</span> : null}
+        {unit ? <span className="text-xl sm:text-2xl xl:text-4xl">{unit}</span> : null}
       </p>
       <p className="mt-1 text-[10px] text-itbd-blue sm:text-xs">{label}</p>
     </div>
@@ -174,7 +174,7 @@ export function DashboardHomeClient({
             channel: opaque from ~29%-71% width, ~24%-82% height) — cropped
             out here via a clipping wrapper + fill/object-cover so only the
             glow and its soft fade show, not the hard-edged box. */}
-        <div className="relative mx-auto hidden aspect-696/540 w-56 shrink-0 lg:block lg:w-72 xl:w-96">
+        <div className="relative mx-auto hidden aspect-696/540 w-56 shrink-0 xl:block xl:w-72 2xl:w-96">
           <motion.div
             className="absolute inset-0 overflow-hidden"
             animate={reduce ? undefined : { y: [0, -8, 0] }}
@@ -212,7 +212,7 @@ export function DashboardHomeClient({
             not three separate boxes). No fill/rounding — just top and bottom
             hairlines, each fading to transparent at both ends. */}
         <div
-          className="relative flex w-full shrink-0 flex-col items-stretch self-center rounded-2xl border border-white/10 bg-slate-800/25 px-2 py-3 sm:flex-row sm:py-0 md:w-auto"
+          className="relative flex w-full min-w-0 flex-col items-stretch self-center rounded-2xl border border-white/10 bg-slate-800/25 px-2 py-3 sm:flex-row sm:py-0 md:w-auto md:shrink-0"
           style={{
             borderImage:
               "linear-gradient(to right, transparent, var(--itbd-blue), transparent) 1",

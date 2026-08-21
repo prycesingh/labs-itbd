@@ -53,7 +53,9 @@ export function AdminNav({
   return (
     <Sidebar
       collapsible="icon"
-      className="overflow-hidden  rounded-tr-3xl  border-itbd-blue border-t top-30! h-[calc(100svh-7.5rem)]! **:data-[slot=sidebar-inner]:rounded-r-2xl **:data-[slot=sidebar-inner]:bg-[linear-gradient(45deg,transparent_25%,color-mix(in_srgb,var(--itbd-blue)_15%,transparent)_50%,transparent_65%)]"
+      // Offset/height track the header's own responsive steps (sm:h-20 at md,
+      // lg:h-26 at lg — dashboard-header.tsx) plus a small buffer for its border.
+      className="overflow-hidden rounded-tr-3xl border-itbd-blue border-t md:top-22! md:h-[calc(100svh-5.5rem)]! lg:top-30! lg:h-[calc(100svh-7.5rem)]! **:data-[slot=sidebar-inner]:rounded-r-2xl **:data-[slot=sidebar-inner]:bg-[linear-gradient(45deg,transparent_25%,color-mix(in_srgb,var(--itbd-blue)_15%,transparent)_50%,transparent_65%)]"
     >
       <SidebarHeader className="flex-row items-center justify-end">
         <SidebarTrigger />

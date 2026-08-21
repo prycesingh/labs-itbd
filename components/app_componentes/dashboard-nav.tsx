@@ -66,7 +66,11 @@ export function DashboardNav({
       className={cn(
         // Desktop container: fixed position under the header, rounded top-right
         // corner, top border, diagonal blue-tinted gradient wash on its inner slot.
-        "md:overflow-hidden md:rounded-tr-3xl md:border-itbd-blue md:border-t md:top-30! md:h-[calc(100svh-7.5rem)]!",
+        // Offset/height track the header's own responsive steps (sm:h-20 at md,
+        // lg:h-26 at lg — dashboard-header.tsx) plus a small buffer for its border.
+        "md:overflow-hidden md:rounded-tr-3xl md:border-itbd-blue md:border-t",
+        "md:top-22! md:h-[calc(100svh-5.5rem)]!",
+        "lg:top-30! lg:h-[calc(100svh-7.5rem)]!",
         "**:data-[slot=sidebar-inner]:rounded-r-2xl **:data-[slot=sidebar-inner]:bg-[linear-gradient(45deg,transparent_25%,color-mix(in_srgb,var(--itbd-blue)_15%,transparent)_50%,transparent_65%)]",
         // Mobile off-canvas sheet has no "sidebar-inner" slot to target — it IS
         // the SheetContent root, and it runs full viewport height (no single
