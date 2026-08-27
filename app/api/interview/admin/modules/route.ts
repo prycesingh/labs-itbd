@@ -6,6 +6,10 @@ import {
   interviewQuestionBank,
   interviewQuestionStandardResponses,
 } from "@/DB/interviewSchema";
+import {
+  CAPABILITY_KEYS,
+  getModuleCapability,
+} from "@/lib/interview/moduleCapabilities";
 import { isAdminRole, type Role } from "@/lib/rbac";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -351,41 +355,60 @@ export async function PATCH(request: Request) {
         );
       }
 
-      const responseCounts = await withDbRetry("load-response-counts", () =>
-        db
-          .select({
-            questionId: interviewQuestionStandardResponses.questionId,
-            total: sql<number>`count(*)`,
-          })
-          .from(interviewQuestionStandardResponses)
-          .where(
-            inArray(interviewQuestionStandardResponses.questionId, questionIds),
-          )
-          .groupBy(interviewQuestionStandardResponses.questionId),
+      // Standard responses are a Customer-Centricity-era concept: a static
+      // reference answer shown to candidates, used only as extra context in
+      // the evaluation prompt (see aiServices.ts's standardResponses option).
+      // Modules with grounded_grading enabled don't need them — they already
+      // carry an equivalent, source-vetted reference (groundedIdealPoints /
+      // groundedAcceptanceCriteria on the question itself, consumed directly
+      // by evaluateAnswer()) — so this check is skipped for them rather than
+      // requiring content that plays no role in how those modules actually
+      // grade.
+      const groundedGrading = await getModuleCapability(
+        validated.id,
+        CAPABILITY_KEYS.GROUNDED_GRADING,
       );
 
-      const coveredQuestionIds = new Set(
-        responseCounts
-          .filter((item) => Number(item.total) > 0)
-          .map((item) => String(item.questionId)),
-      );
-
-      const missingResponseCount = questionIds.filter(
-        (id) => !coveredQuestionIds.has(id),
-      ).length;
-
-      if (missingResponseCount > 0) {
-        return Response.json(
-          {
-            error: "Module is not ready for activation",
-            details: {
-              reason:
-                "Every active question must have at least one standard response before activation.",
-              questionsMissingStandardResponses: missingResponseCount,
-            },
-          },
-          { status: 400 },
+      if (!groundedGrading.enabled) {
+        const responseCounts = await withDbRetry("load-response-counts", () =>
+          db
+            .select({
+              questionId: interviewQuestionStandardResponses.questionId,
+              total: sql<number>`count(*)`,
+            })
+            .from(interviewQuestionStandardResponses)
+            .where(
+              inArray(
+                interviewQuestionStandardResponses.questionId,
+                questionIds,
+              ),
+            )
+            .groupBy(interviewQuestionStandardResponses.questionId),
         );
+
+        const coveredQuestionIds = new Set(
+          responseCounts
+            .filter((item) => Number(item.total) > 0)
+            .map((item) => String(item.questionId)),
+        );
+
+        const missingResponseCount = questionIds.filter(
+          (id) => !coveredQuestionIds.has(id),
+        ).length;
+
+        if (missingResponseCount > 0) {
+          return Response.json(
+            {
+              error: "Module is not ready for activation",
+              details: {
+                reason:
+                  "Every active question must have at least one standard response before activation.",
+                questionsMissingStandardResponses: missingResponseCount,
+              },
+            },
+            { status: 400 },
+          );
+        }
       }
     }
 

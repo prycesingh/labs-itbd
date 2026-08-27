@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { DashboardBreadcrumb } from "@/components/app_componentes/dashboard-breadcrumb";
 import { DashboardHeader } from "@/components/app_componentes/dashboard-header";
 import { DashboardNav } from "@/components/app_componentes/dashboard-nav";
+import { SiteSessionTracker } from "@/components/labs/SiteSessionTracker";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { db } from "@/DB/drizzle";
 import { users } from "@/DB/schema";
@@ -32,6 +33,7 @@ export default async function DashboardLayout({
 
   return (
     <SidebarProvider className="flex h-screen min-h-0 flex-col overflow-hidden">
+      <SiteSessionTracker />
       <DashboardHeader user={session.user} />
       <div className="flex min-h-0 flex-1">
         <DashboardNav user={session.user} />

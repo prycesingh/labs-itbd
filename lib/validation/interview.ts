@@ -75,7 +75,12 @@ export type SessionResponseType = z.infer<typeof sessionResponseSchema>;
 
 export const uploadAudioSchema = z.object({
   sessionId: z.string().uuid("Invalid session ID"),
-  questionId: z.string().uuid("Invalid question ID"),
+  questionId: z.string().uuid("Invalid question ID").optional(),
+  // Set instead of questionId when the candidate is answering an adaptively
+  // generated follow-up (see interview_followup_questions) rather than a
+  // fixed bank question — only reachable for modules with follow_ups
+  // enabled. Exactly one of questionId / followUpId must be present.
+  followUpId: z.string().uuid("Invalid follow-up ID").optional(),
   questionIndex: z.number().int().min(0, "Question index must be >= 0"),
   audioDuration: z
     .number()
@@ -91,6 +96,9 @@ export const uploadAudioSchema = z.object({
   audioMimeType: z.enum([...SUPPORTED_AUDIO_TYPES] as const, {
     message: `Unsupported audio format. Supported: ${SUPPORTED_AUDIO_TYPES.join(", ")}`,
   }),
+}).refine((data) => Boolean(data.questionId) !== Boolean(data.followUpId), {
+  message: "Exactly one of questionId or followUpId must be provided",
+  path: ["questionId"],
 });
 
 export type UploadAudioInput = z.infer<typeof uploadAudioSchema>;
@@ -410,4 +418,27 @@ export const createPracticeOverrideSchema = z.object({
 
 export type CreatePracticeOverrideInput = z.infer<
   typeof createPracticeOverrideSchema
+>;
+
+// ─────────────────────────────────────────────
+// MODULE CAPABILITY SCHEMAS
+// ─────────────────────────────────────────────
+
+export const CAPABILITY_KEY_VALUES = [
+  "delivery_scoring",
+  "grounded_grading",
+  "follow_ups",
+  "evaluation_depth",
+  "attempt_cadence",
+] as const;
+
+export const updateModuleCapabilitySchema = z.object({
+  moduleId: z.string().uuid("Invalid module ID"),
+  capabilityKey: z.enum(CAPABILITY_KEY_VALUES),
+  enabled: z.boolean().optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+});
+
+export type UpdateModuleCapabilityInput = z.infer<
+  typeof updateModuleCapabilitySchema
 >;

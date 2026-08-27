@@ -169,11 +169,22 @@ function InterviewOverridesTab() {
 
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [modules, setModules] = useState<InterviewModuleOption[]>([]);
+  // moduleId -> "daily" | "weekly", from each module's attempt_cadence
+  // capability (see Module Capabilities admin page) — drives whether this
+  // form/table reads "per day" or "per week" so the override UI stays
+  // truthful about which window a module actually enforces.
+  const [cadenceByModuleId, setCadenceByModuleId] = useState<
+    Record<string, "daily" | "weekly">
+  >({});
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [selectedModuleId, setSelectedModuleId] = useState<string>("");
   const [dailyLimit, setDailyLimit] = useState("3");
   const [lockoutThreshold, setLockoutThreshold] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const selectedCadence = cadenceByModuleId[selectedModuleId] ?? "daily";
+  const cadenceLabel = (cadence: "daily" | "weekly") =>
+    cadence === "weekly" ? "week" : "day";
 
   const fetchLockouts = useCallback(async () => {
     setLoadingLockouts(true);
@@ -244,12 +255,42 @@ function InterviewOverridesTab() {
     }
   }, []);
 
+  const fetchCadences = useCallback(async () => {
+    try {
+      const res = await fetch("/api/interview/admin/module-capabilities");
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(payload?.error ?? "Failed to load module cadences");
+      }
+      type ModuleCapabilityRow = {
+        id: string;
+        capabilities?: {
+          attempt_cadence?: { config?: { cadence?: "daily" | "weekly" } };
+        };
+      };
+      const next: Record<string, "daily" | "weekly"> = {};
+      if (Array.isArray(payload)) {
+        for (const mod of payload as ModuleCapabilityRow[]) {
+          next[mod.id] =
+            mod.capabilities?.attempt_cadence?.config?.cadence ?? "daily";
+        }
+      }
+      setCadenceByModuleId(next);
+    } catch (error) {
+      // Non-fatal — the form/table just falls back to "daily" labeling,
+      // which matches every module's behavior before cadence existed.
+      const message = error instanceof Error ? error.message : "Failed to load";
+      console.warn("Unable to load module attempt cadences:", message);
+    }
+  }, []);
+
   useEffect(() => {
     fetchLockouts();
     fetchOverrides();
     fetchUsers();
     fetchModules();
-  }, [fetchLockouts, fetchOverrides, fetchUsers, fetchModules]);
+    fetchCadences();
+  }, [fetchLockouts, fetchOverrides, fetchUsers, fetchModules, fetchCadences]);
 
   const handleGrant = async () => {
     if (!selectedUserId || !selectedModuleId) {
@@ -324,7 +365,11 @@ function InterviewOverridesTab() {
         throw new Error(payload?.error ?? "Failed to reset override");
       }
       setOverrides((prev) => prev.filter((o) => o.id !== resetTarget.id));
-      toast.success("Reset to default limit (1/day)");
+      toast.success(
+        `Reset to the module default (1/${cadenceLabel(
+          cadenceByModuleId[resetTarget.moduleId] ?? "daily",
+        )})`,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to reset";
       toast.error("Unable to reset", { description: message });
@@ -339,12 +384,14 @@ function InterviewOverridesTab() {
       <FadeIn>
         <Card className="border-cyan-500/20 bg-black/20">
           <CardHeader>
-            <CardTitle>Locked-out users today</CardTitle>
+            <CardTitle>Currently locked out</CardTitle>
             <CardDescription>
-              By default, 3 failed attempts on the same module the same day
-              locks that module for the rest of the day (overridable per user
-              below). This clears automatically at midnight and is separate
-              from the daily-limit override.
+              By default, 3 failed attempts on the same module within its
+              current period locks that module for the rest of the period
+              (overridable per user below). A period is a calendar day, or a
+              calendar week for modules set to a weekly cadence — see Module
+              Capabilities. This clears automatically once the next period
+              starts, and is separate from the attempt-limit override.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -360,7 +407,7 @@ function InterviewOverridesTab() {
                   <TableRow>
                     <TableHead>User</TableHead>
                     <TableHead>Module</TableHead>
-                    <TableHead>Failed Attempts Today</TableHead>
+                    <TableHead>Failed Attempts This Period</TableHead>
                     <TableHead>Last Failure At</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -405,9 +452,11 @@ function InterviewOverridesTab() {
           <CardHeader>
             <CardTitle>Active overrides</CardTitle>
             <CardDescription>
-              Users below have a custom daily attempt limit and/or lockout
-              threshold for a specific module. Reset to revoke and revert them
-              to the defaults (1/day, 3 failures to lock).
+              Users below have a custom attempt limit and/or lockout
+              threshold for a specific module. The limit's period (per day or
+              per week) follows that module's cadence setting — see Module
+              Capabilities. Reset to revoke and revert them to the defaults
+              (1 per period, 3 failures to lock).
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -423,7 +472,7 @@ function InterviewOverridesTab() {
                   <TableRow>
                     <TableHead>User</TableHead>
                     <TableHead>Module</TableHead>
-                    <TableHead>Daily Limit</TableHead>
+                    <TableHead>Attempt Limit</TableHead>
                     <TableHead>Lockout Threshold</TableHead>
                     <TableHead>Updated</TableHead>
                     <TableHead className="text-right">Action</TableHead>
@@ -454,7 +503,12 @@ function InterviewOverridesTab() {
                         </TableCell>
                         <TableCell>{rowData.moduleName}</TableCell>
                         <TableCell>
-                          <Badge>{rowData.dailyLimit}/day</Badge>
+                          <Badge>
+                            {rowData.dailyLimit}/
+                            {cadenceLabel(
+                              cadenceByModuleId[rowData.moduleId] ?? "daily",
+                            )}
+                          </Badge>
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">
@@ -489,8 +543,10 @@ function InterviewOverridesTab() {
           <CardHeader>
             <CardTitle>Grant an override</CardTitle>
             <CardDescription>
-              Search for a user, pick a module, and set their daily attempt
-              limit and/or lockout threshold for that module.
+              Search for a user, pick a module, and set their attempt limit
+              and/or lockout threshold for that module. The limit's period
+              (per day or per week) follows the selected module's cadence
+              setting — see Module Capabilities to change a module's default.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -529,14 +585,14 @@ function InterviewOverridesTab() {
 
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">
-                  Daily limit
+                  Attempt limit (per {cadenceLabel(selectedCadence)})
                 </label>
                 <Input
                   type="number"
                   min={1}
                   value={dailyLimit}
                   onChange={(event) => setDailyLimit(event.target.value)}
-                  placeholder="Daily limit"
+                  placeholder={`Attempts per ${cadenceLabel(selectedCadence)}`}
                 />
               </div>
 
@@ -573,7 +629,9 @@ function InterviewOverridesTab() {
           resetTarget
             ? `This will remove the custom limit for ${
                 resetTarget.userName ?? resetTarget.userEmail
-              } on "${resetTarget.moduleName}" and revert them to the defaults (1/day, 3 failures to lock).`
+              } on "${resetTarget.moduleName}" and revert them to the module default (1/${cadenceLabel(
+                cadenceByModuleId[resetTarget.moduleId] ?? "daily",
+              )}, 3 failures to lock).`
             : ""
         }
         onCancel={() => setResetTarget(null)}

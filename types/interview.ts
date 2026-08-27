@@ -168,6 +168,11 @@ export interface AIEvaluationStructured {
   final_summary: string;
   evaluation_source?: "ai" | "fallback";
   validation_status?: "valid" | "invalid_json" | "invalid_structure";
+  // Populated only when the answering session's module has the follow_ups
+  // capability enabled (see lib/interview/moduleCapabilities.ts) — absent/
+  // false-and-empty for every other module, matching today's behavior.
+  follow_up_recommended?: boolean;
+  follow_up_question?: string;
 }
 
 export interface TokenUsage {

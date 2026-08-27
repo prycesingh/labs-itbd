@@ -126,8 +126,16 @@ export async function initiateSessionProcessing(
     const transcriptionJobIds: string[] = [];
 
     for (const answer of answers) {
-      // Skip if already transcribed
-      if (answer.transcriptStatus === "completed") {
+      // Skip if already transcribed, or if an immediate-processing job
+      // (see upload-audio/route.ts, follow_ups-enabled modules only) is
+      // already queued/running for this answer — otherwise a candidate
+      // submitting the full session while the last answer's immediate job
+      // is still in flight would get a duplicate transcription job racing
+      // against it.
+      if (
+        answer.transcriptStatus === "completed" ||
+        answer.transcriptJobId
+      ) {
         continue;
       }
 

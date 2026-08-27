@@ -9,7 +9,7 @@ import {
   emailAssessmentAuditLogs as auditLogs,
   emailAssessmentSubmissions as submissions,
 } from "@/DB/emailAssessmentSchema";
-import { evaluateSubmission } from "@/lib/emailAssessment/evaluation";
+import { enqueueSubmissionEvaluation } from "@/lib/emailAssessment/evaluation";
 import { jsonError, requestIp, requireApiUser } from "@/lib/emailAssessment/auth";
 import { wordCount } from "@/lib/emailAssessment/retakes";
 import { enforceRateLimit, rateLimitResponse } from "@/lib/emailAssessment/rate-limit";
@@ -95,11 +95,15 @@ export async function POST(request: Request) {
     ipAddress: requestIp(request),
   });
 
-  const evaluation = await evaluateSubmission(submissionId);
+  // Evaluation runs asynchronously via the background job queue rather than
+  // blocking this request on a synchronous OpenAI call — the client doesn't
+  // wait on evaluationStatus (see assessment-editor.tsx), it navigates away
+  // immediately and results are read later from the evaluations table.
+  await enqueueSubmissionEvaluation(submissionId, user!.id);
 
   return NextResponse.json({
     submissionId,
     assessmentId: assessment.id,
-    evaluationStatus: evaluation.status,
+    evaluationStatus: "pending_retry",
   });
 }

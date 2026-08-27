@@ -56,6 +56,17 @@ function getDeepgramApiKey(): string | null {
 // TRANSCRIPTION SERVICE
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+// Normalized word-level timing, exposed only when the transcription
+// provider returns it (Deepgram today; OpenAI Whisper's verbose_json does
+// not return the same per-word shape). Consumed by deliveryScoring.ts for
+// pace/pause/filler metrics — undefined for any transcript where it's
+// unavailable, in which case delivery scoring simply skips those metrics.
+export interface TranscriptWordTiming {
+  word: string;
+  start: number;
+  end: number;
+}
+
 export interface TranscriptionResult {
   text: string;
   language: string;
@@ -63,6 +74,7 @@ export interface TranscriptionResult {
   confidence?: number;
   tokensUsed?: number;
   rawResponse: unknown;
+  words?: TranscriptWordTiming[];
 }
 
 type DeepgramWord = {
@@ -215,6 +227,18 @@ async function transcribeWithDeepgram(
     );
   }
 
+  const wordTimings: TranscriptWordTiming[] = (alternative?.words ?? [])
+    .filter(
+      (w): w is DeepgramWord & { start: number; end: number } =>
+        typeof w.start === "number" && typeof w.end === "number",
+    )
+    .map((w) => ({
+      word: (w.word ?? w.punctuated_word ?? "").trim(),
+      start: w.start,
+      end: w.end,
+    }))
+    .filter((w) => w.word.length > 0);
+
   return {
     text: transcriptText,
     language: detectDeepgramLanguage(
@@ -225,6 +249,7 @@ async function transcribeWithDeepgram(
     provider: "deepgram",
     confidence: alternative?.confidence,
     rawResponse: rawData,
+    words: wordTimings.length > 0 ? wordTimings : undefined,
   };
 }
 
@@ -398,10 +423,24 @@ export interface EvaluationResult {
   modelUsed: string;
 }
 
+export interface GroundedAnswerKey {
+  idealPoints?: string[];
+  acceptanceCriteria?: string[];
+  coverage?: "full" | "partial" | "none" | null;
+}
+
 export interface EvaluationPromptOptions {
   moduleTitle?: string;
   standardResponses?: string[];
   scoringWeights?: Record<string, number>;
+  // Populated only when the answering session's module has the
+  // grounded_grading capability enabled (see moduleCapabilities.ts).
+  // Absent/undefined for every other module — buildEvaluationPrompt() falls
+  // back to today's unmodified prompt when groundedAnswerKey is not passed.
+  groundedAnswerKey?: GroundedAnswerKey;
+  // True only when the module has follow_ups enabled — adds the
+  // follow_up_recommended/follow_up_question fields to the requested schema.
+  requestFollowUp?: boolean;
 }
 
 const DEFAULT_SCORING_WEIGHTS: Record<string, number> = {
@@ -430,47 +469,80 @@ function buildEvaluationPrompt(
     ...(options.scoringWeights ?? {}),
   };
 
+  // Grounded answer-key guidance is additive prompt text, only present when
+  // the caller passes groundedAnswerKey — i.e. only for modules with the
+  // grounded_grading capability enabled. Every other module's prompt is
+  // byte-for-byte the same as before this feature existed.
+  const groundedKey = options.groundedAnswerKey;
+  const hasGroundedPoints =
+    !!groundedKey &&
+    (groundedKey.coverage === "full" || groundedKey.coverage === "partial") &&
+    (groundedKey.idealPoints?.length ?? 0) > 0;
+
+  const groundedInstructions = hasGroundedPoints
+    ? `
+
+─── SOURCE-GROUNDED ANSWER KEY (authoritative — treat as ground truth) ───
+The following key points were extracted from vetted, authoritative reference material for this question. They are a GUIDE to a strong answer, not a rigid checklist — do not penalize the candidate for omitting something the question did not actually ask for. Never invent a gap the transcript contradicts: before flagging any point as missing, re-read the transcript and confirm the candidate did not already cover it.
+
+Ideal points:
+${(groundedKey!.idealPoints ?? []).map((p) => `- ${p}`).join("\n")}
+${
+  groundedKey!.acceptanceCriteria && groundedKey!.acceptanceCriteria.length > 0
+    ? `\nAcceptance criteria (a correct/complete answer should satisfy these):\n${groundedKey!.acceptanceCriteria.map((c) => `- ${c}`).join("\n")}`
+    : ""
+}`
+    : "";
+
+  const followUpInstructions = options.requestFollowUp
+    ? `
+
+─── ADAPTIVE FOLLOW-UP ───
+Also decide whether a follow-up question is warranted. If the answer is shallow, vague, or misses key points from the answer key (when provided), set "follow_up_recommended" to true and write one natural follow-up question in "follow_up_question" that probes the biggest gap. Otherwise set "follow_up_recommended" to false and leave "follow_up_question" as an empty string.`
+    : "";
+
   const systemPrompt = `You are evaluating a candidate's verbal response to a customer service scenario in the module "${moduleTitle}".
 
 Be strict about accuracy, but fair about intent. Judge what the candidate actually said in the transcript, including wording mistakes, weak vocabulary, awkward phrasing, missing empathy, and incomplete handling steps. Do not invent details that are not in the transcript.
 
 If the candidate makes language, wording, grammar, or vocabulary mistakes that affect professionalism or clarity, reflect that in communication_clarity, professionalism_and_tone, and improvement_areas. If the answer is generic, evasive, or does not address the scenario directly, reduce engagement_and_problem_handling accordingly.
-
+${hasGroundedPoints ? "\nWhen a source-grounded answer key is provided below, treat its ideal points as authoritative for judging correctness and completeness." : ""}
 Return ONLY a valid JSON object. No markdown, no explanation outside JSON.`;
 
-  const userMessage = `â”€â”€â”€ SCENARIO / QUESTION â”€â”€â”€
+  const userMessage = `─── SCENARIO / QUESTION ───
 ${questionText}
 
-â”€â”€â”€ CANDIDATE'S RESPONSE (transcribed) â”€â”€â”€
+─── CANDIDATE'S RESPONSE (transcribed) ───
 ${transcript}
 
-â”€â”€â”€ STANDARD REFERENCE RESPONSES â”€â”€â”€
+─── STANDARD REFERENCE RESPONSES ───
 ${standardResponses.length > 0 ? standardResponses.map((item, index) => `${index + 1}. ${item}`).join("\n") : "No standard responses were configured for this question."}
-
-â”€â”€â”€ SCORING WEIGHTS â”€â”€â”€
+${groundedInstructions}
+─── SCORING WEIGHTS ───
 ${JSON.stringify(scoringWeights, null, 2)}
 
-â”€â”€â”€ EVALUATION RUBRIC â”€â”€â”€
+─── EVALUATION RUBRIC ───
 
 Rate the candidate's response on each dimension using a 0-10 scale. Apply the scoring weights above to calculate total_score as a weighted average normalized to a 0-1 scale.
 
 Dimensions:
-1. Courtesy â€” Politeness, professional greeting, willingness to help.
-2. Empathy â€” Understanding the customer's frustration and acknowledging their feelings.
-3. Professionalism and Tone â€” Respectful, calm, professional delivery that maintains credibility.
-4. Communication Clarity â€” Clear language, avoidance of jargon, logical structure.
-5. Engagement and Problem Handling â€” Active listening, clarifying questions, ownership, and concrete next steps.
+1. Courtesy — Politeness, professional greeting, willingness to help.
+2. Empathy — Understanding the customer's frustration and acknowledging their feelings.
+3. Professionalism and Tone — Respectful, calm, professional delivery that maintains credibility.
+4. Communication Clarity — Clear language, avoidance of jargon, logical structure.
+5. Engagement and Problem Handling — Active listening, clarifying questions, ownership, and concrete next steps.
 
-â”€â”€â”€ SCORING GUIDELINES â”€â”€â”€
-- 0-2: Very poor â€” rude, dismissive, or completely off-topic.
-- 3-4: Below average â€” minimal effort, lacks empathy or clarity.
-- 5-6: Average â€” acceptable but generic, room for improvement.
-- 7-8: Good â€” genuine empathy, clear communication, helpful approach.
-- 9-10: Excellent â€” outstanding empathy, proactive ownership, clear and warm.
+─── SCORING GUIDELINES ───
+- 0-2: Very poor — rude, dismissive, or completely off-topic.
+- 3-4: Below average — minimal effort, lacks empathy or clarity.
+- 5-6: Average — acceptable but generic, room for improvement.
+- 7-8: Good — genuine empathy, clear communication, helpful approach.
+- 9-10: Excellent — outstanding empathy, proactive ownership, clear and warm.
 
 Be fair and balanced. Give credit for genuine effort, empathy, and willingness to help even if the response is not perfectly structured. Be constructive in your feedback.
+${followUpInstructions}
 
-â”€â”€â”€ REQUIRED JSON OUTPUT â”€â”€â”€
+─── REQUIRED JSON OUTPUT ───
 
 Return ONLY a valid JSON object with this structure:
 
@@ -500,7 +572,13 @@ Return ONLY a valid JSON object with this structure:
   },
   "strengths": ["specific strength 1", "specific strength 2"],
   "improvement_areas": ["specific area 1", "specific area 2"],
-  "final_summary": "A 2-3 sentence constructive summary of the candidate's performance."
+  "final_summary": "A 2-3 sentence constructive summary of the candidate's performance."${
+    options.requestFollowUp
+      ? `,
+  "follow_up_recommended": false,
+  "follow_up_question": ""`
+      : ""
+  }
 }`;
 
   return { systemPrompt, userMessage };
@@ -542,87 +620,108 @@ function resolveEvaluationModel(): {
   };
 }
 
-const EVALUATION_JSON_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: [
-    "total_score",
-    "dimensions",
-    "strengths",
-    "improvement_areas",
-    "final_summary",
-  ],
-  properties: {
-    total_score: {
-      type: "number",
-      minimum: 0,
-      maximum: 1,
-    },
-    dimensions: {
-      type: "object",
-      additionalProperties: false,
-      required: EVALUATION_DIMENSIONS,
-      properties: {
-        courtesy: {
-          type: "object",
-          additionalProperties: false,
-          required: ["score", "reason"],
-          properties: {
-            score: { type: "number", minimum: 0, maximum: 10 },
-            reason: { type: "string" },
+/**
+ * Builds the strict-mode JSON schema for the evaluation response. When
+ * `includeFollowUp` is true (only for modules with the follow_ups
+ * capability enabled), the schema additionally requires
+ * follow_up_recommended/follow_up_question — OpenAI's strict json_schema
+ * mode requires every declared property to be listed in `required`, so this
+ * can't be a single static schema with optional fields; the two shapes are
+ * built on demand instead. Every module not opted into follow-ups gets the
+ * exact same schema shape as before this feature existed.
+ */
+function buildEvaluationJsonSchema(includeFollowUp: boolean) {
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: [
+      "total_score",
+      "dimensions",
+      "strengths",
+      "improvement_areas",
+      "final_summary",
+      ...(includeFollowUp
+        ? ["follow_up_recommended", "follow_up_question"]
+        : []),
+    ],
+    properties: {
+      total_score: {
+        type: "number",
+        minimum: 0,
+        maximum: 1,
+      },
+      dimensions: {
+        type: "object",
+        additionalProperties: false,
+        required: EVALUATION_DIMENSIONS,
+        properties: {
+          courtesy: {
+            type: "object",
+            additionalProperties: false,
+            required: ["score", "reason"],
+            properties: {
+              score: { type: "number", minimum: 0, maximum: 10 },
+              reason: { type: "string" },
+            },
           },
-        },
-        empathy: {
-          type: "object",
-          additionalProperties: false,
-          required: ["score", "reason"],
-          properties: {
-            score: { type: "number", minimum: 0, maximum: 10 },
-            reason: { type: "string" },
+          empathy: {
+            type: "object",
+            additionalProperties: false,
+            required: ["score", "reason"],
+            properties: {
+              score: { type: "number", minimum: 0, maximum: 10 },
+              reason: { type: "string" },
+            },
           },
-        },
-        professionalism_and_tone: {
-          type: "object",
-          additionalProperties: false,
-          required: ["score", "reason"],
-          properties: {
-            score: { type: "number", minimum: 0, maximum: 10 },
-            reason: { type: "string" },
+          professionalism_and_tone: {
+            type: "object",
+            additionalProperties: false,
+            required: ["score", "reason"],
+            properties: {
+              score: { type: "number", minimum: 0, maximum: 10 },
+              reason: { type: "string" },
+            },
           },
-        },
-        communication_clarity: {
-          type: "object",
-          additionalProperties: false,
-          required: ["score", "reason"],
-          properties: {
-            score: { type: "number", minimum: 0, maximum: 10 },
-            reason: { type: "string" },
+          communication_clarity: {
+            type: "object",
+            additionalProperties: false,
+            required: ["score", "reason"],
+            properties: {
+              score: { type: "number", minimum: 0, maximum: 10 },
+              reason: { type: "string" },
+            },
           },
-        },
-        engagement_and_problem_handling: {
-          type: "object",
-          additionalProperties: false,
-          required: ["score", "reason"],
-          properties: {
-            score: { type: "number", minimum: 0, maximum: 10 },
-            reason: { type: "string" },
+          engagement_and_problem_handling: {
+            type: "object",
+            additionalProperties: false,
+            required: ["score", "reason"],
+            properties: {
+              score: { type: "number", minimum: 0, maximum: 10 },
+              reason: { type: "string" },
+            },
           },
         },
       },
+      strengths: {
+        type: "array",
+        items: { type: "string" },
+        minItems: 1,
+      },
+      improvement_areas: {
+        type: "array",
+        items: { type: "string" },
+        minItems: 1,
+      },
+      final_summary: { type: "string", minLength: 1 },
+      ...(includeFollowUp
+        ? {
+            follow_up_recommended: { type: "boolean" },
+            follow_up_question: { type: "string" },
+          }
+        : {}),
     },
-    strengths: {
-      type: "array",
-      items: { type: "string" },
-      minItems: 1,
-    },
-    improvement_areas: {
-      type: "array",
-      items: { type: "string" },
-      minItems: 1,
-    },
-    final_summary: { type: "string", minLength: 1 },
-  },
-};
+  };
+}
 
 const EVALUATION_DIMENSION_ALIASES: Record<string, string> = {
   professionalismandtone: "professionalism_and_tone",
@@ -944,6 +1043,18 @@ function normalizeEvaluationPayload(
     return null;
   }
 
+  // Present only when the module's follow_ups capability is enabled (the
+  // schema only requests these fields in that case) — absent for every
+  // other module, matching today's payload shape exactly.
+  const followUpRecommended =
+    typeof record.follow_up_recommended === "boolean"
+      ? record.follow_up_recommended
+      : undefined;
+  const followUpQuestion =
+    typeof record.follow_up_question === "string"
+      ? record.follow_up_question.trim()
+      : undefined;
+
   return {
     total_score: totalScore,
     dimensions: normalizedDimensions,
@@ -953,6 +1064,12 @@ function normalizeEvaluationPayload(
     final_summary: finalSummary,
     evaluation_source: "ai",
     validation_status: "valid",
+    ...(followUpRecommended !== undefined
+      ? { follow_up_recommended: followUpRecommended }
+      : {}),
+    ...(followUpQuestion !== undefined
+      ? { follow_up_question: followUpQuestion }
+      : {}),
   };
 }
 
@@ -1036,7 +1153,7 @@ export async function evaluateAnswer(
           json_schema: {
             name: "interview_evaluation",
             strict: true,
-            schema: EVALUATION_JSON_SCHEMA,
+            schema: buildEvaluationJsonSchema(Boolean(options.requestFollowUp)),
           },
         }
       : {

@@ -7,7 +7,7 @@ import {
 } from "@/DB/interviewSchema";
 import { isAdminRole, type Role } from "@/lib/rbac";
 import { assignQuestionSchema } from "@/lib/validation/interview";
-import { and, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
@@ -17,9 +17,17 @@ const paramsSchema = z.object({ moduleId: z.string().uuid() });
  * GET /api/interview/admin/modules/{moduleId}/questions
  * List questions assigned to a module, ordered by questionOrder.
  * Returns joined bank question data.
+ *
+ * Pagination is OPT-IN via ?page=&limit= (same query-param convention as
+ * GET /api/interview/admin/question-bank). Omitting both returns the full,
+ * unpaginated array exactly as before — AssignQuestionDialog.tsx depends on
+ * that plain-array shape and must keep working unmodified. Only callers
+ * that explicitly ask for a page (ModuleManagementPage.tsx, added for
+ * modules with hundreds of questions like Interview Coach's 211) get the
+ * paginated `{ items, total, page, limit, totalPages }` wrapper.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ moduleId: string }> },
 ) {
   try {
@@ -35,36 +43,69 @@ export async function GET(
 
     const { moduleId } = parsed.data;
 
-    const assignments = await db
-      .select({
-        id: interviewModuleQuestionAssignments.id,
-        moduleId: interviewModuleQuestionAssignments.moduleId,
-        questionId: interviewModuleQuestionAssignments.questionId,
-        questionOrder: interviewModuleQuestionAssignments.questionOrder,
-        isActive: interviewModuleQuestionAssignments.isActive,
-        createdAt: interviewModuleQuestionAssignments.createdAt,
-        question: {
-          id: interviewQuestionBank.id,
-          promptText: interviewQuestionBank.promptText,
-          promptAudioPath: interviewQuestionBank.promptAudioPath,
-          promptTranscript: interviewQuestionBank.promptTranscript,
-          isActive: interviewQuestionBank.isActive,
-          createdAt: interviewQuestionBank.createdAt,
-          updatedAt: interviewQuestionBank.updatedAt,
-        },
-      })
-      .from(interviewModuleQuestionAssignments)
-      .innerJoin(
-        interviewQuestionBank,
-        eq(
-          interviewQuestionBank.id,
-          interviewModuleQuestionAssignments.questionId,
-        ),
-      )
-      .where(eq(interviewModuleQuestionAssignments.moduleId, moduleId))
-      .orderBy(interviewModuleQuestionAssignments.questionOrder);
+    const { searchParams } = new URL(request.url);
+    const hasPaginationParams =
+      searchParams.has("page") || searchParams.has("limit");
+    const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)),
+    );
+    const offset = (page - 1) * limit;
 
-    return Response.json(assignments, { status: 200 });
+    const baseQuery = () =>
+      db
+        .select({
+          id: interviewModuleQuestionAssignments.id,
+          moduleId: interviewModuleQuestionAssignments.moduleId,
+          questionId: interviewModuleQuestionAssignments.questionId,
+          questionOrder: interviewModuleQuestionAssignments.questionOrder,
+          isActive: interviewModuleQuestionAssignments.isActive,
+          createdAt: interviewModuleQuestionAssignments.createdAt,
+          question: {
+            id: interviewQuestionBank.id,
+            promptText: interviewQuestionBank.promptText,
+            promptAudioPath: interviewQuestionBank.promptAudioPath,
+            promptTranscript: interviewQuestionBank.promptTranscript,
+            isActive: interviewQuestionBank.isActive,
+            createdAt: interviewQuestionBank.createdAt,
+            updatedAt: interviewQuestionBank.updatedAt,
+          },
+        })
+        .from(interviewModuleQuestionAssignments)
+        .innerJoin(
+          interviewQuestionBank,
+          eq(
+            interviewQuestionBank.id,
+            interviewModuleQuestionAssignments.questionId,
+          ),
+        )
+        .where(eq(interviewModuleQuestionAssignments.moduleId, moduleId))
+        .orderBy(interviewModuleQuestionAssignments.questionOrder);
+
+    if (!hasPaginationParams) {
+      const assignments = await baseQuery();
+      return Response.json(assignments, { status: 200 });
+    }
+
+    const [items, [{ total }]] = await Promise.all([
+      baseQuery().limit(limit).offset(offset),
+      db
+        .select({ total: count() })
+        .from(interviewModuleQuestionAssignments)
+        .where(eq(interviewModuleQuestionAssignments.moduleId, moduleId)),
+    ]);
+
+    return Response.json(
+      {
+        items,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(Number(total) / limit),
+      },
+      { status: 200 },
+    );
   } catch (error) {
     console.error(
       "GET /api/interview/admin/modules/{moduleId}/questions:",

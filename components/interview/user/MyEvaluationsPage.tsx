@@ -65,7 +65,7 @@ function formatPercentageScore(value: number | null | undefined): string {
 }
 
 export default function MyEvaluationsPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
   const [sessions, setSessions] = useState<UserSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,12 +85,14 @@ export default function MyEvaluationsPage() {
     failed: "bg-red-600/80",
   };
 
-  // Redirect if not logged in
+  // Redirect if not logged in (wait for the session to finish loading first —
+  // useSession() starts as undefined on mount, so checking `!session` alone
+  // would bounce every visit before the session has a chance to resolve).
   useEffect(() => {
-    if (!session?.user?.id) {
+    if (status === "unauthenticated") {
       router.push("/");
     }
-  }, [session, router]);
+  }, [status, router]);
 
   const fetchUserSessions = useCallback(async () => {
     if (!session?.user?.id) return;

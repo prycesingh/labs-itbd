@@ -1,9 +1,11 @@
 "use client";
 
 import { AudioPlayer } from "@/components/app_componentes/AudioPlayer";
+import DefaultButton from "@/components/app_componentes/customButtons";
 import { Progress } from "@/components/ui/progress";
+import { speak } from "@/lib/interview/textToSpeech";
 import { cn } from "@/lib/utils";
-import { Volume2 } from "lucide-react";
+import { Ear, Volume2 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 
 interface StandardResponse {
@@ -18,6 +20,10 @@ interface QuestionPlayerProps {
   questionAudioPath?: string;
   standardResponses: StandardResponse[];
   className?: string;
+  // Interview Coach only: hides questionText and shows a replay button
+  // (browser TTS) instead, so the candidate answers purely from listening —
+  // matches interview-coach-main's "audio-only" setup toggle.
+  audioOnly?: boolean;
 }
 
 /**
@@ -33,6 +39,7 @@ export function QuestionPlayer({
   questionText,
   questionAudioPath,
   className,
+  audioOnly = false,
 }: QuestionPlayerProps) {
   const reduce = useReducedMotion();
   const progress = ((questionNumber + 1) / totalQuestions) * 100;
@@ -66,11 +73,28 @@ export function QuestionPlayer({
 
         <Progress value={progress} className="h-1.5 bg-white/10" />
 
-        <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-          <p className="text-base leading-relaxed text-white/90">
-            {questionText}
-          </p>
-        </div>
+        {audioOnly ? (
+          <div className="flex flex-col items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-center">
+            <Ear className="h-6 w-6 text-itbd-blue" />
+            <p className="text-sm text-white/70">
+              Listen to the question, then record your answer. Replay it as
+              many times as you need.
+            </p>
+            <DefaultButton
+              onClick={() => speak(questionText)}
+              className="w-fit"
+            >
+              <Volume2 className="mr-2 h-4 w-4" />
+              Replay Question
+            </DefaultButton>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <p className="text-base leading-relaxed text-white/90">
+              {questionText}
+            </p>
+          </div>
+        )}
 
         {questionAudioPath && (
           <div className="space-y-1.5">

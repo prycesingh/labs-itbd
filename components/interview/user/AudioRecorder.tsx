@@ -7,7 +7,14 @@ import DefaultButton, {
 import { cn } from "@/lib/utils";
 import { Mic, Square, Trash2, Upload } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 
 interface AudioRecorderProps {
@@ -18,17 +25,31 @@ interface AudioRecorderProps {
   maxAttempts?: number;
   onUploadSuccess?: (blob: Blob, duration: number) => void;
   className?: string;
+  // Follow-up flow only (Interview Coach): when set, the answer is posted
+  // against this adaptively-generated follow-up id instead of a bank
+  // questionId — see upload-audio/route.ts's followUpId branch.
+  followUpId?: string;
 }
 
-export function AudioRecorder({
-  sessionId,
-  questionId,
-  questionIndex,
-  isLocked = false,
-  maxAttempts = 2,
-  onUploadSuccess,
-  className,
-}: AudioRecorderProps) {
+export interface AudioRecorderHandle {
+  startRecording: () => Promise<void>;
+  stopRecording: () => void;
+}
+
+export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(
+  function AudioRecorder(
+    {
+      sessionId,
+      questionId,
+      questionIndex,
+      isLocked = false,
+      maxAttempts = 2,
+      onUploadSuccess,
+      className,
+      followUpId,
+    },
+    ref,
+  ) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
@@ -123,6 +144,15 @@ export function AudioRecorder({
     }
   };
 
+  // Exposes start/stop to a parent (InterviewSession.tsx's hands-free flow)
+  // via ref, since these were previously only reachable through the
+  // in-component Start/Stop buttons — no behavior change for the existing
+  // click-driven usage (Customer Cetricity), purely additive.
+  useImperativeHandle(ref, () => ({ startRecording, stopRecording }), [
+    startRecording,
+    stopRecording,
+  ]);
+
   const handleDiscard = () => {
     if (isLocked) return;
 
@@ -158,7 +188,14 @@ export function AudioRecorder({
       const uploadDurationMs = Math.round(uploadDuration * 1000);
 
       formData.append("sessionId", sessionId);
-      formData.append("questionId", questionId);
+      // Exactly one of questionId / followUpId, matching uploadAudioSchema's
+      // refine() — followUpId is set only when answering an adaptively
+      // generated follow-up (Interview Coach's follow_ups capability).
+      if (followUpId) {
+        formData.append("followUpId", followUpId);
+      } else {
+        formData.append("questionId", questionId);
+      }
       formData.append("questionIndex", questionIndex.toString());
       formData.append("audio", recordedBlob, `recording.${fileExt}`);
       formData.append("audioDuration", uploadDurationMs.toString());
@@ -337,4 +374,4 @@ export function AudioRecorder({
       </div>
     </motion.div>
   );
-}
+});

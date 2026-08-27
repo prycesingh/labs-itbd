@@ -7,6 +7,12 @@
  * - aiInterviewEvaluations: OpenAI structured evaluation output
  * - adminInterviewEvaluations: Admin overrides + comparison metrics
  * - interviewSessionSummaries: Aggregated session-level results
+ * - interviewModuleCapabilities: per-module feature registry (delivery
+ *   scoring, grounded grading, follow-ups, evaluation depth) — admin-editable
+ *   at runtime so modules (e.g. Customer Centricity vs Interview Coach) can
+ *   have different evaluation behavior without code changes
+ * - interviewDeliveryMetrics: per-answer acoustic delivery scoring, written
+ *   only for modules with the delivery_scoring capability enabled
  *
  * Enhancements to existing backgroundJobs:
  * - correlationId: Links parent to child jobs
@@ -149,6 +155,30 @@ export const interviewQuestionBank = mysqlTable(
     promptAudioPath: varchar("prompt_audio_path", { length: 500 }),
     promptTranscript: text("prompt_transcript"),
     isActive: boolean("is_active").notNull().default(true),
+    // Which module authored/owns this question — used only as the default
+    // scope filter in each module's "browse bank" admin UI. Does NOT restrict
+    // assignment: interviewModuleQuestionAssignments already allows any
+    // module to assign any question regardless of ownership, so cross-module
+    // borrowing needs no further schema support.
+    primaryModuleId: varchar("primary_module_id", { length: 36 }),
+    // Source-grounded answer-key data (ported from interview-coach-main's
+    // question_bank.json answer_key). Null/"none" for questions with no
+    // grounded key — evaluateAnswer() falls back to inferring ideal points.
+    groundedIdealPoints: jsonText<string[]>("grounded_ideal_points"),
+    groundedAcceptanceCriteria: jsonText<string[]>(
+      "grounded_acceptance_criteria",
+    ),
+    groundedSources: jsonText<string[]>("grounded_sources"),
+    groundedCoverage: mysqlEnum("grounded_coverage", [
+      "full",
+      "partial",
+      "none",
+    ]),
+    // Original identifier from interview-coach-main's data files (Python
+    // topic_id / mined-question id) — used only to make the one-time
+    // migration script idempotent on re-run. Null for questions not migrated
+    // from that source.
+    sourceId: varchar("source_id", { length: 255 }),
     createdAt: timestamp("created_at", { mode: "string" })
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),
@@ -161,6 +191,15 @@ export const interviewQuestionBank = mysqlTable(
     unique("iqb_id_unique").on(table.id),
     index("iqb_active_idx").on(table.isActive),
     index("iqb_created_idx").on(table.createdAt),
+    index("iqb_primary_module_idx").on(table.primaryModuleId),
+    index("iqb_source_idx").on(table.sourceId),
+    foreignKey({
+      columns: [table.primaryModuleId],
+      foreignColumns: [interviewModules.id],
+      name: "iqb_primary_module_fk",
+    })
+      .onDelete("set null")
+      .onUpdate("cascade"),
   ],
 );
 
@@ -339,6 +378,13 @@ export const candidateInterviewAnswers = mysqlTable(
       }),
     questionId: varchar("question_id", { length: 255 }).notNull(),
     questionIndex: int().notNull(), // 0-based sequence
+    // Follow-up linkage: set only for modules with the follow_ups capability
+    // enabled. isFollowUp marks this answer as a response to an adaptively
+    // generated follow-up question rather than a fixed bank question;
+    // followUpOfAnswerId points back to the answer that triggered it. Both
+    // stay null/false for every module without follow_ups enabled.
+    isFollowUp: boolean("is_follow_up").notNull().default(false),
+    followUpOfAnswerId: varchar("follow_up_of_answer_id", { length: 36 }),
     audioStoragePath: varchar("audio_storage_path", { length: 500 }).notNull(), // /uploads/interview-audio/{sessionId}/{questionIndex}-{timestamp}.wav
     audioMimeType: varchar("audio_mime_type", { length: 50 }).notNull(), // audio/wav, audio/mp3, etc.
     audioSizeBytes: int().notNull(), // For analytics
@@ -403,6 +449,12 @@ export const candidateInterviewAnswers = mysqlTable(
     index("interview_answers_transcript_job_idx").on(table.transcriptJobId),
     index("interview_answers_evaluation_job_idx").on(table.evaluationJobId),
     index("interview_answers_created_idx").on(table.createdAt),
+    index("interview_answers_follow_up_of_idx").on(table.followUpOfAnswerId),
+    foreignKey({
+      columns: [table.followUpOfAnswerId],
+      foreignColumns: [table.id],
+      name: "interview_answers_follow_up_of_fk",
+    }).onDelete("set null"),
   ],
 );
 
@@ -561,6 +613,180 @@ export const interviewSessionSummaries = mysqlTable(
     unique("interview_session_summaries_id_unique").on(table.id),
     index("interview_session_summaries_candidate_idx").on(table.candidateId),
     index("interview_session_summaries_module_idx").on(table.moduleId),
+  ],
+);
+
+// ─────────────────────────────────────────────
+// FOLLOW-UP QUESTIONS (adaptive, capability-gated)
+// ─────────────────────────────────────────────
+
+/**
+ * Adaptively-generated follow-up questions, created only when a per-answer
+ * evaluation (immediate-processing path, see upload-audio route) flags
+ * follow_up_recommended for a module with the follow_ups capability
+ * enabled. Not a bank question — scoped to one session, one parent answer.
+ * `status` tracks whether the candidate still needs to record it.
+ */
+export const interviewFollowupQuestions = mysqlTable(
+  "interview_followup_questions",
+  {
+    id: varchar({ length: 36 }).notNull(),
+    sessionId: varchar("session_id", { length: 36 }).notNull(),
+    parentAnswerId: varchar("parent_answer_id", { length: 36 }).notNull(),
+    questionText: text("question_text").notNull(),
+    idealPoints: jsonText<string[]>("ideal_points"),
+    status: mysqlEnum("status", ["pending", "answered", "skipped"])
+      .notNull()
+      .default("pending"),
+    createdAt: timestamp("created_at", { mode: "string" })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.id], name: "ifq_id" }),
+    unique("ifq_id_unique").on(table.id),
+    index("ifq_session_idx").on(table.sessionId, table.status),
+    index("ifq_parent_answer_idx").on(table.parentAnswerId),
+    foreignKey({
+      columns: [table.sessionId],
+      foreignColumns: [candidateInterviewSessions.id],
+      name: "ifq_session_fk",
+    })
+      .onDelete("cascade")
+      .onUpdate("cascade"),
+    foreignKey({
+      columns: [table.parentAnswerId],
+      foreignColumns: [candidateInterviewAnswers.id],
+      name: "ifq_parent_answer_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
+// ─────────────────────────────────────────────
+// MODULE CAPABILITIES (admin-editable feature registry)
+// ─────────────────────────────────────────────
+
+/**
+ * Generic, extensible per-module capability registry — one row per
+ * (module, capabilityKey). Replaces hardcoded per-module booleans so that
+ * what a module evaluates (delivery scoring, grounded grading, follow-ups,
+ * evaluation depth) is admin-configurable at runtime instead of baked into
+ * code. Adding a future capability is a data change (new capabilityKey) plus
+ * a code path that reads it via getModuleCapability() — no schema migration
+ * for the flag itself.
+ *
+ * `enabled` is the on/off switch for boolean-style capabilities
+ * (delivery_scoring, grounded_grading, follow_ups); it is unused/ignored for
+ * config-only capabilities like evaluation_depth. `config` carries
+ * capability-specific settings, e.g.:
+ *   delivery_scoring: { calibrationMode: "static" | "population-relative" }
+ *   evaluation_depth: { depth: "full-rubric" | "content-only" | "delivery-only" }
+ *
+ * If a (moduleId, capabilityKey) row does not exist, getModuleCapability()
+ * defaults to disabled / content-only — never to an enabled/expansive
+ * default — so an unconfigured module never silently inherits expensive or
+ * unexpected behavior.
+ */
+export const interviewModuleCapabilities = mysqlTable(
+  "interview_module_capabilities",
+  {
+    id: varchar({ length: 36 }).notNull(),
+    moduleId: varchar("module_id", { length: 36 })
+      .notNull()
+      .references(() => interviewModules.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    capabilityKey: varchar("capability_key", { length: 100 }).notNull(),
+    enabled: boolean("enabled").notNull().default(false),
+    config: jsonText<Record<string, unknown>>("config"),
+    updatedBy: varchar("updated_by", { length: 255 })
+      .notNull()
+      .references(() => users.id, {
+        onDelete: "restrict",
+        onUpdate: "cascade",
+      }),
+    updatedAt: timestamp("updated_at", { mode: "string" })
+      .onUpdateNow()
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.id], name: "imc_id" }),
+    unique("imc_id_unique").on(table.id),
+    unique("imc_module_capability_unique").on(
+      table.moduleId,
+      table.capabilityKey,
+    ),
+    index("imc_module_idx").on(table.moduleId),
+  ],
+);
+
+// ─────────────────────────────────────────────
+// DELIVERY METRICS (acoustic scoring — capability-gated)
+// ─────────────────────────────────────────────
+
+/**
+ * Per-answer acoustic delivery scoring (pace, pauses, fillers, pitch,
+ * loudness) — written ONLY for answers belonging to a session whose module
+ * has the delivery_scoring capability enabled. Ported from
+ * interview-coach-main's audio_analysis.py/llm.py delivery rubric, computed
+ * in Node via Deepgram word-timestamps (pace/pause/filler) plus
+ * pitchy/pitchfinder/meyda (pitch/loudness) instead of faster-whisper/
+ * praat-parselmouth.
+ */
+export const interviewDeliveryMetrics = mysqlTable(
+  "interview_delivery_metrics",
+  {
+    id: varchar({ length: 36 }).notNull(),
+    answerId: varchar("answer_id", { length: 36 }).notNull().unique(),
+    wpm: decimal("wpm", { precision: 6, scale: 2 }),
+    pauseCount: int("pause_count"),
+    totalPauseS: decimal("total_pause_s", { precision: 6, scale: 2 }),
+    longestPauseS: decimal("longest_pause_s", { precision: 6, scale: 2 }),
+    pauseRatio: decimal("pause_ratio", { precision: 5, scale: 3 }),
+    fillerCount: int("filler_count"),
+    fillersPerMin: decimal("fillers_per_min", { precision: 6, scale: 2 }),
+    pitchMeanHz: decimal("pitch_mean_hz", { precision: 7, scale: 2 }),
+    pitchDynamismSt: decimal("pitch_dynamism_st", { precision: 6, scale: 3 }),
+    pitchRangeSt: decimal("pitch_range_st", { precision: 6, scale: 3 }),
+    loudnessDbMean: decimal("loudness_db_mean", { precision: 6, scale: 2 }),
+    loudnessVariationDb: decimal("loudness_variation_db", {
+      precision: 6,
+      scale: 3,
+    }),
+    // { pace, pausing, fluency, expressiveness } — each banded 1-5
+    deliveryScores: jsonText<{
+      pace: number;
+      pausing: number;
+      fluency: number;
+      expressiveness: number;
+    }>("delivery_scores").notNull(),
+    deliveryOverall: decimal("delivery_overall", { precision: 3, scale: 1 }),
+    // Which calibration mode produced these bands — stamped at scoring time
+    // so switching the admin toggle later doesn't retroactively
+    // misrepresent already-scored answers.
+    calibrationMode: mysqlEnum("calibration_mode", [
+      "static",
+      "population-relative",
+    ])
+      .notNull()
+      .default("static"),
+    createdAt: timestamp("created_at", { mode: "string" })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.id], name: "idm_id" }),
+    unique("idm_id_unique").on(table.id),
+    index("idm_created_idx").on(table.createdAt),
+    foreignKey({
+      columns: [table.answerId],
+      foreignColumns: [candidateInterviewAnswers.id],
+      name: "idm_answer_fk",
+    })
+      .onDelete("cascade")
+      .onUpdate("cascade"),
   ],
 );
 

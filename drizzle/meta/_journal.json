@@ -71,6 +71,34 @@
       "when": 1786727982543,
       "tag": "0009_lush_kabuki",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1787313176391,
+      "tag": "0010_lush_roland_deschain",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1787313282654,
+      "tag": "0011_smart_sunspot",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1787316474823,
+      "tag": "0012_busy_night_nurse",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1787834859652,
+      "tag": "0013_moaning_sabra",
+      "breakpoints": true
     }
   ]
 }

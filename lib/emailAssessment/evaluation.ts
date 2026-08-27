@@ -15,6 +15,13 @@ import {
   emailAssessmentScenarios as scenarios,
   emailAssessmentSubmissions as submissions,
 } from "@/DB/emailAssessmentSchema";
+import { backgroundJobs } from "@/DB/schema";
+import { getJobQueue } from "@/lib/backgroundJobs";
+import {
+  EMAIL_ASSESSMENT_EVALUATION_JOB,
+  EMAIL_ASSESSMENT_EVALUATION_JOB_MAX_ATTEMPTS,
+  EMAIL_ASSESSMENT_EVALUATION_JOB_TIMEOUT_MS,
+} from "@/lib/emailAssessment/jobConstants";
 import {
   calculateCopyPenalty,
   evaluationJsonSchema,
@@ -22,6 +29,66 @@ import {
 } from "@/lib/emailAssessment/rubric";
 
 const MAX_EVALUATION_ATTEMPTS = 2;
+
+let handlerRegistered = false;
+
+/**
+ * Registers the email-evaluation background job handler. Safe/cheap to call
+ * on every request that needs it (idempotent in-memory) — mirrors the
+ * lazy-init-on-first-use convention used by initializeBackgroundJobs() for
+ * the Interview module.
+ */
+export function initializeEmailAssessmentBackgroundJobs() {
+  if (handlerRegistered) return;
+  handlerRegistered = true;
+
+  getJobQueue().registerHandler(EMAIL_ASSESSMENT_EVALUATION_JOB, async (_, jobId) => {
+    if (!jobId) throw new Error("Missing job id for email assessment evaluation");
+
+    const [job] = await db
+      .select({ result: backgroundJobs.result })
+      .from(backgroundJobs)
+      .where(eq(backgroundJobs.id, jobId))
+      .limit(1);
+
+    const submissionId =
+      job?.result && typeof job.result === "object" && "submissionId" in job.result
+        ? (job.result as { submissionId?: unknown }).submissionId
+        : null;
+
+    if (typeof submissionId !== "string") {
+      throw new Error("Missing submissionId in email assessment evaluation job payload");
+    }
+
+    const result = await evaluateSubmission(submissionId);
+    return result;
+  });
+}
+
+/**
+ * Enqueues an email-assessment evaluation to run asynchronously via the
+ * shared background job queue, instead of blocking the submission request
+ * on a synchronous OpenAI call. Returns immediately with the job id.
+ */
+export async function enqueueSubmissionEvaluation(submissionId: string, userId: string) {
+  initializeEmailAssessmentBackgroundJobs();
+
+  const jobId = `${EMAIL_ASSESSMENT_EVALUATION_JOB}_${submissionId}_${Date.now()}`;
+
+  await db.insert(backgroundJobs).values({
+    id: jobId,
+    name: EMAIL_ASSESSMENT_EVALUATION_JOB,
+    status: "queued",
+    userId,
+    maxAttempts: EMAIL_ASSESSMENT_EVALUATION_JOB_MAX_ATTEMPTS,
+    maxExecutionTimeMs: EMAIL_ASSESSMENT_EVALUATION_JOB_TIMEOUT_MS,
+    result: { submissionId },
+  });
+
+  getJobQueue().triggerJob(jobId);
+
+  return jobId;
+}
 
 const AI_DETECTION_INSTRUCTIONS = `AI DETECTION INSTRUCTIONS:
 You MUST set "aiDetected" to true if the candidate's response exhibits any of the following characteristics of AI-generated text:

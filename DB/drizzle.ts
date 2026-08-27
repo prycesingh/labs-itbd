@@ -53,9 +53,13 @@ const poolConnection =
   globalThis.__dbPool ??
   mysql.createPool({
     uri: effectiveDatabaseUrl,
-    // Connection pool settings to prevent ECONNRESET errors
-    connectionLimit: 10,
-    maxIdle: 10,
+    // Connection pool settings to prevent ECONNRESET errors.
+    // Hostinger's shared MariaDB caps this DB user at 60 concurrent
+    // connections (SHOW VARIABLES LIKE 'max_user_connections'); 20 leaves
+    // headroom for phpMyAdmin/other tooling sharing the same account while
+    // still giving the app more concurrency than the previous limit of 10.
+    connectionLimit: 20,
+    maxIdle: 20,
     idleTimeout: 60000, // 60 seconds
     queueLimit: 0,
     enableKeepAlive: true,

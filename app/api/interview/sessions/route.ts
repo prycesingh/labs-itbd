@@ -6,6 +6,7 @@ import {
   aiInterviewEvaluations,
   candidateInterviewAnswers,
   candidateInterviewSessions,
+  interviewFollowupQuestions,
   interviewModuleQuestionAssignments,
   interviewModules,
   interviewPracticeAttemptOverrides,
@@ -20,7 +21,12 @@ import {
   normalizeTotalScore,
   totalScoreToPercentage,
 } from "@/lib/interview/evaluationMetrics";
-import { startOfToday } from "@/lib/labs/date";
+import {
+  CAPABILITY_KEYS,
+  getAttemptCadence,
+  getModuleCapability,
+} from "@/lib/interview/moduleCapabilities";
+import { startOfThisWeek, startOfToday } from "@/lib/labs/date";
 import {
   createSessionSchema,
   updateSessionStatusSchema,
@@ -170,7 +176,19 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (!existingSession) {
-      const today = startOfToday().toISOString();
+      // Cadence ("daily" | "weekly") is a per-module default from the
+      // capability registry (Interview Coach defaults to weekly; every
+      // other module, including Customer Centricity, defaults to "daily" —
+      // its behavior before this capability existed). A per-(user, module)
+      // override row below still wins for that specific user if the admin
+      // has customized their limits, independent of the module's cadence.
+      const cadence = await getAttemptCadence(moduleId);
+      const periodStart = (
+        cadence === "weekly" ? startOfThisWeek() : startOfToday()
+      ).toISOString();
+      const periodLabel = cadence === "weekly" ? "this week" : "today";
+      const nextPeriodLabel =
+        cadence === "weekly" ? "next week" : "tomorrow";
 
       const [failureCountRow] = await db
         .select({ count: sql<number>`count(*)` })
@@ -180,7 +198,7 @@ export async function POST(request: NextRequest) {
             eq(candidateInterviewSessions.candidateId, candidateId),
             eq(candidateInterviewSessions.moduleId, moduleId),
             eq(candidateInterviewSessions.status, "failed"),
-            gte(candidateInterviewSessions.createdAt, today),
+            gte(candidateInterviewSessions.createdAt, periodStart),
           ),
         );
 
@@ -203,14 +221,13 @@ export async function POST(request: NextRequest) {
       if (Number(failureCountRow?.count ?? 0) >= lockoutThreshold) {
         return NextResponse.json(
           {
-            error:
-              "Too many failed attempts today. This module is locked until tomorrow.",
+            error: `Too many failed attempts ${periodLabel}. This module is locked until ${nextPeriodLabel}.`,
           },
           { status: 429 },
         );
       }
 
-      const dailyLimit = override?.dailyLimit ?? 1;
+      const attemptLimit = override?.dailyLimit ?? 1;
 
       const [attemptCountRow] = await db
         .select({ count: sql<number>`count(*)` })
@@ -220,15 +237,14 @@ export async function POST(request: NextRequest) {
             eq(candidateInterviewSessions.candidateId, candidateId),
             eq(candidateInterviewSessions.moduleId, moduleId),
             ne(candidateInterviewSessions.status, "failed"),
-            gte(candidateInterviewSessions.createdAt, today),
+            gte(candidateInterviewSessions.createdAt, periodStart),
           ),
         );
 
-      if (Number(attemptCountRow?.count ?? 0) >= dailyLimit) {
+      if (Number(attemptCountRow?.count ?? 0) >= attemptLimit) {
         return NextResponse.json(
           {
-            error:
-              "Daily practice limit reached for this module. Try again tomorrow.",
+            error: `Practice limit reached for this module ${periodLabel}. Try again ${nextPeriodLabel}.`,
           },
           { status: 429 },
         );
@@ -521,6 +537,26 @@ export async function GET(request: NextRequest) {
             .where(inArray(interviewQuestionBank.id, questionIds))
         : [];
 
+    // Follow-up answers store the follow-up's own ID (not a bank question
+    // ID) in questionId, so the lookup above never matches them — resolve
+    // their display text from interview_followup_questions instead.
+    const followUpAnswerQuestionIds = answers
+      .filter((answer) => answer.isFollowUp)
+      .map((answer) => answer.questionId);
+    const followUpRows =
+      followUpAnswerQuestionIds.length > 0
+        ? await db
+            .select({
+              id: interviewFollowupQuestions.id,
+              questionText: interviewFollowupQuestions.questionText,
+            })
+            .from(interviewFollowupQuestions)
+            .where(inArray(interviewFollowupQuestions.id, followUpAnswerQuestionIds))
+        : [];
+    const followUpTextById = new Map(
+      followUpRows.map((row) => [row.id, row.questionText]),
+    );
+
     const standardResponseRows =
       questionIds.length > 0
         ? await db
@@ -602,8 +638,13 @@ export async function GET(request: NextRequest) {
         id: answer.id,
         questionId: answer.questionId,
         questionIndex: answer.questionIndex,
-        questionText: question?.promptText ?? null,
+        questionText:
+          question?.promptText ??
+          (answer.isFollowUp
+            ? (followUpTextById.get(answer.questionId) ?? null)
+            : null),
         questionAudioPath: question?.promptAudioPath ?? null,
+        isFollowUp: answer.isFollowUp,
         standardResponses: responseByQuestionId.get(answer.questionId) ?? [],
         audioPath: answer.audioStoragePath,
         transcript: answer.transcriptedText,
@@ -649,12 +690,31 @@ export async function GET(request: NextRequest) {
         promptAudioPath: question.promptAudioPath,
       }));
 
+    // Candidate-facing capability flags — booleans only, never a capability's
+    // internal config (e.g. calibration mode), since this route has no admin
+    // gate. Drives InterviewSession.tsx's hands-free setup toggle and the
+    // follow-up "checking..." pause UX; both stay off for any module (e.g.
+    // Customer Cetricity) without follow_ups enabled.
+    const [followUpsCapability, deliveryScoringCapability] = await Promise.all(
+      [
+        getModuleCapability(sessionRow.moduleId, CAPABILITY_KEYS.FOLLOW_UPS),
+        getModuleCapability(
+          sessionRow.moduleId,
+          CAPABILITY_KEYS.DELIVERY_SCORING,
+        ),
+      ],
+    );
+
     return NextResponse.json(
       {
         session: sessionRow,
         sessionQuestions,
         answers: enrichedAnswers,
         summary: normalizedSummary,
+        capabilities: {
+          followUps: followUpsCapability.enabled,
+          deliveryScoring: deliveryScoringCapability.enabled,
+        },
       },
       { status: 200 },
     );

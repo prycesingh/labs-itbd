@@ -94,6 +94,27 @@ export default function ModuleManagementPage() {
   >(null);
   const [questions, setQuestions] = useState<ModuleQuestionAssignment[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const QUESTIONS_PAGE_SIZE = 20;
+  const [questionsPage, setQuestionsPage] = useState(1);
+  const [questionsTotalPages, setQuestionsTotalPages] = useState(1);
+  const [questionsTotal, setQuestionsTotal] = useState(0);
+  // Collapsed-by-default: only the expanded question's full detail (audio
+  // player, edit-title, upload-audio, StandardResponsesForm) is rendered —
+  // this is what keeps a 211-question module from mounting 211
+  // StandardResponsesForm instances (and firing 211 fetches) at once.
+  const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(
+    null,
+  );
+  // questionId -> standard-response count, batch-fetched once per page
+  // instead of once per question (see /api/interview/admin/questions/
+  // standard-responses). Modules with grounded_grading enabled don't
+  // require standard responses at all (they use groundedIdealPoints
+  // instead — see moduleCapabilities.ts), so this is shown as informational
+  // for them rather than as a completion requirement.
+  const [responseCounts, setResponseCounts] = useState<
+    Record<string, number>
+  >({});
+  const [groundedGradingEnabled, setGroundedGradingEnabled] = useState(false);
   const [questionAudioFiles, setQuestionAudioFiles] = useState<
     Record<string, File | null>
   >({});
@@ -151,35 +172,91 @@ export default function ModuleManagementPage() {
     void fetchModules();
   }, [fetchModules]);
 
-  const fetchQuestionsForModule = useCallback(async (moduleId: string) => {
+  const fetchResponseCounts = useCallback(async (questionIds: string[]) => {
+    if (questionIds.length === 0) {
+      setResponseCounts({});
+      return;
+    }
     try {
-      setLoadingQuestions(true);
       const res = await fetch(
-        `/api/interview/admin/modules/${moduleId}/questions`,
+        `/api/interview/admin/questions/standard-responses?questionIds=${questionIds
+          .map(encodeURIComponent)
+          .join(",")}`,
       );
-
-      if (!res.ok) {
-        throw new Error("Failed to fetch questions");
-      }
-
-      const data = (await res.json()) as ModuleQuestionAssignment[];
-      setQuestions(data);
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        questionId: string;
+        count: number;
+      }[];
+      setResponseCounts((prev) => {
+        const next = { ...prev };
+        for (const row of data) next[row.questionId] = row.count;
+        return next;
+      });
     } catch (error) {
-      setQuestions([]);
-      toast.error("Failed to load questions for selected module");
-      console.error(error);
-    } finally {
-      setLoadingQuestions(false);
+      // Non-fatal — collapsed rows just show no count badge.
+      console.warn("Failed to load standard-response counts", error);
     }
   }, []);
+
+  const fetchQuestionsForModule = useCallback(
+    async (moduleId: string, page: number = 1) => {
+      try {
+        setLoadingQuestions(true);
+        const res = await fetch(
+          `/api/interview/admin/modules/${moduleId}/questions?page=${page}&limit=${QUESTIONS_PAGE_SIZE}`,
+        );
+
+        if (!res.ok) {
+          throw new Error("Failed to fetch questions");
+        }
+
+        const payload = (await res.json()) as {
+          items: ModuleQuestionAssignment[];
+          page: number;
+          totalPages: number;
+          total: number;
+        };
+        setQuestions(payload.items);
+        setQuestionsPage(payload.page);
+        setQuestionsTotalPages(payload.totalPages);
+        setQuestionsTotal(payload.total);
+        void fetchResponseCounts(payload.items.map((item) => item.questionId));
+      } catch (error) {
+        setQuestions([]);
+        toast.error("Failed to load questions for selected module");
+        console.error(error);
+      } finally {
+        setLoadingQuestions(false);
+      }
+    },
+    [fetchResponseCounts],
+  );
 
   useEffect(() => {
     if (!selectedModuleId) {
       setQuestions([]);
+      setExpandedQuestionId(null);
       return;
     }
 
-    void fetchQuestionsForModule(selectedModuleId);
+    setExpandedQuestionId(null);
+    void fetchQuestionsForModule(selectedModuleId, 1);
+
+    fetch(`/api/interview/admin/module-capabilities?moduleId=${selectedModuleId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then(
+        (
+          data:
+            | { capabilities?: { grounded_grading?: { enabled?: boolean } } }[]
+            | null,
+        ) => {
+          const enabled =
+            data?.[0]?.capabilities?.grounded_grading?.enabled ?? false;
+          setGroundedGradingEnabled(enabled);
+        },
+      )
+      .catch(() => setGroundedGradingEnabled(false));
   }, [fetchQuestionsForModule, selectedModuleId]);
 
   const readErrorMessage = async (res: Response) => {
@@ -330,7 +407,7 @@ export default function ModuleManagementPage() {
   const handleQuestionCreated = async () => {
     await fetchModules();
     if (selectedModuleId) {
-      await fetchQuestionsForModule(selectedModuleId);
+      await fetchQuestionsForModule(selectedModuleId, questionsPage);
     }
   };
 
@@ -380,7 +457,7 @@ export default function ModuleManagementPage() {
       toast.success("Question audio and transcript updated");
 
       if (selectedModuleId) {
-        await fetchQuestionsForModule(selectedModuleId);
+        await fetchQuestionsForModule(selectedModuleId, questionsPage);
       }
     } catch (error) {
       const message =
@@ -481,7 +558,7 @@ export default function ModuleManagementPage() {
 
       await Promise.all([
         fetchModules(),
-        fetchQuestionsForModule(selectedModuleId),
+        fetchQuestionsForModule(selectedModuleId, questionsPage),
       ]);
     } catch (error) {
       const message =
@@ -733,174 +810,292 @@ export default function ModuleManagementPage() {
                 No questions assigned yet for this module.
               </p>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  {questionsTotal} question{questionsTotal === 1 ? "" : "s"}{" "}
+                  assigned — showing page {questionsPage} of{" "}
+                  {questionsTotalPages}. Click a question to expand it.
+                </p>
                 {questions.map((question) => {
+                  const isExpanded = expandedQuestionId === question.id;
                   const hasPersistedTranscript =
                     Boolean(question.question.promptTranscript) &&
                     String(question.question.promptTranscript).trim().length >
                       0;
+                  const responseCount =
+                    responseCounts[question.question.id] ?? null;
 
                   return (
                     <Card
                       key={question.id}
                       className="border-white/10 bg-black/25"
                     >
-                      <CardHeader>
-                        <CardTitle className="text-base">
-                          Question {question.questionOrder + 1}
-                        </CardTitle>
-                        {editingQuestionId === question.question.id ? (
-                          <div className="space-y-2">
-                            <Textarea
-                              value={editingPromptText}
-                              onChange={(event) =>
-                                setEditingPromptText(event.target.value)
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedQuestionId(isExpanded ? null : question.id)
+                        }
+                        className="flex w-full items-center justify-between gap-3 px-6 py-4 text-left"
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="shrink-0 text-sm font-medium text-muted-foreground">
+                            Q{question.questionOrder + 1}
+                          </span>
+                          <span className="truncate text-sm">
+                            {question.question.promptText}
+                          </span>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {question.question.promptAudioPath ? (
+                            <Badge variant="outline" className="text-xs">
+                              Audio ready
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className="text-xs text-yellow-400"
+                            >
+                              No audio
+                            </Badge>
+                          )}
+                          {responseCount !== null && (
+                            <Badge
+                              variant={
+                                responseCount === 0 && !groundedGradingEnabled
+                                  ? "destructive"
+                                  : "outline"
                               }
-                              rows={3}
-                              maxLength={2000}
-                            />
-                            <div className="flex flex-wrap gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                onClick={() =>
-                                  void saveQuestionTitle(question.question.id)
-                                }
-                                disabled={
-                                  savingQuestionTitleId === question.question.id
-                                }
-                              >
-                                <Check className="mr-1 h-3.5 w-3.5" />
-                                {savingQuestionTitleId === question.question.id
-                                  ? "Saving..."
-                                  : "Save Title"}
-                              </Button>
+                              className="text-xs"
+                            >
+                              {responseCount} response
+                              {responseCount === 1 ? "" : "s"}
+                              {responseCount === 0 && groundedGradingEnabled
+                                ? " (optional)"
+                                : ""}
+                            </Badge>
+                          )}
+                        </div>
+                      </button>
+
+                      {isExpanded && (
+                        <>
+                          <Separator />
+                          <CardHeader>
+                            {editingQuestionId === question.question.id ? (
+                              <div className="space-y-2">
+                                <Textarea
+                                  value={editingPromptText}
+                                  onChange={(event) =>
+                                    setEditingPromptText(event.target.value)
+                                  }
+                                  rows={3}
+                                  maxLength={2000}
+                                />
+                                <div className="flex flex-wrap gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() =>
+                                      void saveQuestionTitle(
+                                        question.question.id,
+                                      )
+                                    }
+                                    disabled={
+                                      savingQuestionTitleId ===
+                                      question.question.id
+                                    }
+                                  >
+                                    <Check className="mr-1 h-3.5 w-3.5" />
+                                    {savingQuestionTitleId ===
+                                    question.question.id
+                                      ? "Saving..."
+                                      : "Save Title"}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setEditingQuestionId(null);
+                                      setEditingPromptText("");
+                                    }}
+                                    disabled={
+                                      savingQuestionTitleId ===
+                                      question.question.id
+                                    }
+                                  >
+                                    <X className="mr-1 h-3.5 w-3.5" />
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <CardDescription className="space-y-2">
+                                <span className="block">
+                                  {question.question.promptText}
+                                </span>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="w-fit"
+                                  onClick={() =>
+                                    startEditingQuestionTitle(
+                                      question.question.id,
+                                      question.question.promptText,
+                                    )
+                                  }
+                                >
+                                  <Pencil className="mr-1 h-3.5 w-3.5" />
+                                  Edit Title
+                                </Button>
+                              </CardDescription>
+                            )}
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            <div className="flex items-center justify-end">
                               <Button
                                 type="button"
                                 size="sm"
                                 variant="outline"
-                                onClick={() => {
-                                  setEditingQuestionId(null);
-                                  setEditingPromptText("");
-                                }}
+                                onClick={() => unassignQuestion(question.id)}
                                 disabled={
-                                  savingQuestionTitleId === question.question.id
+                                  removingAssignmentId === question.id
                                 }
                               >
-                                <X className="mr-1 h-3.5 w-3.5" />
-                                Cancel
+                                <Unlink className="mr-2 h-4 w-4" />
+                                {removingAssignmentId === question.id
+                                  ? "Unassigning..."
+                                  : "Unassign"}
                               </Button>
                             </div>
-                          </div>
-                        ) : (
-                          <CardDescription className="space-y-2">
-                            <span className="block">
-                              {question.question.promptText}
-                            </span>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="w-fit"
-                              onClick={() =>
-                                startEditingQuestionTitle(
-                                  question.question.id,
-                                  question.question.promptText,
+
+                            <div className="space-y-2">
+                              <p className="text-xs text-muted-foreground">
+                                Current uploaded audio
+                              </p>
+                              {question.question.promptAudioPath ? (
+                                <audio
+                                  key={question.question.promptAudioPath}
+                                  controls
+                                  preload="metadata"
+                                  className="w-full"
+                                  src={question.question.promptAudioPath}
+                                >
+                                  Your browser does not support the audio
+                                  element.
+                                </audio>
+                              ) : (
+                                <p className="text-sm text-muted-foreground">
+                                  No question audio uploaded yet.
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="space-y-2 rounded-md border border-white/10 bg-black/30 p-3">
+                              <p className="text-xs text-muted-foreground">
+                                Replace audio file
+                              </p>
+                              <Input
+                                type="file"
+                                accept="audio/*"
+                                onChange={(e) =>
+                                  handleQuestionAudioFileSelect(
+                                    question.question.id,
+                                    e.target.files?.[0] ?? null,
+                                  )
+                                }
+                              />
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() =>
+                                  updateQuestionAudio(question.question.id)
+                                }
+                                disabled={
+                                  updatingQuestionId === question.question.id ||
+                                  !questionAudioFiles[question.question.id]
+                                }
+                              >
+                                {updatingQuestionId === question.question.id
+                                  ? "Updating..."
+                                  : "Save Audio Change"}
+                              </Button>
+
+                              {hasPersistedTranscript && (
+                                <p className="text-xs text-green-400">
+                                  Transcript ready
+                                </p>
+                              )}
+                              {!hasPersistedTranscript && (
+                                <p className="text-xs text-yellow-400">
+                                  Transcript missing. Upload audio to
+                                  regenerate.
+                                </p>
+                              )}
+                            </div>
+
+                            {groundedGradingEnabled && (
+                              <p className="text-xs text-muted-foreground">
+                                This module grades against source-grounded
+                                answer keys, so a standard response below is
+                                optional context rather than a requirement.
+                              </p>
+                            )}
+                            <StandardResponsesForm
+                              questionId={question.question.id}
+                              onSuccess={() =>
+                                void fetchResponseCounts(
+                                  questions.map((q) => q.question.id),
                                 )
                               }
-                            >
-                              <Pencil className="mr-1 h-3.5 w-3.5" />
-                              Edit Title
-                            </Button>
-                          </CardDescription>
-                        )}
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="flex items-center justify-end">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => unassignQuestion(question.id)}
-                            disabled={removingAssignmentId === question.id}
-                          >
-                            <Unlink className="mr-2 h-4 w-4" />
-                            {removingAssignmentId === question.id
-                              ? "Unassigning..."
-                              : "Unassign"}
-                          </Button>
-                        </div>
-
-                        <div className="space-y-2">
-                          <p className="text-xs text-muted-foreground">
-                            Current uploaded audio
-                          </p>
-                          {question.question.promptAudioPath ? (
-                            <audio
-                              key={question.question.promptAudioPath}
-                              controls
-                              preload="metadata"
-                              className="w-full"
-                              src={question.question.promptAudioPath}
-                            >
-                              Your browser does not support the audio element.
-                            </audio>
-                          ) : (
-                            <p className="text-sm text-muted-foreground">
-                              No question audio uploaded yet.
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="space-y-2 rounded-md border border-white/10 bg-black/30 p-3">
-                          <p className="text-xs text-muted-foreground">
-                            Replace audio file
-                          </p>
-                          <Input
-                            type="file"
-                            accept="audio/*"
-                            onChange={(e) =>
-                              handleQuestionAudioFileSelect(
-                                question.question.id,
-                                e.target.files?.[0] ?? null,
-                              )
-                            }
-                          />
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() =>
-                              updateQuestionAudio(question.question.id)
-                            }
-                            disabled={
-                              updatingQuestionId === question.question.id ||
-                              !questionAudioFiles[question.question.id]
-                            }
-                          >
-                            {updatingQuestionId === question.question.id
-                              ? "Updating..."
-                              : "Save Audio Change"}
-                          </Button>
-
-                          {hasPersistedTranscript && (
-                            <p className="text-xs text-green-400">
-                              Transcript ready
-                            </p>
-                          )}
-                          {!hasPersistedTranscript && (
-                            <p className="text-xs text-yellow-400">
-                              Transcript missing. Upload audio to regenerate.
-                            </p>
-                          )}
-                        </div>
-
-                        <StandardResponsesForm
-                          questionId={question.question.id}
-                        />
-                      </CardContent>
+                            />
+                          </CardContent>
+                        </>
+                      )}
                     </Card>
                   );
                 })}
+
+                {questionsTotalPages > 1 && (
+                  <div className="flex items-center justify-between pt-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={questionsPage <= 1 || loadingQuestions}
+                      onClick={() =>
+                        selectedModuleId &&
+                        fetchQuestionsForModule(
+                          selectedModuleId,
+                          questionsPage - 1,
+                        )
+                      }
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                      Page {questionsPage} of {questionsTotalPages}
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={
+                        questionsPage >= questionsTotalPages || loadingQuestions
+                      }
+                      onClick={() =>
+                        selectedModuleId &&
+                        fetchQuestionsForModule(
+                          selectedModuleId,
+                          questionsPage + 1,
+                        )
+                      }
+                    >
+                      Next
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

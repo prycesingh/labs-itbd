@@ -15,7 +15,7 @@ import {
   aiInterviewEvaluations,
   candidateInterviewAnswers,
   candidateInterviewSessions,
-  interviewModuleQuestionAssignments,
+  interviewFollowupQuestions,
   interviewModules,
   interviewQuestionBank,
   interviewQuestionStandardResponses,
@@ -37,6 +37,11 @@ import {
   normalizeTotalScore,
 } from "@/lib/interview/evaluationMetrics";
 import {
+  CAPABILITY_KEYS,
+  getModuleCapability,
+} from "@/lib/interview/moduleCapabilities";
+import {
+  generateCorrelationId,
   INTERVIEW_AUDIO_RETENTION_CLEANUP_JOB,
   INTERVIEW_EVALUATION_JOB,
   INTERVIEW_SESSION_ORCHESTRATION_JOB,
@@ -438,6 +443,61 @@ async function handleInterviewSessionOrchestration(
   throw new Error("Orchestration timed out waiting for child jobs");
 }
 
+/**
+ * Immediate-processing chain step: once a single answer's transcription
+ * completes (only reached via the transcription-immediate payload marker,
+ * itself only set for modules with follow_ups enabled), spawn and trigger
+ * that answer's evaluation job right away instead of waiting for the batch
+ * orchestration loop to notice it during full-session submission.
+ */
+async function spawnImmediateEvaluation(answerId: string, sessionId: string) {
+  const [answer] = await db
+    .select({
+      questionIndex: candidateInterviewAnswers.questionIndex,
+      evaluationJobId: candidateInterviewAnswers.evaluationJobId,
+    })
+    .from(candidateInterviewAnswers)
+    .where(eq(candidateInterviewAnswers.id, answerId))
+    .limit(1);
+
+  if (!answer || answer.evaluationJobId) {
+    return; // already has an evaluation job queued/completed — avoid duplicates
+  }
+
+  const [sessionRow] = await db
+    .select({ candidateId: candidateInterviewSessions.candidateId })
+    .from(candidateInterviewSessions)
+    .where(eq(candidateInterviewSessions.id, sessionId))
+    .limit(1);
+
+  const correlationId = generateCorrelationId(sessionId);
+  const jobId = `${INTERVIEW_EVALUATION_JOB}_${sessionId}_${answer.questionIndex}_immediate_${Date.now()}`;
+
+  await db.insert(backgroundJobs).values({
+    id: jobId,
+    name: INTERVIEW_EVALUATION_JOB,
+    status: "queued",
+    correlationId,
+    userId: sessionRow?.candidateId ?? null,
+    maxExecutionTimeMs: 3 * 60 * 1000,
+    maxAttempts: 2,
+    result: {
+      sessionId,
+      answerId,
+      type: "evaluation-immediate",
+    },
+    error: null,
+    createdAt: sql`CURRENT_TIMESTAMP`,
+  });
+
+  await db
+    .update(candidateInterviewAnswers)
+    .set({ evaluationJobId: jobId, evaluationStatus: "pending" })
+    .where(eq(candidateInterviewAnswers.id, answerId));
+
+  getJobQueue().triggerJob(jobId);
+}
+
 async function handleInterviewTranscription(
   callbacks: {
     updateProgress: (progress: number) => void;
@@ -549,6 +609,50 @@ async function handleInterviewTranscription(
       language: transcriptResult.language,
     });
 
+    // Delivery/acoustic scoring: capability gate first (Customer Centricity
+    // and any other non-opted-in module never reaches scoreAndPersistDelivery
+    // at all). Failures here are logged and swallowed, never thrown — a
+    // scoring bug must not fail the transcription job or block evaluation.
+    const [sessionForDelivery] = await db
+      .select({ moduleId: candidateInterviewSessions.moduleId })
+      .from(candidateInterviewSessions)
+      .where(eq(candidateInterviewSessions.id, sessionId))
+      .limit(1);
+    if (sessionForDelivery?.moduleId) {
+      const deliveryCapability = await getModuleCapability(
+        sessionForDelivery.moduleId,
+        CAPABILITY_KEYS.DELIVERY_SCORING,
+      );
+      if (deliveryCapability.enabled) {
+        try {
+          const { scoreAndPersistDelivery } = await import(
+            "@/lib/interview/deliveryScoring"
+          );
+          await scoreAndPersistDelivery({
+            answerId,
+            moduleId: sessionForDelivery.moduleId,
+            audioBuffer,
+            words: transcriptResult.words,
+          });
+        } catch (deliveryError) {
+          console.warn(
+            `[deliveryScoring] Failed for answer ${answerId}, continuing without delivery metrics:`,
+            deliveryError,
+          );
+        }
+      }
+    }
+
+    // Immediate-processing path (follow_ups-enabled modules only, see
+    // upload-audio/route.ts): chain straight into evaluation for THIS one
+    // answer, rather than waiting for the batch orchestration job to notice
+    // it at final session submission. Every other module's transcription
+    // job payload never carries this marker, so this block never runs for
+    // them.
+    if (payload.type === "transcription-immediate") {
+      await spawnImmediateEvaluation(answerId, sessionId);
+    }
+
     return {
       success: true,
       answerId,
@@ -636,25 +740,64 @@ async function handleInterviewEvaluation(
   callbacks.updateProgress(20);
 
   try {
-    const [question] = await db
-      .select({
-        questionText: interviewQuestionBank.promptText,
-        moduleTitle: interviewModules.name,
-      })
-      .from(interviewQuestionBank)
-      .leftJoin(
-        interviewModuleQuestionAssignments,
-        eq(
-          interviewModuleQuestionAssignments.questionId,
-          interviewQuestionBank.id,
-        ),
-      )
-      .leftJoin(
-        interviewModules,
-        eq(interviewModules.id, interviewModuleQuestionAssignments.moduleId),
-      )
-      .where(eq(interviewQuestionBank.id, answer.questionId))
+    // moduleId comes from the answering SESSION, not from a join through
+    // interviewModuleQuestionAssignments — a question can be assigned to
+    // more than one module (cross-module borrowing), so the session is the
+    // only reliable source of "which module's capabilities govern this
+    // answer." moduleTitle is still resolved via the session's module row.
+    const [sessionForModule] = await db
+      .select({ moduleId: candidateInterviewSessions.moduleId })
+      .from(candidateInterviewSessions)
+      .where(eq(candidateInterviewSessions.id, resolvedSessionId))
       .limit(1);
+    const moduleId = sessionForModule?.moduleId ?? null;
+
+    // Follow-up answers (answer.isFollowUp) point at interview_followup_
+    // questions.id in the questionId column, not a real bank question — the
+    // bank has no row for them, so look up question text there instead.
+    // Ideal points for a follow-up come from the follow-up row itself
+    // (already derived from the parent answer's missed points when it was
+    // created), not a grounded answer key.
+    const question = answer.isFollowUp
+      ? await (async () => {
+          const [followUp] = await db
+            .select({
+              questionText: interviewFollowupQuestions.questionText,
+              groundedIdealPoints: interviewFollowupQuestions.idealPoints,
+            })
+            .from(interviewFollowupQuestions)
+            .where(eq(interviewFollowupQuestions.id, answer.questionId))
+            .limit(1);
+          return followUp
+            ? {
+                questionText: followUp.questionText,
+                groundedIdealPoints: followUp.groundedIdealPoints,
+                groundedAcceptanceCriteria: null as string[] | null,
+                groundedCoverage: "full" as const,
+              }
+            : undefined;
+        })()
+      : (
+          await db
+            .select({
+              questionText: interviewQuestionBank.promptText,
+              groundedIdealPoints: interviewQuestionBank.groundedIdealPoints,
+              groundedAcceptanceCriteria:
+                interviewQuestionBank.groundedAcceptanceCriteria,
+              groundedCoverage: interviewQuestionBank.groundedCoverage,
+            })
+            .from(interviewQuestionBank)
+            .where(eq(interviewQuestionBank.id, answer.questionId))
+            .limit(1)
+        )[0];
+
+    const [moduleRow] = moduleId
+      ? await db
+          .select({ name: interviewModules.name })
+          .from(interviewModules)
+          .where(eq(interviewModules.id, moduleId))
+          .limit(1)
+      : [];
 
     const standardResponseRows = await db
       .select({
@@ -673,13 +816,37 @@ async function handleInterviewEvaluation(
       .filter((item) => item.trim().length > 0);
     const startedAt = Date.now();
 
+    const [groundedGradingCapability, followUpsCapabilityRaw] = moduleId
+      ? await Promise.all([
+          getModuleCapability(moduleId, CAPABILITY_KEYS.GROUNDED_GRADING),
+          getModuleCapability(moduleId, CAPABILITY_KEYS.FOLLOW_UPS),
+        ])
+      : [{ enabled: false, config: {} }, { enabled: false, config: {} }];
+
+    // Never chain a follow-up off another follow-up — one probe per weak
+    // answer is the intended depth, matching the Python app's behavior.
+    const followUpsCapability = answer.isFollowUp
+      ? { enabled: false, config: {} }
+      : followUpsCapabilityRaw;
+
     const evaluationResult = await evaluateAnswer(
       answer.transcriptedText,
       questionText,
       resolvedAnswerId,
       {
-        moduleTitle: question?.moduleTitle ?? undefined,
+        moduleTitle: moduleRow?.name ?? undefined,
         standardResponses,
+        requestFollowUp: followUpsCapability.enabled,
+        ...(groundedGradingCapability.enabled
+          ? {
+              groundedAnswerKey: {
+                idealPoints: question?.groundedIdealPoints ?? undefined,
+                acceptanceCriteria:
+                  question?.groundedAcceptanceCriteria ?? undefined,
+                coverage: question?.groundedCoverage ?? null,
+              },
+            }
+          : {}),
       },
     );
 
@@ -718,6 +885,29 @@ async function handleInterviewEvaluation(
         aiEvaluationId: evaluationId,
       })
       .where(eq(candidateInterviewAnswers.id, resolvedAnswerId));
+
+    // Adaptive follow-up: only when the module has follow_ups enabled AND
+    // the model flagged this answer as shallow/incomplete. Storing this as
+    // a pending row lets the client poll for it (see the follow-up route)
+    // and insert it into the flow before advancing — the actual UX pause
+    // lives client-side (Phase 6), this is just the detection + storage.
+    if (
+      followUpsCapability.enabled &&
+      evaluationResult.evaluation.follow_up_recommended &&
+      evaluationResult.evaluation.follow_up_question
+    ) {
+      await db.insert(interviewFollowupQuestions).values({
+        id: randomUUID(),
+        sessionId: resolvedSessionId,
+        parentAnswerId: resolvedAnswerId,
+        questionText: evaluationResult.evaluation.follow_up_question,
+        idealPoints:
+          evaluationResult.evaluation.improvement_areas.length > 0
+            ? evaluationResult.evaluation.improvement_areas
+            : (question?.groundedIdealPoints ?? undefined),
+        status: "pending",
+      });
+    }
 
     callbacks.updateProgress(100);
     callbacks.updateResult?.({

@@ -3,10 +3,18 @@ import { db } from "@/DB/drizzle";
 import {
   candidateInterviewAnswers,
   candidateInterviewSessions,
+  interviewFollowupQuestions,
   interviewModuleQuestionAssignments,
   interviewQuestionBank,
 } from "@/DB/interviewSchema";
+import { backgroundJobs } from "@/DB/schema";
+import { getJobQueue } from "@/lib/backgroundJobs";
 import { getAudioStorageProvider } from "@/lib/interview/audioStorage";
+import { generateCorrelationId, INTERVIEW_TRANSCRIPTION_JOB } from "@/lib/interview/jobConstants";
+import {
+  CAPABILITY_KEYS,
+  getModuleCapability,
+} from "@/lib/interview/moduleCapabilities";
 import {
   uploadAudioSchema,
   validateAudioMetadata,
@@ -37,13 +45,19 @@ export async function POST(request: NextRequest) {
 
     const rawSessionId = formData.get("sessionId");
     const rawQuestionId = formData.get("questionId");
+    const rawFollowUpId = formData.get("followUpId");
     const rawQuestionIndex = formData.get("questionIndex");
     const rawAudioDuration = formData.get("audioDuration");
     const rawAudioMimeType = formData.get("audioMimeType");
 
     const parsed = uploadAudioSchema.safeParse({
       sessionId: String(rawSessionId ?? ""),
-      questionId: String(rawQuestionId ?? ""),
+      ...(typeof rawQuestionId === "string" && rawQuestionId.length > 0
+        ? { questionId: rawQuestionId }
+        : {}),
+      ...(typeof rawFollowUpId === "string" && rawFollowUpId.length > 0
+        ? { followUpId: rawFollowUpId }
+        : {}),
       questionIndex: Number(rawQuestionIndex),
       audioDuration: Number(rawAudioDuration),
       audioMimeType:
@@ -65,6 +79,7 @@ export async function POST(request: NextRequest) {
     const {
       sessionId,
       questionId,
+      followUpId,
       questionIndex,
       audioDuration,
       audioMimeType,
@@ -103,31 +118,70 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [question] = await db
-      .select({ id: interviewQuestionBank.id })
-      .from(interviewModuleQuestionAssignments)
-      .innerJoin(
-        interviewQuestionBank,
-        eq(
-          interviewQuestionBank.id,
-          interviewModuleQuestionAssignments.questionId,
-        ),
-      )
-      .where(
-        and(
-          eq(interviewQuestionBank.id, questionId),
-          eq(interviewModuleQuestionAssignments.moduleId, sessionRow.moduleId),
-          eq(interviewModuleQuestionAssignments.isActive, true),
-          eq(interviewQuestionBank.isActive, true),
-        ),
-      )
-      .limit(1);
+    let resolvedQuestionId: string;
+    let followUpRow: { id: string; parentAnswerId: string } | null = null;
 
-    if (!question) {
-      return NextResponse.json(
-        { error: "Question not found in selected module" },
-        { status: 400 },
-      );
+    if (followUpId) {
+      const [row] = await db
+        .select({
+          id: interviewFollowupQuestions.id,
+          sessionId: interviewFollowupQuestions.sessionId,
+          parentAnswerId: interviewFollowupQuestions.parentAnswerId,
+          status: interviewFollowupQuestions.status,
+        })
+        .from(interviewFollowupQuestions)
+        .where(eq(interviewFollowupQuestions.id, followUpId))
+        .limit(1);
+
+      if (!row || row.sessionId !== sessionId) {
+        return NextResponse.json(
+          { error: "Follow-up question not found for this session" },
+          { status: 404 },
+        );
+      }
+      if (row.status !== "pending") {
+        return NextResponse.json(
+          { error: "This follow-up question has already been answered" },
+          { status: 409 },
+        );
+      }
+
+      followUpRow = { id: row.id, parentAnswerId: row.parentAnswerId };
+      // Follow-up answers aren't tied to a bank question; use the follow-up's
+      // own ID as the answer's questionId so it still satisfies the
+      // candidateInterviewAnswers schema without a real bank-question FK.
+      resolvedQuestionId = row.id;
+    } else {
+      const [question] = await db
+        .select({ id: interviewQuestionBank.id })
+        .from(interviewModuleQuestionAssignments)
+        .innerJoin(
+          interviewQuestionBank,
+          eq(
+            interviewQuestionBank.id,
+            interviewModuleQuestionAssignments.questionId,
+          ),
+        )
+        .where(
+          and(
+            eq(interviewQuestionBank.id, questionId!),
+            eq(
+              interviewModuleQuestionAssignments.moduleId,
+              sessionRow.moduleId,
+            ),
+            eq(interviewModuleQuestionAssignments.isActive, true),
+            eq(interviewQuestionBank.isActive, true),
+          ),
+        )
+        .limit(1);
+
+      if (!question) {
+        return NextResponse.json(
+          { error: "Question not found in selected module" },
+          { status: 400 },
+        );
+      }
+      resolvedQuestionId = question.id;
     }
 
     const audioStorage = getAudioStorageProvider();
@@ -147,7 +201,7 @@ export async function POST(request: NextRequest) {
       .where(
         and(
           eq(candidateInterviewAnswers.sessionId, sessionId),
-          eq(candidateInterviewAnswers.questionId, questionId),
+          eq(candidateInterviewAnswers.questionId, resolvedQuestionId),
         ),
       )
       .limit(1);
@@ -167,13 +221,22 @@ export async function POST(request: NextRequest) {
     await db.insert(candidateInterviewAnswers).values({
       id: answerId,
       sessionId,
-      questionId,
+      questionId: resolvedQuestionId,
       questionIndex,
+      isFollowUp: Boolean(followUpRow),
+      followUpOfAnswerId: followUpRow?.parentAnswerId ?? null,
       audioStoragePath: storageResult.storagePath,
       audioMimeType: storageResult.mimeType,
       audioSizeBytes: storageResult.sizeBytes,
       audioDurationMs: storageResult.durationMs,
     });
+
+    if (followUpRow) {
+      await db
+        .update(interviewFollowupQuestions)
+        .set({ status: "answered" })
+        .where(eq(interviewFollowupQuestions.id, followUpRow.id));
+    }
 
     const [recordedStats] = await db
       .select({ count: sql<number>`count(*)` })
@@ -205,6 +268,50 @@ export async function POST(request: NextRequest) {
       })
       .where(eq(candidateInterviewSessions.id, sessionId));
 
+    // Immediate per-answer processing: only for modules with follow_ups
+    // enabled (Interview Coach today). This lets the UI show a brief
+    // "checking..." state and surface an adaptive follow-up before the
+    // candidate advances, instead of waiting for full-session submission —
+    // see moduleCapabilities.ts. Every other module (Customer Centricity)
+    // keeps its existing batch-at-submission flow untouched: this capability
+    // check is the only new code path, and it's false by default.
+    const followUpsCapability = await getModuleCapability(
+      sessionRow.moduleId,
+      CAPABILITY_KEYS.FOLLOW_UPS,
+    );
+    let immediateProcessingJobId: string | null = null;
+
+    if (followUpsCapability.enabled) {
+      const correlationId = generateCorrelationId(sessionId);
+      const jobId = `${INTERVIEW_TRANSCRIPTION_JOB}_${sessionId}_${questionIndex}_${Date.now()}`;
+
+      await db.insert(backgroundJobs).values({
+        id: jobId,
+        name: INTERVIEW_TRANSCRIPTION_JOB,
+        status: "queued",
+        correlationId,
+        userId: session.user.id,
+        maxExecutionTimeMs: 5 * 60 * 1000,
+        maxAttempts: 3,
+        result: {
+          sessionId,
+          answerId,
+          audioStoragePath: storageResult.storagePath,
+          type: "transcription-immediate",
+        },
+        error: null,
+        createdAt: sql`CURRENT_TIMESTAMP`,
+      });
+
+      await db
+        .update(candidateInterviewAnswers)
+        .set({ transcriptJobId: jobId, transcriptStatus: "pending" })
+        .where(eq(candidateInterviewAnswers.id, answerId));
+
+      getJobQueue().triggerJob(jobId);
+      immediateProcessingJobId = jobId;
+    }
+
     return NextResponse.json(
       {
         answerId,
@@ -214,6 +321,10 @@ export async function POST(request: NextRequest) {
         mimeType: storageResult.mimeType,
         sizeBytes: storageResult.sizeBytes,
         durationMs: storageResult.durationMs,
+        immediateProcessing: followUpsCapability.enabled,
+        ...(immediateProcessingJobId
+          ? { transcriptionJobId: immediateProcessingJobId }
+          : {}),
       },
       { status: 201 },
     );

@@ -157,6 +157,11 @@ export const ROUTE_RULES: readonly RouteRule[] = [
     allow: ADMIN_ROLES,
     note: "Per-user practice attempt overrides admin (Interview + Email Assessment)",
   },
+  {
+    prefix: "/dashboard/ModuleCapabilities",
+    allow: ADMIN_ROLES,
+    note: "Interview module capability registry admin (delivery scoring, grounded grading, follow-ups, evaluation depth, attempt cadence)",
+  },
 
   // Catch-all: any authenticated user may reach the rest of the dashboard.
   { prefix: "/dashboard", allow: undefined, note: "Authenticated area" },
