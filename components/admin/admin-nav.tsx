@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/sidebar";
 import { motion } from "motion/react";
 import {
+  Activity,
   ArrowLeft,
   KeyRound,
   LogOut,
@@ -48,6 +49,7 @@ export function AdminNav({
     ...(isSuperAdmin
       ? [{ href: "/admin/users", label: "User Management", icon: Users }]
       : []),
+    { href: "/admin/activity", label: "Activity Log", icon: Activity },
   ];
 
   return (

@@ -168,3 +168,31 @@ export const backgroundJobs = mysqlTable(
     index("background_jobs_retry_idx").on(table.nextRetryAt),
   ],
 );
+
+// ─────────────────────────────────────────────
+// Page visit log (admin activity view)
+// ─────────────────────────────────────────────
+/**
+ * One row per page navigation, written fire-and-forget from proxy.ts via
+ * waitUntil() so it never delays the response. Cross-cutting across both
+ * modules (Interview + Email Assessment) and /admin, so it lives here rather
+ * than in a feature schema. Deliberately un-normalized (no join to a
+ * separate "path" table) — the write path must stay a single INSERT.
+ */
+export const pageVisits = mysqlTable(
+  "page_visits",
+  {
+    id: varchar({ length: 36 }).primaryKey(),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    path: varchar({ length: 512 }).notNull(),
+    visitedAt: timestamp("visited_at", { mode: "string" })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (table) => [
+    index("page_visits_user_visited_idx").on(table.userId, table.visitedAt),
+    index("page_visits_visited_idx").on(table.visitedAt),
+  ],
+);

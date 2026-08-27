@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { db } from "@/DB/drizzle";
 import { users } from "@/DB/schema";
 import { AdminNav } from "@/components/admin/admin-nav";
+import { PageVisitTracker } from "@/components/admin/PageVisitTracker";
 import { DashboardHeader } from "@/components/app_componentes/dashboard-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { isAdminRole, isSuperAdmin, type Role } from "@/lib/rbac";
@@ -39,6 +40,7 @@ export default async function AdminLayout({
 
   return (
     <SidebarProvider className="flex h-screen min-h-0 flex-col overflow-hidden">
+      <PageVisitTracker />
       <DashboardHeader
         user={{
           name: session.user.name,
