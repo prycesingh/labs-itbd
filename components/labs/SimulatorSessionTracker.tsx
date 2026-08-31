@@ -16,11 +16,11 @@ function withJitter(baseMs: number): number {
 
 /**
  * Mounted once per simulator page. Sends a heartbeat immediately, then every
- * ~45s (jittered) while the tab is visible + focused, so the dashboard's
- * "time spent" stats only accrue while the learner is actually looking at
- * the simulator. Hiding/blurring closes the current session outright rather
- * than pausing it — refocusing simply starts a fresh one via the same
- * heartbeat endpoint. Renders nothing.
+ * ~45s (jittered) while the tab is visible, so the dashboard's "time spent"
+ * stats only accrue while the learner has the simulator tab open. Hiding the
+ * tab closes the current session outright rather than pausing it — becoming
+ * visible again simply starts a fresh one via the same heartbeat endpoint.
+ * Renders nothing.
  */
 export function SimulatorSessionTracker({
   simulatorKey,
@@ -33,8 +33,11 @@ export function SimulatorSessionTracker({
     let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-    const isActive = () =>
-      document.visibilityState === "visible" && document.hasFocus();
+    // Visibility alone (not focus) gates whether time accrues — see
+    // SiteSessionTracker for why `document.hasFocus()` is deliberately
+    // excluded (window blur fires for reasons that don't mean the user left
+    // the simulator tab, and was closing real sessions after 10-20s).
+    const isActive = () => document.visibilityState === "visible";
 
     const scheduleNextHeartbeat = () => {
       if (cancelled) return;
@@ -95,14 +98,12 @@ export function SimulatorSessionTracker({
       Math.random() * HEARTBEAT_INTERVAL_MS * JITTER_RATIO,
     );
     document.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("blur", sendClose);
     window.addEventListener("beforeunload", sendClose);
 
     return () => {
       cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
       document.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("blur", sendClose);
       window.removeEventListener("beforeunload", sendClose);
       sendClose();
     };

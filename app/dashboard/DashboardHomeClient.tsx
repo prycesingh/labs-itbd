@@ -254,8 +254,6 @@ export function DashboardHomeClient({
           accent="blue"
           variant="list"
           listItems={COMMUNICATION_MODULES}
-          ctaLabel="View all communication modules"
-          ctaHref="/dashboard/interview/PracticalLearning"
         />
       </div>
 

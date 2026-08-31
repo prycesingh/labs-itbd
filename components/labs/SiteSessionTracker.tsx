@@ -16,12 +16,12 @@ function withJitter(baseMs: number): number {
 
 /**
  * Mounted once in the dashboard layout. Sends a heartbeat immediately, then
- * every ~45s (jittered) while the tab is visible + focused, so the dashboard
- * home's "time spent" stats only accrue while the learner is actually
- * looking at the site (any dashboard page), not just while a simulator is
- * open. Hiding/blurring closes the current session outright rather than
- * pausing it — refocusing simply starts a fresh one via the same heartbeat
- * endpoint. Renders nothing.
+ * every ~45s (jittered) while the tab is visible, so the dashboard home's
+ * "time spent" stats only accrue while the learner has this tab open (any
+ * dashboard page), not just while a simulator is open. Hiding the tab closes
+ * the current session outright rather than pausing it — becoming visible
+ * again simply starts a fresh one via the same heartbeat endpoint. Renders
+ * nothing.
  */
 export function SiteSessionTracker() {
   const sessionIdRef = useRef<string | null>(null);
@@ -30,8 +30,14 @@ export function SiteSessionTracker() {
     let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-    const isActive = () =>
-      document.visibilityState === "visible" && document.hasFocus();
+    // Visibility alone (not focus) gates whether time accrues. `document.
+    // hasFocus()` is deliberately NOT part of this check — window blur fires
+    // for reasons that don't mean the user left the site (clicking a <select>,
+    // devtools, the address bar, briefly alt-tabbing), and treating those as
+    // "gone" was closing real sessions after 10-20s despite the tab staying
+    // open and visible the whole time. Tab-hide (visibilitychange) and
+    // beforeunload are the only signals that actually mean "stop counting."
+    const isActive = () => document.visibilityState === "visible";
 
     const scheduleNextHeartbeat = () => {
       if (cancelled) return;
@@ -91,14 +97,12 @@ export function SiteSessionTracker() {
       Math.random() * HEARTBEAT_INTERVAL_MS * JITTER_RATIO,
     );
     document.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("blur", sendClose);
     window.addEventListener("beforeunload", sendClose);
 
     return () => {
       cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
       document.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("blur", sendClose);
       window.removeEventListener("beforeunload", sendClose);
       sendClose();
     };
