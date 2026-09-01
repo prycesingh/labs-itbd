@@ -1,0 +1,42 @@
+
+> labs-itbd@1.0.0 dev
+> next dev
+
+▲ Next.js 16.2.9 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://172.16.0.28:3000
+- Environments: .env.local, .env
+✓ Ready in 1164ms
+
+○ Compiling /admin/activity ...
+ GET /api/admin/page-visits/summary?days=30 401 in 1882ms (next.js: 1843ms, application-code: 39ms)
+ POST /api/labs/site-sessions/heartbeat 401 in 1658ms (next.js: 1439ms, application-code: 218ms)
+ GET /admin/activity 200 in 13.3s (next.js: 9.8s, proxy.ts: 376ms, application-code: 3.1s)
+ GET /api/admin/page-visits/summary?days=30 200 in 707ms (next.js: 21ms, application-code: 686ms)
+ POST /api/page-visits 200 in 1719ms (next.js: 1151ms, application-code: 568ms)
+ GET /api/auth/session 200 in 2.9s (next.js: 2.6s, application-code: 297ms)
+ GET /api/auth/session 200 in 40ms (next.js: 25ms, application-code: 15ms)
+ GET /api/admin/site-time/summary?days=30 200 in 919ms (next.js: 612ms, application-code: 307ms)
+ GET /api/admin/site-time/summary?days=30 200 in 303ms (next.js: 6ms, application-code: 297ms)
+✓ Compiled in 502ms
+ GET /api/admin/page-visits/summary?days=30 200 in 2.2s (next.js: 175ms, application-code: 2.1s)
+ GET /admin/activity 200 in 2.5s (next.js: 369ms, proxy.ts: 477ms, application-code: 1659ms)
+ GET /admin/activity 200 in 1528ms (next.js: 6ms, proxy.ts: 89ms, application-code: 1433ms)
+ GET /admin/activity 200 in 1473ms (next.js: 7ms, proxy.ts: 37ms, application-code: 1429ms)
+ GET /api/admin/site-time/summary?days=30 200 in 3.0s (next.js: 247ms, application-code: 2.7s)
+ GET /api/admin/page-visits?page=1 200 in 3.1s (next.js: 824ms, application-code: 2.3s)
+✓ Compiled in 313ms
+ GET /admin/activity 200 in 1153ms (next.js: 238ms, proxy.ts: 121ms, application-code: 794ms)
+✓ Compiled in 218ms
+ GET /admin/activity 200 in 1226ms (next.js: 266ms, proxy.ts: 144ms, application-code: 817ms)
+✓ Compiled in 200ms
+ GET /admin/activity 200 in 1173ms (next.js: 297ms, proxy.ts: 120ms, application-code: 757ms)
+✓ Compiled in 328ms
+ GET /admin/activity 200 in 1637ms (next.js: 479ms, proxy.ts: 202ms, application-code: 956ms)
+ GET /api/auth/csrf 200 in 248ms (next.js: 218ms, application-code: 30ms)
+ POST /api/auth/signout 200 in 29ms (next.js: 6ms, application-code: 23ms)
+○ Compiling / ...
+ GET / 200 in 3.9s (next.js: 3.4s, proxy.ts: 11ms, application-code: 568ms)
+ GET /api/auth/session 200 in 65ms (next.js: 37ms, application-code: 28ms)
+ GET /api/auth/session 200 in 24ms (next.js: 9ms, application-code: 15ms)
+[browser] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
