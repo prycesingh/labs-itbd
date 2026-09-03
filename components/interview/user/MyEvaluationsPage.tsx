@@ -16,7 +16,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
 import { totalScoreToPercentage } from "@/lib/interview/evaluationMetrics";
 import { Download, Eye, Loader2 } from "lucide-react";
 import { useSession } from "next-auth/react";
@@ -40,6 +39,7 @@ interface UserSession {
   evaluation?: {
     overallAiScore: number;
     overallAdminScore?: number;
+    overallDeliveryScore?: number;
     aiStrengths?: string;
     aiImprovementAreas?: string;
   };
@@ -52,11 +52,13 @@ interface SessionAnswerDetail {
   transcript: string | null;
   aiScore: number | null;
   adminScore: number | null;
+  deliveryScore?: number | null;
 }
 
 interface SessionDetailPayload {
   session: { id: string };
   answers: SessionAnswerDetail[];
+  overallDeliveryScore?: number;
 }
 
 function formatPercentageScore(value: number | null | undefined): string {
@@ -181,7 +183,7 @@ export default function MyEvaluationsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-cyan-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-itbd-blue" />
       </div>
     );
   }
@@ -189,7 +191,7 @@ export default function MyEvaluationsPage() {
   return (
     <main className="flex flex-col w-full gap-6">
       {sessions.length === 0 ? (
-        <Card className="border-cyan-500/20 bg-black/20">
+        <Card className="border-border bg-card">
           <CardContent className="pt-6">
             <p className="text-center text-muted-foreground">
               No completed interviews yet. Start practicing to see your
@@ -204,10 +206,14 @@ export default function MyEvaluationsPage() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {sessions.map((sess) => (
+            {sessions.map((sess) => {
+              const hasDeliveryScore =
+                typeof sess.evaluation?.overallDeliveryScore === "number";
+
+              return (
               <Card
                 key={sess.id}
-                className="border-cyan-500/20 bg-black/20 hover:border-cyan-500/40 transition-colors"
+                className="border-border bg-card hover:border-itbd-blue/50 transition-colors"
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-2">
@@ -237,21 +243,42 @@ export default function MyEvaluationsPage() {
                   </div>
 
                   {sess.evaluation && (
-                    <div className="space-y-2 p-2 rounded-md bg-blue-500/10 border border-blue-500/20">
-                      <div className="text-xs font-medium text-blue-400">
-                        Total Score (%)
+                    <div
+                      className={`grid gap-2 ${hasDeliveryScore ? "grid-cols-2" : "grid-cols-1"}`}
+                    >
+                      <div className="space-y-1 rounded-md bg-itbd-blue/10 p-2">
+                        <div className="text-[11px] font-medium uppercase tracking-wide text-itbd-blue">
+                          Content
+                        </div>
+                        <div className="text-2xl font-bold text-itbd-blue">
+                          {formatPercentageScore(
+                            sess.evaluation.overallAdminScore ??
+                              sess.evaluation.overallAiScore,
+                          )}
+                          <span className="text-sm font-normal text-itbd-blue/70">
+                            {" "}
+                            / 100
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-2xl font-bold text-blue-400">
-                        {formatPercentageScore(
-                          sess.evaluation.overallAdminScore ??
-                            sess.evaluation.overallAiScore,
-                        )}{" "}
-                        / 100
-                      </div>
+                      {hasDeliveryScore && (
+                        <div className="space-y-1 rounded-md bg-muted p-2">
+                          <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            Delivery
+                          </div>
+                          <div className="text-2xl font-bold text-foreground">
+                            {formatPercentageScore(
+                              sess.evaluation.overallDeliveryScore,
+                            )}
+                            <span className="text-sm font-normal text-muted-foreground">
+                              {" "}
+                              / 100
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
-
-                  <Separator className="bg-white/10" />
 
                   <div className="flex gap-2">
                     <Button
@@ -259,7 +286,7 @@ export default function MyEvaluationsPage() {
                       onClick={() => {
                         void openSessionDetails(sess);
                       }}
-                      className="flex-1 gap-1 bg-cyan-600 hover:bg-cyan-700"
+                      className="flex-1 gap-1 bg-itbd-blue text-white hover:bg-itbd-blue/90"
                     >
                       <Eye className="h-3 w-3" />
                       View Details
@@ -283,14 +310,15 @@ export default function MyEvaluationsPage() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
 
       {/* Details Modal */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-3xl max-h-96 overflow-y-auto">
+        <DialogContent className="w-[calc(100%-2rem)] sm:max-w-2xl lg:max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {selectedSession && selectedSession.moduleName}
@@ -304,12 +332,19 @@ export default function MyEvaluationsPage() {
           <div className="space-y-4">
             {selectedSession && selectedSession.evaluation && (
               <>
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="p-3 rounded-md bg-blue-500/10 border border-blue-500/20">
-                    <div className="text-xs font-medium text-muted-foreground">
-                      Total Score (%)
+                <div
+                  className={`grid gap-4 ${
+                    typeof selectedSession.evaluation.overallDeliveryScore ===
+                    "number"
+                      ? "grid-cols-2"
+                      : "grid-cols-1"
+                  }`}
+                >
+                  <div className="p-3 rounded-md bg-itbd-blue/10">
+                    <div className="text-xs font-medium uppercase tracking-wide text-itbd-blue">
+                      Content Score
                     </div>
-                    <div className="text-2xl font-bold text-blue-400 mt-1">
+                    <div className="text-2xl font-bold text-itbd-blue mt-1">
                       {formatPercentageScore(
                         selectedSession.evaluation.overallAdminScore ??
                           selectedSession.evaluation.overallAiScore,
@@ -317,32 +352,68 @@ export default function MyEvaluationsPage() {
                       / 100
                     </div>
                   </div>
+                  {typeof selectedSession.evaluation.overallDeliveryScore ===
+                    "number" && (
+                    <div className="p-3 rounded-md bg-muted">
+                      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Delivery Score
+                      </div>
+                      <div className="text-2xl font-bold text-foreground mt-1">
+                        {formatPercentageScore(
+                          selectedSession.evaluation.overallDeliveryScore,
+                        )}{" "}
+                        / 100
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {selectedSession.evaluation.aiStrengths && (
-                  <div className="p-3 rounded-md bg-green-500/10 border border-green-500/20">
-                    <div className="text-xs font-medium mb-1">Strengths</div>
-                    <p className="text-sm text-gray-300">
-                      {selectedSession.evaluation.aiStrengths}
-                    </p>
+                  <div className="p-3 rounded-md bg-muted">
+                    <div className="text-xs font-medium mb-2">Strengths</div>
+                    <ul className="space-y-1.5">
+                      {selectedSession.evaluation.aiStrengths
+                        .split("; ")
+                        .filter(Boolean)
+                        .map((item, index) => (
+                          <li
+                            key={index}
+                            className="text-sm text-muted-foreground flex gap-2"
+                          >
+                            <span className="text-itbd-blue">•</span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                    </ul>
                   </div>
                 )}
 
                 {selectedSession.evaluation.aiImprovementAreas && (
-                  <div className="p-3 rounded-md bg-yellow-500/10 border border-yellow-500/20">
-                    <div className="text-xs font-medium mb-1">
+                  <div className="p-3 rounded-md bg-muted">
+                    <div className="text-xs font-medium mb-2">
                       Areas for Improvement
                     </div>
-                    <p className="text-sm text-gray-300">
-                      {selectedSession.evaluation.aiImprovementAreas}
-                    </p>
+                    <ul className="space-y-1.5">
+                      {selectedSession.evaluation.aiImprovementAreas
+                        .split("; ")
+                        .filter(Boolean)
+                        .map((item, index) => (
+                          <li
+                            key={index}
+                            className="text-sm text-muted-foreground flex gap-2"
+                          >
+                            <span className="text-itbd-blue">•</span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                    </ul>
                   </div>
                 )}
               </>
             )}
 
             {(detailLoading || detailAnswers.length > 0) && (
-              <div className="rounded-md border border-white/10 bg-black/30 p-3">
+              <div className="rounded-md bg-muted/40 p-3">
                 <div className="text-xs font-medium mb-3">Answer Breakdown</div>
 
                 {detailLoading ? (
@@ -355,20 +426,32 @@ export default function MyEvaluationsPage() {
                     {detailAnswers.map((answer) => (
                       <div
                         key={answer.id}
-                        className="rounded-md border border-white/10 bg-black/25 p-3"
+                        className="rounded-md bg-card p-3"
                       >
                         <div className="text-sm font-medium">
                           Q{answer.questionIndex + 1}:{" "}
                           {answer.questionText || "Question"}
                         </div>
                         <div className="mt-2 text-xs text-muted-foreground">
-                          Score:{" "}
-                          {formatPercentageScore(
-                            answer.adminScore ?? answer.aiScore,
-                          )}{" "}
-                          / 100
+                          Content:{" "}
+                          <span className="text-itbd-blue font-medium">
+                            {formatPercentageScore(
+                              answer.adminScore ?? answer.aiScore,
+                            )}{" "}
+                            / 100
+                          </span>
+                          {typeof answer.deliveryScore === "number" && (
+                            <>
+                              <span className="mx-2">·</span>
+                              Delivery:{" "}
+                              <span className="text-foreground font-medium">
+                                {formatPercentageScore(answer.deliveryScore)} /
+                                100
+                              </span>
+                            </>
+                          )}
                         </div>
-                        <p className="mt-2 text-sm text-gray-300">
+                        <p className="mt-2 text-sm text-muted-foreground">
                           {answer.transcript || "Transcript unavailable"}
                         </p>
                       </div>

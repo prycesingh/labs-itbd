@@ -1,7 +1,9 @@
 import {
+  DEFAULT_DIMENSION_SET,
+  DIMENSION_SETS,
   EVALUATION_DIMENSION_LABELS,
-  EVALUATION_DIMENSION_ORDER,
   type DimensionScoreMap,
+  type DimensionSetName,
 } from "@/lib/interview/evaluationMetrics";
 import {
   Document,
@@ -37,6 +39,13 @@ const ITBD_WHITE = "#FFFFFF";
 const ITBD_LIGHT_GRAY = "#BFBFBF";
 const ITBD_NEUTRAL_GRAY = "#252525";
 
+export type DeliveryScoreMap = {
+  pace?: number;
+  pausing?: number;
+  fluency?: number;
+  expressiveness?: number;
+};
+
 export type ResultsPdfAnswer = {
   questionIndex: number;
   questionText: string;
@@ -45,6 +54,8 @@ export type ResultsPdfAnswer = {
   aiDimensions: DimensionScoreMap;
   finalDimensions: DimensionScoreMap;
   transcript: string | null;
+  deliveryOverall?: number | null;
+  deliveryScores?: DeliveryScoreMap | null;
 };
 
 export type ResultsPdfData = {
@@ -53,12 +64,18 @@ export type ResultsPdfData = {
   completedAt: string;
   aiScore: number | null;
   finalScore: number | null;
+  dimensionSet?: DimensionSetName;
   aiDimensions: DimensionScoreMap;
   finalDimensions: DimensionScoreMap;
   strengths: string[];
   improvementAreas: string[];
   summary: string;
   answers: ResultsPdfAnswer[];
+  // Delivery scoring (pace/pausing/fluency/expressiveness, 1-5 band) — only
+  // present for modules with delivery scoring enabled (Interview Coach);
+  // absent for Customer Cetricity sessions, which never have this data.
+  deliveryOverall?: number | null;
+  deliveryScores?: DeliveryScoreMap;
 };
 
 const styles = StyleSheet.create({
@@ -212,15 +229,17 @@ function formatScore(value: number | null): string {
 }
 
 function DimensionGrid({
+  dimensionSet = DEFAULT_DIMENSION_SET,
   aiDimensions,
   finalDimensions,
 }: {
+  dimensionSet?: DimensionSetName;
   aiDimensions: DimensionScoreMap;
   finalDimensions: DimensionScoreMap;
 }) {
   return (
     <View style={styles.dimensionGrid}>
-      {EVALUATION_DIMENSION_ORDER.map((key) => (
+      {DIMENSION_SETS[dimensionSet].map((key) => (
         <View key={key} style={styles.dimensionCell}>
           <Text style={styles.dimensionLabel}>
             {EVALUATION_DIMENSION_LABELS[key]}
@@ -236,6 +255,34 @@ function DimensionGrid({
               ) ?? "-"}
             </Text>
           </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const DELIVERY_LABELS: Record<keyof DeliveryScoreMap, string> = {
+  pace: "Pace",
+  pausing: "Pausing",
+  fluency: "Fluency",
+  expressiveness: "Expressiveness",
+};
+const DELIVERY_ORDER: Array<keyof DeliveryScoreMap> = [
+  "pace",
+  "pausing",
+  "fluency",
+  "expressiveness",
+];
+
+function DeliveryGrid({ deliveryScores }: { deliveryScores: DeliveryScoreMap }) {
+  return (
+    <View style={styles.dimensionGrid}>
+      {DELIVERY_ORDER.map((key) => (
+        <View key={key} style={styles.dimensionCell}>
+          <Text style={styles.dimensionLabel}>{DELIVERY_LABELS[key]}</Text>
+          <Text style={styles.dimensionScoreFinal}>
+            {deliveryScores[key]?.toFixed(1) ?? "-"} / 5
+          </Text>
         </View>
       ))}
     </View>
@@ -270,6 +317,14 @@ function ResultsPdfDocument({ data }: { data: ResultsPdfData }) {
               {formatScore(data.finalScore)}
             </Text>
           </View>
+          {typeof data.deliveryOverall === "number" && (
+            <View style={styles.scoreCard}>
+              <Text style={styles.scoreLabel}>Delivery Score</Text>
+              <Text style={styles.scoreValue}>
+                {data.deliveryOverall.toFixed(1)} / 5
+              </Text>
+            </View>
+          )}
         </View>
 
         <Text style={styles.sectionTitle}>Summary</Text>
@@ -305,9 +360,17 @@ function ResultsPdfDocument({ data }: { data: ResultsPdfData }) {
 
         <Text style={styles.sectionTitle}>Dimension Breakdown</Text>
         <DimensionGrid
+          dimensionSet={data.dimensionSet}
           aiDimensions={data.aiDimensions}
           finalDimensions={data.finalDimensions}
         />
+
+        {data.deliveryScores && (
+          <>
+            <Text style={styles.sectionTitle}>Delivery Scoring</Text>
+            <DeliveryGrid deliveryScores={data.deliveryScores} />
+          </>
+        )}
 
         <View style={styles.footer} fixed>
           <Text>IT By Design — Labs ITBD</Text>
@@ -329,6 +392,9 @@ function ResultsPdfDocument({ data }: { data: ResultsPdfData }) {
               </Text>
               <Text style={styles.answerScore}>
                 {formatScore(answer.finalScore ?? answer.aiScore)}
+                {typeof answer.deliveryOverall === "number"
+                  ? `  ·  Delivery ${answer.deliveryOverall.toFixed(1)} / 5`
+                  : ""}
               </Text>
             </View>
             <Text style={styles.bodyText}>

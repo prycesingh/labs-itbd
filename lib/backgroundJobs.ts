@@ -271,23 +271,25 @@ class BackgroundJobQueue {
 
       await this.awaitProgressWrites(jobId);
 
-      await db
-        .update(backgroundJobs)
-        .set({
-          status: "completed",
-          progress: 100,
-          completedAt: new Date().toISOString(),
-          result,
-          error: null,
-          executionTimeMs: Date.now() - startedAtMs,
-          activeLockKey: null,
-        })
-        .where(
-          and(
-            eq(backgroundJobs.id, jobId),
-            eq(backgroundJobs.status, "running"),
+      await this.withDbRetry(() =>
+        db
+          .update(backgroundJobs)
+          .set({
+            status: "completed",
+            progress: 100,
+            completedAt: new Date().toISOString(),
+            result,
+            error: null,
+            executionTimeMs: Date.now() - startedAtMs,
+            activeLockKey: null,
+          })
+          .where(
+            and(
+              eq(backgroundJobs.id, jobId),
+              eq(backgroundJobs.status, "running"),
+            ),
           ),
-        );
+      );
 
       if (isInterviewJob) {
         console.log(
@@ -308,18 +310,20 @@ class BackgroundJobQueue {
 
       if (shouldRetry) {
         try {
-          await db
-            .update(backgroundJobs)
-            .set({
-              status: "queued",
-              progress: 0,
-              startedAt: null,
-              completedAt: null,
-              executionTimeMs: null,
-              error: message,
-              activeLockKey: null,
-            })
-            .where(eq(backgroundJobs.id, jobId));
+          await this.withDbRetry(() =>
+            db
+              .update(backgroundJobs)
+              .set({
+                status: "queued",
+                progress: 0,
+                startedAt: null,
+                completedAt: null,
+                executionTimeMs: null,
+                error: message,
+                activeLockKey: null,
+              })
+              .where(eq(backgroundJobs.id, jobId)),
+          );
 
           this.scheduleJobRetry(jobId, CLAIM_LOCK_RETRY_DELAY_MS);
         } catch (statusUpdateError) {
@@ -505,16 +509,18 @@ class BackgroundJobQueue {
     errorMessage: string,
     executionTimeMs?: number,
   ) {
-    await db
-      .update(backgroundJobs)
-      .set({
-        status: "failed",
-        error: errorMessage,
-        completedAt: new Date().toISOString(),
-        executionTimeMs,
-        activeLockKey: null,
-      })
-      .where(eq(backgroundJobs.id, job.id));
+    await this.withDbRetry(() =>
+      db
+        .update(backgroundJobs)
+        .set({
+          status: "failed",
+          error: errorMessage,
+          completedAt: new Date().toISOString(),
+          executionTimeMs,
+          activeLockKey: null,
+        })
+        .where(eq(backgroundJobs.id, job.id)),
+    );
   }
 
   private async awaitProgressWrites(jobId: string) {

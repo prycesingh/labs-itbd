@@ -6,6 +6,7 @@ import {
   aiInterviewEvaluations,
   candidateInterviewAnswers,
   candidateInterviewSessions,
+  interviewDeliveryMetrics,
   interviewFollowupQuestions,
   interviewModuleQuestionAssignments,
   interviewModules,
@@ -23,6 +24,7 @@ import {
   totalScoreToPercentage,
   type DimensionSetName,
 } from "@/lib/interview/evaluationMetrics";
+import { average1To5ToPercentage } from "@/lib/interview/deliveryMetrics";
 import {
   CAPABILITY_KEYS,
   getAttemptCadence,
@@ -456,8 +458,47 @@ export async function GET(request: NextRequest) {
         summaries.map((summary) => [summary.sessionId, summary]),
       );
 
+      // Delivery scoring (Interview Coach only — Customer Cetricity answers
+      // never have a row here). Averaged per session across its answers so
+      // the session card can show one delivery figure alongside content.
+      const sessionIds = sessionRows.map((row) => row.id);
+      const deliveryRows =
+        sessionIds.length > 0
+          ? await db
+              .select({
+                sessionId: candidateInterviewAnswers.sessionId,
+                deliveryOverall: interviewDeliveryMetrics.deliveryOverall,
+              })
+              .from(interviewDeliveryMetrics)
+              .innerJoin(
+                candidateInterviewAnswers,
+                eq(
+                  candidateInterviewAnswers.id,
+                  interviewDeliveryMetrics.answerId,
+                ),
+              )
+              .where(inArray(candidateInterviewAnswers.sessionId, sessionIds))
+          : [];
+
+      const deliveryScoresBySessionId = new Map<string, number[]>();
+      for (const row of deliveryRows) {
+        const value = Number(row.deliveryOverall);
+        if (!Number.isFinite(value)) continue;
+        const existing = deliveryScoresBySessionId.get(row.sessionId) ?? [];
+        existing.push(value);
+        deliveryScoresBySessionId.set(row.sessionId, existing);
+      }
+
       const payload = sessionRows.map((row) => {
         const summary = summaryBySessionId.get(row.id);
+        const deliveryScores = deliveryScoresBySessionId.get(row.id);
+        const overallDeliveryScore =
+          deliveryScores && deliveryScores.length > 0
+            ? average1To5ToPercentage(
+                deliveryScores.reduce((sum, score) => sum + score, 0) /
+                  deliveryScores.length,
+              )
+            : undefined;
 
         return {
           id: row.id,
@@ -473,16 +514,13 @@ export async function GET(request: NextRequest) {
                   summary.overallAdminScore !== null
                     ? Number(summary.overallAdminScore)
                     : undefined,
-                aiStrengths: Array.isArray(summary.aiStrengths)
-                  ? summary.aiStrengths.join("; ")
-                  : typeof summary.aiStrengths === "string"
-                    ? summary.aiStrengths
-                    : undefined,
-                aiImprovementAreas: Array.isArray(summary.aiImprovementAreas)
-                  ? summary.aiImprovementAreas.join("; ")
-                  : typeof summary.aiImprovementAreas === "string"
-                    ? summary.aiImprovementAreas
-                    : undefined,
+                overallDeliveryScore,
+                aiStrengths:
+                  normalizeStringList(summary.aiStrengths).join("; ") ||
+                  undefined,
+                aiImprovementAreas:
+                  normalizeStringList(summary.aiImprovementAreas).join("; ") ||
+                  undefined,
               }
             : undefined,
         };
@@ -535,6 +573,23 @@ export async function GET(request: NextRequest) {
     const adminEvalIds = answers
       .map((answer) => answer.adminEvaluationId)
       .filter((id): id is string => Boolean(id));
+    const answerIds = answers.map((answer) => answer.id);
+
+    // Delivery scoring (Interview Coach only — Customer Cetricity answers
+    // will never have a row here, which is correct, not a gap).
+    const deliveryRows =
+      answerIds.length > 0
+        ? await db
+            .select({
+              answerId: interviewDeliveryMetrics.answerId,
+              deliveryOverall: interviewDeliveryMetrics.deliveryOverall,
+            })
+            .from(interviewDeliveryMetrics)
+            .where(inArray(interviewDeliveryMetrics.answerId, answerIds))
+        : [];
+    const deliveryOverallByAnswerId = new Map(
+      deliveryRows.map((row) => [row.answerId, Number(row.deliveryOverall)]),
+    );
 
     const questionRows =
       questionIds.length > 0
@@ -678,8 +733,24 @@ export async function GET(request: NextRequest) {
           typeof normalizedAdminTotal === "number"
             ? (totalScoreToPercentage(normalizedAdminTotal) ?? null)
             : null,
+        deliveryScore: average1To5ToPercentage(
+          deliveryOverallByAnswerId.get(answer.id),
+        ),
       };
     });
+
+    const answerDeliveryScores = enrichedAnswers
+      .map((answer) => answer.deliveryScore)
+      .filter((score): score is number => typeof score === "number");
+    const overallDeliveryScore =
+      answerDeliveryScores.length > 0
+        ? Number(
+            (
+              answerDeliveryScores.reduce((sum, score) => sum + score, 0) /
+              answerDeliveryScores.length
+            ).toFixed(2),
+          )
+        : undefined;
 
     const [summary] = await db
       .select()
@@ -731,6 +802,7 @@ export async function GET(request: NextRequest) {
         sessionQuestions,
         answers: enrichedAnswers,
         summary: normalizedSummary,
+        overallDeliveryScore,
         capabilities: {
           followUps: followUpsCapability.enabled,
           deliveryScoring: deliveryScoringCapability.enabled,

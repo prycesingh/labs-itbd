@@ -5,6 +5,7 @@ import {
   adminInterviewEvaluations,
   candidateInterviewAnswers,
   candidateInterviewSessions,
+  interviewDeliveryMetrics,
   interviewModules,
   interviewQuestionBank,
   interviewSessionSummaries,
@@ -14,12 +15,14 @@ import {
   averageDimensionMaps,
   averageTotalScores,
   calculateWeightedTotalScore,
-  EVALUATION_DIMENSION_ORDER,
+  DEFAULT_DIMENSION_SET,
+  DIMENSION_SETS,
   mergeDimensionMaps,
   normalizeDimensionMap,
   normalizeTotalScore,
   totalScoreToPercentage,
   type DimensionScoreMap,
+  type DimensionSetName,
 } from "@/lib/interview/evaluationMetrics";
 import { renderResultsPdf, type ResultsPdfAnswer } from "@/lib/interview/resultsPdf";
 import { isAdminRole, type Role } from "@/lib/rbac";
@@ -29,15 +32,23 @@ import { z } from "zod";
 
 const paramsSchema = z.object({ sessionId: z.string().uuid() });
 
-function hasCompleteDimensionScores(dimensions: DimensionScoreMap) {
-  return EVALUATION_DIMENSION_ORDER.every(
+function hasCompleteDimensionScores(
+  dimensions: DimensionScoreMap,
+  dimensionSet: DimensionSetName = DEFAULT_DIMENSION_SET,
+) {
+  return DIMENSION_SETS[dimensionSet].every(
     (key) => typeof dimensions[key]?.score === "number",
   );
 }
 
 function parseAiStructured(
   value: unknown,
-): { total_score?: number; dimensions?: unknown; final_summary?: string } | null {
+): {
+  total_score?: number;
+  dimensions?: unknown;
+  dimensionSet?: DimensionSetName;
+  final_summary?: string;
+} | null {
   if (typeof value === "string") {
     try {
       return parseAiStructured(JSON.parse(value));
@@ -49,6 +60,7 @@ function parseAiStructured(
   return value as {
     total_score?: number;
     dimensions?: unknown;
+    dimensionSet?: DimensionSetName;
     final_summary?: string;
   };
 }
@@ -175,9 +187,27 @@ export async function GET(
             .where(inArray(adminInterviewEvaluations.id, adminEvalIds))
         : [];
 
+    // Delivery scoring (Interview Coach only — Customer Cetricity answers
+    // never have a row here, which is correct, not a gap).
+    const answerIds = answers.map((answer) => answer.id);
+    const deliveryRows =
+      answerIds.length > 0
+        ? await db
+            .select({
+              answerId: interviewDeliveryMetrics.answerId,
+              deliveryScores: interviewDeliveryMetrics.deliveryScores,
+              deliveryOverall: interviewDeliveryMetrics.deliveryOverall,
+            })
+            .from(interviewDeliveryMetrics)
+            .where(inArray(interviewDeliveryMetrics.answerId, answerIds))
+        : [];
+
     const questionById = new Map(questionRows.map((q) => [q.id, q]));
     const aiById = new Map(aiRows.map((item) => [item.id, item]));
     const adminById = new Map(adminRows.map((item) => [item.id, item]));
+    const deliveryByAnswerId = new Map(
+      deliveryRows.map((row) => [row.answerId, row]),
+    );
 
     const [summary] = await db
       .select()
@@ -190,6 +220,28 @@ export async function GET(
     const perAnswerFinalTotals: Array<number | undefined> = [];
     const perAnswerAiDimensions: DimensionScoreMap[] = [];
     const perAnswerFinalDimensions: DimensionScoreMap[] = [];
+    const perAnswerDeliveryOverall: number[] = [];
+    const perAnswerDeliveryScores: Array<{
+      pace?: number;
+      pausing?: number;
+      fluency?: number;
+      expressiveness?: number;
+    }> = [];
+
+    // All answers in a session share one module, so one dimension set —
+    // derived from the first answer that has one, same pattern as the admin
+    // route, rather than assuming DEFAULT_DIMENSION_SET.
+    let sessionDimensionSet: DimensionSetName = DEFAULT_DIMENSION_SET;
+    for (const answer of answers) {
+      const ai = answer.aiEvaluationId
+        ? aiById.get(answer.aiEvaluationId)
+        : undefined;
+      const dimensionSet = parseAiStructured(ai?.structured)?.dimensionSet;
+      if (dimensionSet) {
+        sessionDimensionSet = dimensionSet;
+        break;
+      }
+    }
 
     for (const answer of answers) {
       const question = questionById.get(answer.questionId);
@@ -199,20 +251,37 @@ export async function GET(
       const admin = answer.adminEvaluationId
         ? adminById.get(answer.adminEvaluationId)
         : undefined;
+      const delivery = deliveryByAnswerId.get(answer.id);
 
       const aiStructured = parseAiStructured(ai?.structured);
-      const aiDimensions = normalizeDimensionMap(aiStructured?.dimensions ?? {});
-      const computedAiTotal = calculateWeightedTotalScore(aiDimensions);
+      const aiDimensions = normalizeDimensionMap(
+        aiStructured?.dimensions ?? {},
+        sessionDimensionSet,
+      );
+      const computedAiTotal = calculateWeightedTotalScore(
+        aiDimensions,
+        sessionDimensionSet,
+      );
       const modelAiTotal = normalizeTotalScore(aiStructured?.total_score);
-      const normalizedAiTotal = hasCompleteDimensionScores(aiDimensions)
+      const normalizedAiTotal = hasCompleteDimensionScores(
+        aiDimensions,
+        sessionDimensionSet,
+      )
         ? (computedAiTotal ?? modelAiTotal)
         : (modelAiTotal ?? computedAiTotal);
 
-      const adminOverrides = normalizeDimensionMap(admin?.dimensionOverrides);
-      const finalDimensions = mergeDimensionMaps(aiDimensions, adminOverrides);
+      const adminOverrides = normalizeDimensionMap(
+        admin?.dimensionOverrides,
+        sessionDimensionSet,
+      );
+      const finalDimensions = mergeDimensionMaps(
+        aiDimensions,
+        adminOverrides,
+        sessionDimensionSet,
+      );
       const normalizedFinalTotal = admin
         ? (normalizeTotalScore(admin.totalScoreOverride) ??
-          calculateWeightedTotalScore(finalDimensions) ??
+          calculateWeightedTotalScore(finalDimensions, sessionDimensionSet) ??
           normalizedAiTotal)
         : normalizedAiTotal;
 
@@ -220,6 +289,26 @@ export async function GET(
       perAnswerFinalTotals.push(normalizedFinalTotal);
       perAnswerAiDimensions.push(aiDimensions);
       perAnswerFinalDimensions.push(finalDimensions);
+
+      const deliveryOverall = delivery
+        ? Number(delivery.deliveryOverall)
+        : undefined;
+      const deliveryScores =
+        delivery && typeof delivery.deliveryScores === "object"
+          ? (delivery.deliveryScores as {
+              pace?: number;
+              pausing?: number;
+              fluency?: number;
+              expressiveness?: number;
+            })
+          : undefined;
+
+      if (typeof deliveryOverall === "number" && Number.isFinite(deliveryOverall)) {
+        perAnswerDeliveryOverall.push(deliveryOverall);
+      }
+      if (deliveryScores) {
+        perAnswerDeliveryScores.push(deliveryScores);
+      }
 
       pdfAnswers.push({
         questionIndex: answer.questionIndex,
@@ -229,13 +318,52 @@ export async function GET(
         aiDimensions,
         finalDimensions,
         transcript: answer.transcriptedText,
+        deliveryOverall:
+          typeof deliveryOverall === "number" && Number.isFinite(deliveryOverall)
+            ? deliveryOverall
+            : null,
+        deliveryScores: deliveryScores ?? null,
       });
     }
 
     const overallAiScore = averageTotalScores(perAnswerAiTotals);
     const overallFinalScore = averageTotalScores(perAnswerFinalTotals);
-    const overallAiDimensions = averageDimensionMaps(perAnswerAiDimensions);
-    const overallFinalDimensions = averageDimensionMaps(perAnswerFinalDimensions);
+    const overallAiDimensions = averageDimensionMaps(
+      perAnswerAiDimensions,
+      sessionDimensionSet,
+    );
+    const overallFinalDimensions = averageDimensionMaps(
+      perAnswerFinalDimensions,
+      sessionDimensionSet,
+    );
+
+    const overallDeliveryScore =
+      perAnswerDeliveryOverall.length > 0
+        ? Number(
+            (
+              perAnswerDeliveryOverall.reduce((sum, v) => sum + v, 0) /
+              perAnswerDeliveryOverall.length
+            ).toFixed(2),
+          )
+        : undefined;
+
+    const DELIVERY_KEYS = ["pace", "pausing", "fluency", "expressiveness"] as const;
+    const overallDeliveryScores: {
+      pace?: number;
+      pausing?: number;
+      fluency?: number;
+      expressiveness?: number;
+    } = {};
+    for (const key of DELIVERY_KEYS) {
+      const values = perAnswerDeliveryScores
+        .map((item) => item[key])
+        .filter((value): value is number => typeof value === "number");
+      if (values.length > 0) {
+        overallDeliveryScores[key] = Number(
+          (values.reduce((sum, v) => sum + v, 0) / values.length).toFixed(2),
+        );
+      }
+    }
 
     const summaryText =
       pdfAnswers
@@ -261,12 +389,15 @@ export async function GET(
         totalScoreToPercentage(overallFinalScore) ??
         totalScoreToPercentage(overallAiScore) ??
         null,
+      dimensionSet: sessionDimensionSet,
       aiDimensions: overallAiDimensions,
       finalDimensions: overallFinalDimensions,
       strengths: asStringList(summary?.aiStrengths),
       improvementAreas: asStringList(summary?.aiImprovementAreas),
       summary: summaryText,
       answers: pdfAnswers,
+      deliveryOverall: overallDeliveryScore ?? null,
+      deliveryScores: overallDeliveryScores,
     });
 
     return new NextResponse(new Uint8Array(pdfBuffer), {

@@ -9,6 +9,7 @@ import {
 } from "@/DB/interviewSchema";
 import { backgroundJobs } from "@/DB/schema";
 import { getJobQueue } from "@/lib/backgroundJobs";
+import { initializeBackgroundJobs } from "@/lib/backgroundJobHandlers";
 import { getAudioStorageProvider } from "@/lib/interview/audioStorage";
 import { generateCorrelationId, INTERVIEW_TRANSCRIPTION_JOB } from "@/lib/interview/jobConstants";
 import {
@@ -27,6 +28,16 @@ import { randomUUID } from "node:crypto";
 export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
+  // This route can be the very first interview API call in a fresh server
+  // process (a candidate's first answer upload, before any admin/processing
+  // page has ever run) — without this, the immediate-processing transcription
+  // job queued below via getJobQueue().triggerJob() can fire against a queue
+  // with zero registered handlers, failing instantly with "No handler
+  // registered for job type: interview-transcription" and silently stranding
+  // that answer at transcriptStatus "pending" forever. Every other route that
+  // queues/triggers an interview job already does this; this one was missed.
+  initializeBackgroundJobs();
+
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

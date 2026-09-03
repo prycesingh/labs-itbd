@@ -4,6 +4,11 @@
  * Classifies and handles interview-specific errors with retry logic
  */
 
+import {
+  DEFAULT_DIMENSION_SET,
+  DIMENSION_SETS,
+  type DimensionSetName,
+} from "./evaluationMetrics";
 import { INTERVIEW_ERROR_CODES } from "./jobConstants";
 
 // ─────────────────────────────────────────────
@@ -328,7 +333,10 @@ export function validateTranscript(text: string): {
 /**
  * Validate AI evaluation structure
  */
-export function validateEvaluationStructure(data: unknown): {
+export function validateEvaluationStructure(
+  data: unknown,
+  dimensionSet: DimensionSetName = DEFAULT_DIMENSION_SET,
+): {
   valid: boolean;
   errors: string[];
 } {
@@ -349,13 +357,14 @@ export function validateEvaluationStructure(data: unknown): {
     errors.push("dimensions object is required");
   } else {
     const dimensionsRecord = dimensions as Record<string, unknown>;
-    const requiredDimensions = [
-      "courtesy",
-      "empathy",
-      "professionalism_and_tone",
-      "communication_clarity",
-      "engagement_and_problem_handling",
-    ];
+    // Which 5 keys are required depends on which of the two fixed dimension
+    // sets this evaluation was actually generated against (see
+    // evaluationMetrics.ts's DIMENSION_SETS) — technical-interview
+    // evaluations (Interview Coach) never have courtesy/empathy/etc., so
+    // validating against the wrong set here rejects every genuine model
+    // response and silently forces the safe-fallback (flat neutral scores)
+    // path on every single evaluation for that module.
+    const requiredDimensions = DIMENSION_SETS[dimensionSet];
     for (const dim of requiredDimensions) {
       const dimension = dimensionsRecord[dim];
       if (!dimension || typeof dimension !== "object") {

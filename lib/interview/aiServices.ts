@@ -1325,7 +1325,10 @@ export async function evaluateAnswer(
     }
 
     // Validate structure
-    const { valid, errors } = validateEvaluationStructure(normalized);
+    const { valid, errors } = validateEvaluationStructure(
+      normalized,
+      dimensionSet,
+    );
     if (!valid) {
       throw new EvaluationError(
         answerId,

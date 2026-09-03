@@ -3,13 +3,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -18,7 +11,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
   calculateWeightedTotalScore,
@@ -29,11 +21,13 @@ import {
   ChevronDown,
   ChevronUp,
   Loader2,
+  Mic,
   Pause,
   Play,
   RefreshCw,
 } from "lucide-react";
 import { isAdminRole, type Role } from "@/lib/rbac";
+import { motion, useReducedMotion } from "motion/react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -172,6 +166,58 @@ function dimensionOrderFor(
     : CUSTOMER_SERVICE_DIMENSION_ORDER;
 }
 
+const DELIVERY_SCORE_ORDER = [
+  ["pace", "Pace"],
+  ["pausing", "Pausing"],
+  ["fluency", "Fluency"],
+  ["expressiveness", "Expressiveness"],
+] as const;
+
+/**
+ * Session-level delivery average, banded 1-5 same as the per-answer scores —
+ * averaged across every answer that has delivery data (Interview Coach only;
+ * undefined for Customer Cetricity sessions, which never carry any).
+ */
+function averageDeliveryForSession(session: SessionResult): {
+  overall?: number;
+  scores: Partial<Record<(typeof DELIVERY_SCORE_ORDER)[number][0], number>>;
+} | null {
+  const answersWithDelivery = session.answers.filter(
+    (answer) => answer.deliveryMetrics,
+  );
+  if (answersWithDelivery.length === 0) {
+    return null;
+  }
+
+  const overallValues = answersWithDelivery
+    .map((answer) => answer.deliveryMetrics?.overall)
+    .filter((value): value is number => typeof value === "number");
+  const overall =
+    overallValues.length > 0
+      ? Number(
+          (
+            overallValues.reduce((sum, value) => sum + value, 0) /
+            overallValues.length
+          ).toFixed(2),
+        )
+      : undefined;
+
+  const scores: Partial<Record<(typeof DELIVERY_SCORE_ORDER)[number][0], number>> =
+    {};
+  for (const [key] of DELIVERY_SCORE_ORDER) {
+    const values = answersWithDelivery
+      .map((answer) => answer.deliveryMetrics?.scores[key])
+      .filter((value): value is number => typeof value === "number");
+    if (values.length > 0) {
+      scores[key] = Number(
+        (values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2),
+      );
+    }
+  }
+
+  return { overall, scores };
+}
+
 const REEVALUATION_POLL_INTERVAL_MS = 2000;
 const REEVALUATION_TIMEOUT_MS = 2 * 60 * 1000;
 
@@ -198,6 +244,7 @@ export default function ResultsEvaluationPage() {
   const [reEvaluatingSession, setReEvaluatingSession] = useState(false);
   const [deletingResults, setDeletingResults] = useState(false);
   const [isDeleteResultsOpen, setIsDeleteResultsOpen] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   const readErrorMessage = async (res: Response) => {
     try {
@@ -409,6 +456,22 @@ export default function ResultsEvaluationPage() {
 
       const payload = await res.json().catch(() => null);
       if (!res.ok) {
+        // Not a real failure — it means every answer already succeeded or
+        // has a retry genuinely in flight (e.g. from an earlier click on
+        // this same session), so there's nothing left to queue. Surface it
+        // as a calm status note instead of an error toast, and refresh so
+        // the UI reflects the now-current (likely completed) state.
+        if (
+          typeof payload?.error === "string" &&
+          payload.error.includes("No failed answers found to retry")
+        ) {
+          toast.info("Nothing to retry", {
+            description:
+              "Every answer either finished processing or has a retry already in progress.",
+          });
+          await fetchSessions();
+          return;
+        }
         throw new Error(payload?.error || "Failed to retry processing");
       }
 
@@ -677,35 +740,53 @@ export default function ResultsEvaluationPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-cyan-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-itbd-blue" />
       </div>
     );
   }
 
+  const sessionDelivery = selectedSession
+    ? averageDeliveryForSession(selectedSession)
+    : null;
+
   return (
     <main className="flex flex-col w-full gap-6">
-      <header className="space-y-1">
-        <h1 className="text-3xl font-bold">User Responses & Evaluations</h1>
-        <p className="text-sm text-muted-foreground">
+      <motion.header
+        className="space-y-1"
+        initial={reduceMotion ? false : { opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <h1 className="text-3xl font-bold text-white">
+          User Responses & Evaluations
+        </h1>
+        <p className="text-sm text-slate-400">
           Review user responses and provide manual evaluations alongside AI
           scores.
         </p>
-      </header>
-
-      <Separator className="bg-white" />
+      </motion.header>
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Sessions List */}
-        <Card className="border-cyan-500/20 bg-black/20 lg:col-span-1">
-          <CardHeader>
-            <CardTitle>Sessions</CardTitle>
-            <CardDescription>
+        <motion.div
+          className="itbd-glow-border relative overflow-hidden rounded-2xl bg-black/40 backdrop-blur-md lg:col-span-1"
+          initial={reduceMotion ? false : { opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <span
+            aria-hidden
+            className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+          />
+          <div className="p-6 pb-3">
+            <h2 className="text-lg font-semibold text-white">Sessions</h2>
+            <p className="text-sm text-slate-400">
               {sessions.length} completed session(s)
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 max-h-96 overflow-y-auto">
+            </p>
+          </div>
+          <div className="max-h-96 space-y-2 overflow-y-auto px-4 pb-4">
             {sessions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
+              <p className="px-2 text-sm text-slate-400">
                 No completed sessions yet.
               </p>
             ) : (
@@ -713,17 +794,19 @@ export default function ResultsEvaluationPage() {
                 <button
                   key={sess.id}
                   onClick={() => setSelectedSession(sess)}
-                  className={`w-full text-left p-3 rounded-md border transition-colors ${
+                  className={`w-full text-left rounded-xl border p-3 transition-colors ${
                     selectedSession?.id === sess.id
-                      ? "border-cyan-500 bg-cyan-500/10"
-                      : "border-cyan-500/20 hover:border-cyan-500/40 hover:bg-cyan-500/5"
+                      ? "border-itbd-blue/60 bg-itbd-blue/10"
+                      : "border-white/10 bg-white/5 hover:border-itbd-blue/30 hover:bg-white/10"
                   }`}
                 >
-                  <div className="text-sm font-medium">{sess.moduleName}</div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-sm font-medium text-white">
+                    {sess.moduleName}
+                  </div>
+                  <div className="text-xs text-slate-400">
                     {sess.candidateName || "Unknown"}
                   </div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-xs text-slate-400">
                     {new Date(sess.createdAt).toLocaleDateString()}
                   </div>
                   <div className="mt-2">
@@ -734,83 +817,175 @@ export default function ResultsEvaluationPage() {
                 </button>
               ))
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </motion.div>
 
         {/* Session Details */}
-        <Card className="border-cyan-500/20 bg-black/20 lg:col-span-2">
-          <CardHeader>
-            <CardTitle>
-              {selectedSession ? (
-                <div>
-                  <div>{selectedSession.moduleName}</div>
-                  <div className="text-sm font-normal text-muted-foreground">
-                    Candidate: {selectedSession.candidateName || "Unknown"}
-                  </div>
-                  <div className="mt-2">
-                    <Badge
-                      className={sessionStatusClass(selectedSession.status)}
-                    >
-                      {selectedSession.status}
-                    </Badge>
-                  </div>
+        <motion.div
+          className="itbd-glow-border relative overflow-hidden rounded-2xl bg-black/40 backdrop-blur-md lg:col-span-2"
+          initial={reduceMotion ? false : { opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: reduceMotion ? 0 : 0.05 }}
+        >
+          <span
+            aria-hidden
+            className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+          />
+          <div className="p-6 pb-3">
+            {selectedSession ? (
+              <div>
+                <div className="text-lg font-semibold text-white">
+                  {selectedSession.moduleName}
                 </div>
-              ) : (
-                "Select a session"
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+                <div className="text-sm text-slate-400">
+                  Candidate: {selectedSession.candidateName || "Unknown"}
+                </div>
+                <div className="mt-2">
+                  <Badge className={sessionStatusClass(selectedSession.status)}>
+                    {selectedSession.status}
+                  </Badge>
+                </div>
+              </div>
+            ) : (
+              <div className="text-lg font-semibold text-white">
+                Select a session
+              </div>
+            )}
+          </div>
+          <div className="px-6 pb-6">
             {!selectedSession ? (
-              <p className="text-center text-muted-foreground py-8">
+              <p className="text-center text-slate-400 py-8">
                 Select a session from the list to view details.
               </p>
             ) : (
-              <div className="space-y-4">
+              <motion.div
+                key={selectedSession.id}
+                className="space-y-4"
+                initial={reduceMotion ? false : "hidden"}
+                animate="show"
+                variants={{
+                  hidden: {},
+                  show: {
+                    transition: {
+                      staggerChildren: 0.06,
+                      delayChildren: 0.04,
+                    },
+                  },
+                }}
+              >
                 {/* Session Summary */}
-                <div className="grid gap-2 mb-4 p-3 rounded-md border border-cyan-500/20 bg-cyan-500/5">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">AI Score:</span>
-                    <Badge className="bg-blue-600">
-                      {formatScoreAsPercentage(
-                        selectedSession.evaluation?.overallAiScore,
-                      )}
-                      / 100
-                    </Badge>
-                  </div>
-                  {selectedSession.evaluation?.overallAdminScore !==
-                    undefined && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium">Final Score:</span>
-                      <Badge className="bg-green-600">
-                        {formatScoreAsPercentage(
-                          selectedSession.evaluation.overallAdminScore,
-                        )}
-                        / 100
-                      </Badge>
-                    </div>
-                  )}
+                <motion.div
+                  className="relative space-y-4 mb-4 p-4 rounded-2xl border border-white/10 bg-white/5 overflow-hidden"
+                  variants={{
+                    hidden: { opacity: 0, y: 14 },
+                    show: {
+                      opacity: 1,
+                      y: 0,
+                      transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] },
+                    },
+                  }}
+                >
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(0,173,218,0.12),transparent_45%)]"
+                  />
 
-                  <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                  <motion.div
+                    className="relative grid gap-3 sm:grid-cols-2"
+                    variants={{
+                      hidden: {},
+                      show: { transition: { staggerChildren: 0.06 } },
+                    }}
+                  >
+                    <motion.div
+                      className="rounded-xl border border-white/10 bg-black/25 p-3"
+                      variants={{
+                        hidden: { opacity: 0, y: 10, scale: 0.97 },
+                        show: {
+                          opacity: 1,
+                          y: 0,
+                          scale: 1,
+                          transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] },
+                        },
+                      }}
+                    >
+                      <div className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400">
+                        AI Score
+                      </div>
+                      <div className="mt-1 text-2xl font-bold text-itbd-blue">
+                        {formatScoreAsPercentage(
+                          selectedSession.evaluation?.overallAiScore,
+                        )}
+                        <span className="text-sm font-normal text-slate-400">
+                          {" "}
+                          / 100
+                        </span>
+                      </div>
+                    </motion.div>
+                    {selectedSession.evaluation?.overallAdminScore !==
+                      undefined && (
+                      <motion.div
+                        className="rounded-xl border border-white/10 bg-black/25 p-3"
+                        variants={{
+                          hidden: { opacity: 0, y: 10, scale: 0.97 },
+                          show: {
+                            opacity: 1,
+                            y: 0,
+                            scale: 1,
+                            transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] },
+                          },
+                        }}
+                      >
+                        <div className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400">
+                          Final Score
+                        </div>
+                        <div className="mt-1 text-2xl font-bold text-white">
+                          {formatScoreAsPercentage(
+                            selectedSession.evaluation.overallAdminScore,
+                          )}
+                          <span className="text-sm font-normal text-slate-400">
+                            {" "}
+                            / 100
+                          </span>
+                        </div>
+                      </motion.div>
+                    )}
+                  </motion.div>
+
+                  <motion.div
+                    className="relative grid gap-2 md:grid-cols-2 xl:grid-cols-4"
+                    variants={{
+                      hidden: {},
+                      show: { transition: { staggerChildren: 0.04 } },
+                    }}
+                  >
                     {dimensionOrderFor(selectedSession.evaluation?.dimensionSet).map(
                       (key) => (
-                      <div
+                      <motion.div
                         key={key}
-                        className="rounded-md border border-cyan-500/20 bg-black/20 p-2"
+                        className="rounded-lg border border-white/10 bg-black/20 p-2"
+                        variants={{
+                          hidden: { opacity: 0, y: 8 },
+                          show: {
+                            opacity: 1,
+                            y: 0,
+                            transition: { duration: 0.25, ease: [0.22, 1, 0.36, 1] },
+                          },
+                        }}
                       >
-                        <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                        <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
                           {DIMENSION_LABELS[key]}
                         </div>
                         <div className="mt-1 flex items-center justify-between text-xs">
-                          <span>AI</span>
-                          <span className="text-blue-400">
+                          <span className="text-slate-400">AI</span>
+                          <span className="text-itbd-blue">
                             {selectedSession.evaluation?.aiDimensions?.[key]
                               ?.score ?? "-"}
                           </span>
                         </div>
                         <div className="mt-1 flex items-center justify-between text-xs">
-                          <span>Final</span>
-                          <span className="text-green-400">
+                          <span className="text-slate-400">Final</span>
+                          <span className="text-white">
                             {selectedSession.evaluation?.finalDimensions?.[key]
                               ?.score ??
                               selectedSession.evaluation?.aiDimensions?.[key]
@@ -818,64 +993,84 @@ export default function ResultsEvaluationPage() {
                               "-"}
                           </span>
                         </div>
-                      </div>
+                      </motion.div>
                     ))}
-                  </div>
+                  </motion.div>
 
-                  {(selectedSession.status === "failed" ||
-                    selectedSession.answers.some(
-                      (answer) =>
-                        answer.transcriptStatus === "failed" ||
-                        answer.evaluationStatus === "failed",
-                    )) && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-fit"
-                      disabled={retryingSession}
-                      onClick={() => {
-                        void retryProcessing();
+                  {/* Delivery Score — only present for modules with delivery
+                      scoring (Interview Coach); silently absent otherwise. */}
+                  {sessionDelivery && (
+                    <motion.div
+                      className="relative space-y-2 rounded-xl border border-white/10 bg-black/25 p-3"
+                      variants={{
+                        hidden: { opacity: 0, y: 12, scale: 0.98 },
+                        show: {
+                          opacity: 1,
+                          y: 0,
+                          scale: 1,
+                          transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] },
+                        },
                       }}
                     >
-                      <RefreshCw className="h-3 w-3 mr-1" />
-                      {retryingSession ? "Retrying..." : "Retry Failed Jobs"}
-                    </Button>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400">
+                          <Mic className="h-3 w-3" />
+                          Delivery Score
+                        </div>
+                        <div className="text-lg font-bold text-white">
+                          {sessionDelivery.overall ?? "-"}
+                          <span className="text-xs font-normal text-slate-400">
+                            {" "}
+                            / 5
+                          </span>
+                        </div>
+                      </div>
+                      <motion.div
+                        className="grid gap-2 md:grid-cols-2 xl:grid-cols-4"
+                        variants={{
+                          hidden: {},
+                          show: { transition: { staggerChildren: 0.04 } },
+                        }}
+                      >
+                        {DELIVERY_SCORE_ORDER.map(([key, label]) => (
+                          <motion.div
+                            key={key}
+                            className="rounded-lg border border-white/10 bg-white/5 p-2"
+                            variants={{
+                              hidden: { opacity: 0, y: 8 },
+                              show: {
+                                opacity: 1,
+                                y: 0,
+                                transition: { duration: 0.25, ease: [0.22, 1, 0.36, 1] },
+                              },
+                            }}
+                          >
+                            <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                              {label}
+                            </div>
+                            <div className="mt-1 text-sm text-white">
+                              {sessionDelivery.scores[key] ?? "-"}
+                            </div>
+                          </motion.div>
+                        ))}
+                      </motion.div>
+                    </motion.div>
                   )}
-
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-fit"
-                    disabled={
-                      reEvaluatingSession ||
-                      !selectedSession.answers.some((answer) => answer.transcript)
-                    }
-                    title={
-                      selectedSession.answers.some((answer) => answer.transcript)
-                        ? undefined
-                        : "No answers have a transcript yet — use Retry Failed Jobs first"
-                    }
-                    onClick={() => {
-                      void reEvaluateSession();
-                    }}
-                  >
-                    <RefreshCw className="h-3 w-3 mr-1" />
-                    {reEvaluatingSession ? "Re-evaluating..." : "Re-Evaluate"}
-                  </Button>
-
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    className="w-fit"
-                    onClick={() => setIsDeleteResultsOpen(true)}
-                  >
-                    Delete Results
-                  </Button>
 
                   {selectedSession.followUps?.some(
                     (f) => f.status === "pending",
                   ) && (
-                    <div className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
+                    <motion.div
+                      className="relative rounded-lg border border-amber-400/20 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-200"
+                      variants={{
+                        hidden: { opacity: 0, y: 8 },
+                        show: {
+                          opacity: 1,
+                          y: 0,
+                          transition: { duration: 0.25, ease: [0.22, 1, 0.36, 1] },
+                        },
+                      }}
+                    >
                       {
                         selectedSession.followUps.filter(
                           (f) => f.status === "pending",
@@ -883,25 +1078,91 @@ export default function ResultsEvaluationPage() {
                       }{" "}
                       follow-up question(s) never answered — the candidate may
                       have abandoned the flow mid-interview.
-                    </div>
+                    </motion.div>
                   )}
-                </div>
+
+                  <motion.div
+                    className="relative flex flex-wrap gap-2 pt-1"
+                    variants={{
+                      hidden: { opacity: 0, y: 8 },
+                      show: {
+                        opacity: 1,
+                        y: 0,
+                        transition: { duration: 0.25, ease: [0.22, 1, 0.36, 1] },
+                      },
+                    }}
+                  >
+                    {(selectedSession.status === "failed" ||
+                      selectedSession.answers.some(
+                        (answer) =>
+                          answer.transcriptStatus === "failed" ||
+                          answer.evaluationStatus === "failed",
+                      )) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={retryingSession}
+                        onClick={() => {
+                          void retryProcessing();
+                        }}
+                      >
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                        {retryingSession ? "Retrying..." : "Retry Failed Jobs"}
+                      </Button>
+                    )}
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={
+                        reEvaluatingSession ||
+                        !selectedSession.answers.some((answer) => answer.transcript)
+                      }
+                      title={
+                        selectedSession.answers.some((answer) => answer.transcript)
+                          ? undefined
+                          : "No answers have a transcript yet — use Retry Failed Jobs first"
+                      }
+                      onClick={() => {
+                        void reEvaluateSession();
+                      }}
+                    >
+                      <RefreshCw className="h-3 w-3 mr-1" />
+                      {reEvaluatingSession ? "Re-evaluating..." : "Re-Evaluate"}
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => setIsDeleteResultsOpen(true)}
+                    >
+                      Delete Results
+                    </Button>
+                  </motion.div>
+                </motion.div>
 
                 {/* Answers List */}
                 <div className="space-y-2">
-                  {selectedSession.answers.map((answer) => (
-                    <div
+                  {selectedSession.answers.map((answer, index) => (
+                    <motion.div
                       key={answer.id}
-                      className="border border-cyan-500/20 rounded-md overflow-hidden bg-black/20"
+                      className="overflow-hidden rounded-xl border border-white/10 bg-white/5"
+                      initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        duration: 0.3,
+                        ease: [0.22, 1, 0.36, 1],
+                        delay: reduceMotion ? 0 : Math.min(index * 0.04, 0.4),
+                      }}
                     >
                       <button
                         onClick={() => toggleAnswerExpanded(answer.id)}
-                        className="w-full p-3 flex items-center justify-between hover:bg-cyan-500/5 transition-colors text-left"
+                        className="w-full p-3 flex items-center justify-between hover:bg-white/5 transition-colors text-left"
                       >
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 text-sm font-medium">
+                          <div className="flex items-center gap-2 text-sm font-medium text-white">
                             {answer.isFollowUp && (
-                              <Badge className="bg-purple-600/80 shrink-0">
+                              <Badge className="bg-itbd-blue/20 text-itbd-blue shrink-0">
                                 Follow-up
                               </Badge>
                             )}
@@ -914,24 +1175,33 @@ export default function ResultsEvaluationPage() {
                                 (a) => a.id === answer.followUpOfAnswerId,
                               );
                               return parent ? (
-                                <div className="text-xs text-purple-300/80 mt-0.5">
+                                <div className="text-xs text-slate-400 mt-0.5">
                                   Follow-up to: {parent.questionText.slice(0, 80)}
                                   {parent.questionText.length > 80 ? "…" : ""}
                                 </div>
                               ) : null;
                             })()}
                           {answer.aiEvaluation?.total_score !== undefined && (
-                            <div className="text-xs text-muted-foreground mt-1">
+                            <div className="text-xs text-slate-400 mt-1">
                               AI Score:{" "}
-                              <span className="text-blue-400">
+                              <span className="text-itbd-blue">
                                 {answer.aiEvaluation.total_score}
                               </span>
                               <span className="ml-3">
                                 Final:{" "}
-                                <span className="text-green-400">
+                                <span className="text-white">
                                   {getPreviewTotal(answer) ?? "-"}
                                 </span>
                               </span>
+                              {typeof answer.deliveryMetrics?.overall ===
+                                "number" && (
+                                <span className="ml-3">
+                                  Delivery:{" "}
+                                  <span className="text-white">
+                                    {answer.deliveryMetrics.overall} / 5
+                                  </span>
+                                </span>
+                              )}
                             </div>
                           )}
                           <div className="mt-2 flex flex-wrap gap-2">
@@ -954,7 +1224,7 @@ export default function ResultsEvaluationPage() {
                                 answer.aiEvaluation?.evaluation_source ===
                                 "fallback"
                                   ? "bg-amber-600/80"
-                                  : "bg-cyan-600/80"
+                                  : "bg-itbd-blue/20 text-itbd-blue"
                               }
                             >
                               {answer.aiEvaluation?.evaluation_source ===
@@ -965,18 +1235,18 @@ export default function ResultsEvaluationPage() {
                           </div>
                         </div>
                         {expandedAnswers.has(answer.id) ? (
-                          <ChevronUp className="h-4 w-4" />
+                          <ChevronUp className="h-4 w-4 text-slate-400" />
                         ) : (
-                          <ChevronDown className="h-4 w-4" />
+                          <ChevronDown className="h-4 w-4 text-slate-400" />
                         )}
                       </button>
 
                       {expandedAnswers.has(answer.id) && (
-                        <div className="border-t border-cyan-500/20 p-3 space-y-3">
+                        <div className="p-3 space-y-3 border-t border-white/10">
                           {/* Question prompt audio */}
                           {answer.questionAudioPath && (
                             <div className="space-y-2">
-                              <div className="text-xs font-medium text-muted-foreground">
+                              <div className="text-xs font-medium text-slate-400">
                                 Question Audio
                               </div>
                               <audio
@@ -991,7 +1261,7 @@ export default function ResultsEvaluationPage() {
                           {Array.isArray(answer.standardResponses) &&
                             answer.standardResponses.length > 0 && (
                               <div className="space-y-2">
-                                <div className="text-xs font-medium text-muted-foreground">
+                                <div className="text-xs font-medium text-slate-400">
                                   Standard Responses
                                 </div>
                                 <div className="space-y-1">
@@ -999,7 +1269,7 @@ export default function ResultsEvaluationPage() {
                                     (response, idx) => (
                                       <p
                                         key={`${answer.id}-std-${idx}`}
-                                        className="text-sm bg-black/40 p-2 rounded text-gray-300"
+                                        className="text-sm bg-black/25 p-2 rounded-lg text-slate-300"
                                       >
                                         {idx + 1}. {response}
                                       </p>
@@ -1012,7 +1282,7 @@ export default function ResultsEvaluationPage() {
                           {/* Audio Playback */}
                           {answer.audioPath && (
                             <div className="space-y-2">
-                              <div className="text-xs font-medium text-muted-foreground">
+                              <div className="text-xs font-medium text-slate-400">
                                 Audio Response
                               </div>
                               <div className="flex gap-2">
@@ -1046,10 +1316,10 @@ export default function ResultsEvaluationPage() {
                           {/* Transcript */}
                           {answer.transcript && (
                             <div className="space-y-2">
-                              <div className="text-xs font-medium text-muted-foreground">
+                              <div className="text-xs font-medium text-slate-400">
                                 Transcript
                               </div>
-                              <p className="text-sm bg-black/40 p-2 rounded text-gray-300">
+                              <p className="text-sm bg-black/25 p-2 rounded-lg text-slate-300">
                                 {answer.transcript}
                               </p>
                             </div>
@@ -1057,13 +1327,13 @@ export default function ResultsEvaluationPage() {
 
                           {/* AI Evaluation */}
                           {answer.aiEvaluation && (
-                            <div className="space-y-2 p-2 bg-blue-500/10 rounded border border-blue-500/20">
-                              <div className="text-xs font-medium">
+                            <div className="space-y-2 p-3 rounded-xl border border-itbd-blue/20 bg-itbd-blue/5">
+                              <div className="text-xs font-medium text-white">
                                 AI Evaluation
                               </div>
                               {answer.aiEvaluation.evaluation_source ===
                                 "fallback" && (
-                                <div className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
+                                <div className="rounded-lg bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
                                   This evaluation was generated from a fallback
                                   path because the AI response did not pass JSON
                                   validation. The score is usable for
@@ -1071,10 +1341,10 @@ export default function ResultsEvaluationPage() {
                                   structured AI result.
                                 </div>
                               )}
-                              <div className="text-xs space-y-1">
+                              <div className="text-xs space-y-1 text-slate-300">
                                 <div>
                                   Score:{" "}
-                                  <span className="text-blue-400 font-bold">
+                                  <span className="text-itbd-blue font-bold">
                                     {answer.aiEvaluation.total_score}
                                   </span>
                                 </div>
@@ -1083,12 +1353,12 @@ export default function ResultsEvaluationPage() {
                                     (key) => (
                                     <div
                                       key={`${answer.id}-ai-${key}`}
-                                      className="rounded bg-black/20 px-2 py-1"
+                                      className="rounded-lg bg-black/25 px-2 py-1"
                                     >
-                                      <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                                      <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
                                         {DIMENSION_LABELS[key]}
                                       </div>
-                                      <div className="text-sm text-blue-300">
+                                      <div className="text-sm text-itbd-blue">
                                         {answer.aiEvaluation?.dimensions?.[key]
                                           ?.score ?? "-"}
                                       </div>
@@ -1114,19 +1384,20 @@ export default function ResultsEvaluationPage() {
                               delivery_scoring enabled (Interview Coach);
                               silently absent for Customer Cetricity answers. */}
                           {answer.deliveryMetrics && (
-                            <div className="space-y-2 p-2 bg-purple-500/10 rounded border border-purple-500/20">
+                            <div className="space-y-2 p-3 rounded-xl border border-white/10 bg-white/5">
                               <div className="flex items-center justify-between">
-                                <div className="text-xs font-medium">
+                                <div className="flex items-center gap-1.5 text-xs font-medium text-white">
+                                  <Mic className="h-3 w-3 text-slate-400" />
                                   Delivery Scoring
                                 </div>
-                                <Badge className="bg-purple-600/70 text-[10px]">
+                                <Badge className="bg-white/10 text-slate-300 text-[10px]">
                                   {answer.deliveryMetrics.calibrationMode}
                                 </Badge>
                               </div>
-                              <div className="text-xs space-y-1">
+                              <div className="text-xs space-y-1 text-slate-300">
                                 <div>
                                   Overall:{" "}
-                                  <span className="text-purple-300 font-bold">
+                                  <span className="text-white font-bold">
                                     {answer.deliveryMetrics.overall ?? "-"} / 5
                                   </span>
                                 </div>
@@ -1141,19 +1412,19 @@ export default function ResultsEvaluationPage() {
                                   ).map(([key, label]) => (
                                     <div
                                       key={`${answer.id}-delivery-${key}`}
-                                      className="rounded bg-black/20 px-2 py-1"
+                                      className="rounded-lg bg-black/25 px-2 py-1"
                                     >
-                                      <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                                      <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
                                         {label}
                                       </div>
-                                      <div className="text-sm text-purple-300">
+                                      <div className="text-sm text-white">
                                         {answer.deliveryMetrics?.scores[key] ??
                                           "-"}
                                       </div>
                                     </div>
                                   ))}
                                 </div>
-                                <div className="pt-1 text-[11px] text-muted-foreground">
+                                <div className="pt-1 text-[11px] text-slate-500">
                                   {answer.deliveryMetrics.wpm !== undefined && (
                                     <>WPM: {answer.deliveryMetrics.wpm} · </>
                                   )}
@@ -1222,16 +1493,16 @@ export default function ResultsEvaluationPage() {
                           )}
 
                           {/* Admin Evaluation */}
-                          <div className="space-y-2 p-2 bg-green-500/10 rounded border border-green-500/20">
-                            <div className="text-xs font-medium">
+                          <div className="space-y-2 p-3 rounded-xl border border-white/10 bg-black/25">
+                            <div className="text-xs font-medium text-white">
                               Manual Evaluation
                             </div>
                             <div className="space-y-2">
                               <div>
-                                <label className="text-xs text-muted-foreground block mb-1">
+                                <label className="text-xs text-slate-400 block mb-1">
                                   Final score preview
                                 </label>
-                                <div className="rounded-md border border-green-500/20 bg-black/30 px-3 py-2 text-sm text-green-300">
+                                <div className="rounded-lg bg-white/5 px-3 py-2 text-sm text-itbd-blue font-medium">
                                   {getPreviewTotal(answer)?.toFixed(2) ??
                                     "Pending"}{" "}
                                   / 100
@@ -1241,7 +1512,7 @@ export default function ResultsEvaluationPage() {
                                 {dimensionOrderFor(answer.aiEvaluation?.dimensionSet).map(
                                   (key) => (
                                   <div key={`${answer.id}-override-${key}`}>
-                                    <label className="text-xs text-muted-foreground block mb-1">
+                                    <label className="text-xs text-slate-400 block mb-1">
                                       {DIMENSION_LABELS[key]}
                                     </label>
                                     <Input
@@ -1279,7 +1550,7 @@ export default function ResultsEvaluationPage() {
                                 ))}
                               </div>
                               <div>
-                                <label className="text-xs text-muted-foreground block mb-1">
+                                <label className="text-xs text-slate-400 block mb-1">
                                   Notes
                                 </label>
                                 <Textarea
@@ -1297,7 +1568,7 @@ export default function ResultsEvaluationPage() {
                               <Button
                                 size="sm"
                                 onClick={() => saveEvaluation(answer.id)}
-                                className="w-full bg-green-600 hover:bg-green-700"
+                                className="w-full bg-itbd-blue text-white hover:bg-itbd-blue/90"
                               >
                                 Save review
                               </Button>
@@ -1305,13 +1576,13 @@ export default function ResultsEvaluationPage() {
                           </div>
                         </div>
                       )}
-                    </div>
+                    </motion.div>
                   ))}
                 </div>
-              </div>
+              </motion.div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </motion.div>
       </div>
 
       <Dialog open={isDeleteResultsOpen} onOpenChange={setIsDeleteResultsOpen}>

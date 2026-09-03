@@ -123,18 +123,49 @@ export async function initiateSessionProcessing(
     });
 
     // 6. Create transcription jobs for all answers
+
+    // An answer's transcriptJobId is set as soon as upload-audio/route.ts
+    // queues its immediate-processing job (follow_ups-enabled modules only)
+    // — before that job has actually run. If that job died before its
+    // handler ever executed (e.g. "No handler registered for job type" from
+    // a missing initializeBackgroundJobs() call, or a hot-reload race),
+    // transcriptJobId is still set but nothing will ever transcribe this
+    // answer. Checking only "does a transcriptJobId exist" (as this used
+    // to) treats that as "already being handled" forever — final submission
+    // then silently skips it, and the answer stays stuck at transcriptStatus
+    // "pending" indefinitely. Look up the referenced jobs' actual status so
+    // a dead one gets a fresh job queued here instead of being trusted.
+    const existingJobIds = answers
+      .map((answer) => answer.transcriptJobId)
+      .filter((id): id is string => Boolean(id));
+    const existingJobRows =
+      existingJobIds.length > 0
+        ? await db
+            .select({ id: backgroundJobs.id, status: backgroundJobs.status })
+            .from(backgroundJobs)
+            .where(inArray(backgroundJobs.id, existingJobIds))
+        : [];
+    const deadTranscriptJobIds = new Set(
+      existingJobRows
+        .filter((job) => job.status === "failed")
+        .map((job) => job.id),
+    );
+
     const transcriptionJobIds: string[] = [];
 
     for (const answer of answers) {
       // Skip if already transcribed, or if an immediate-processing job
       // (see upload-audio/route.ts, follow_ups-enabled modules only) is
-      // already queued/running for this answer — otherwise a candidate
-      // submitting the full session while the last answer's immediate job
-      // is still in flight would get a duplicate transcription job racing
-      // against it.
+      // already queued/running (i.e. not dead) for this answer — otherwise
+      // a candidate submitting the full session while the last answer's
+      // immediate job is still in flight would get a duplicate
+      // transcription job racing against it.
+      const referencedJobIsDead =
+        answer.transcriptJobId &&
+        deadTranscriptJobIds.has(answer.transcriptJobId);
       if (
         answer.transcriptStatus === "completed" ||
-        answer.transcriptJobId
+        (answer.transcriptJobId && !referencedJobIsDead)
       ) {
         continue;
       }

@@ -285,6 +285,15 @@ export function InterviewSession({
 
     if (!followUpsSupported) return;
 
+    // Mark "checking" synchronously, before the async answer-id lookup
+    // below even starts — otherwise there's a real window (this fetch can
+    // take a couple of seconds) where answeredQuestions already shows every
+    // question answered (Submit becomes enabled) but pollForFollowUp/
+    // checkingFollowUp hasn't started yet, letting a candidate submit the
+    // whole session mid-flight on the final question and race the
+    // in-progress follow-up check against final submission.
+    setCheckingFollowUp(true);
+
     // Interview Coach only: find the answer we just created for this
     // question and start polling for whether it's flagged a follow-up.
     // The upload response itself doesn't carry the new answerId, so we
@@ -298,9 +307,13 @@ export function InterviewSession({
         );
         if (answer?.id) {
           pollForFollowUp(answer.id);
+        } else {
+          // Couldn't resolve the new answer's id — nothing to poll, so
+          // don't leave the UI stuck in "checking" state forever.
+          setCheckingFollowUp(false);
         }
       })
-      .catch(() => undefined);
+      .catch(() => setCheckingFollowUp(false));
   };
 
   const handleFollowUpAnswerSubmitted = () => {
