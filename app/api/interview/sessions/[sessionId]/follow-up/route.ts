@@ -4,6 +4,7 @@ import {
   candidateInterviewAnswers,
   candidateInterviewSessions,
   interviewFollowupQuestions,
+  interviewQuestionBank,
 } from "@/DB/interviewSchema";
 import { and, desc, eq } from "drizzle-orm";
 
@@ -78,8 +79,24 @@ export async function GET(
         idealPoints: interviewFollowupQuestions.idealPoints,
         parentAnswerId: interviewFollowupQuestions.parentAnswerId,
         createdAt: interviewFollowupQuestions.createdAt,
+        // The base question this follow-up is probing a gap in — shown to
+        // the candidate so a follow-up never looks like an indistinguishable
+        // "next question" (matches interview-coach-main's web UI, which
+        // tags follow-ups and references the answer that prompted them).
+        parentQuestionText: interviewQuestionBank.promptText,
       })
       .from(interviewFollowupQuestions)
+      .innerJoin(
+        candidateInterviewAnswers,
+        eq(
+          candidateInterviewAnswers.id,
+          interviewFollowupQuestions.parentAnswerId,
+        ),
+      )
+      .innerJoin(
+        interviewQuestionBank,
+        eq(interviewQuestionBank.id, candidateInterviewAnswers.questionId),
+      )
       .where(
         and(
           eq(interviewFollowupQuestions.sessionId, sessionId),

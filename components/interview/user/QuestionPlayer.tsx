@@ -24,6 +24,13 @@ interface QuestionPlayerProps {
   // (browser TTS) instead, so the candidate answers purely from listening —
   // matches interview-coach-main's "audio-only" setup toggle.
   audioOnly?: boolean;
+  // Follow-up questions (Interview Coach only) — matches interview-coach-main's
+  // web UI, which tags these with a visible "Follow-up" chip and a note on
+  // which of the candidate's prior answers prompted it (see its #fuTag /
+  // #fuNote elements), rather than presenting it as an indistinguishable
+  // next question.
+  isFollowUp?: boolean;
+  followUpOfQuestionText?: string;
 }
 
 /**
@@ -40,6 +47,8 @@ export function QuestionPlayer({
   questionAudioPath,
   className,
   audioOnly = false,
+  isFollowUp = false,
+  followUpOfQuestionText,
 }: QuestionPlayerProps) {
   const reduce = useReducedMotion();
   const progress = ((questionNumber + 1) / totalQuestions) * 100;
@@ -61,17 +70,46 @@ export function QuestionPlayer({
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col space-y-3">
         <div className="flex items-center justify-between gap-4">
-          <h2 className="text-lg font-bold tracking-wide text-white uppercase sm:text-xl">
-            Question{" "}
-            <span className="text-itbd-blue">{questionNumber + 1}</span>{" "}
-            <span className="text-white/50">of {totalQuestions}</span>
-          </h2>
+          {isFollowUp ? (
+            <h2 className="flex items-center gap-2 text-lg font-bold tracking-wide text-white uppercase sm:text-xl">
+              <span className="rounded-full bg-itbd-blue/15 px-2.5 py-0.5 text-xs tracking-[0.15em] text-itbd-blue">
+                Follow-up
+              </span>
+              <span className="text-white/50 normal-case">
+                on question {questionNumber + 1}
+              </span>
+            </h2>
+          ) : (
+            <h2 className="text-lg font-bold tracking-wide text-white uppercase sm:text-xl">
+              Question{" "}
+              <span className="text-itbd-blue">{questionNumber + 1}</span>{" "}
+              <span className="text-white/50">of {totalQuestions}</span>
+            </h2>
+          )}
           <span className="shrink-0 text-sm font-semibold text-itbd-blue tabular-nums">
             {Math.round(progress)}%
           </span>
         </div>
 
         <Progress value={progress} className="h-1.5 bg-white/10" />
+
+        {isFollowUp && (
+          <div className="flex items-start gap-2 rounded-xl border border-itbd-blue/20 bg-itbd-blue/5 p-3 text-sm text-itbd-blue/90">
+            <span aria-hidden>↳</span>
+            <span>
+              The coach wants to probe a gap in your last answer
+              {followUpOfQuestionText ? (
+                <>
+                  {" "}
+                  to <span className="italic">
+                    “{followUpOfQuestionText}”
+                  </span>
+                </>
+              ) : null}
+              . Answer it, then you&apos;ll continue as normal.
+            </span>
+          </div>
+        )}
 
         {audioOnly ? (
           <div className="flex flex-col items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-center">

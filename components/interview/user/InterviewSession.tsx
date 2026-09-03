@@ -27,6 +27,7 @@ interface PendingFollowUp {
   id: string;
   questionText: string;
   parentAnswerId: string;
+  parentQuestionText?: string;
 }
 
 interface InterviewSessionProps {
@@ -36,11 +37,6 @@ interface InterviewSessionProps {
 
 const HANDS_FREE_READ_COUNT = 2;
 const HANDS_FREE_COUNTDOWN_SECONDS = 5;
-// How long to keep polling the follow-up endpoint after a submission before
-// giving up and just advancing — mirrors the immediate-processing job's own
-// budget (transcription + evaluation should resolve well within this).
-const FOLLOW_UP_POLL_TIMEOUT_MS = 45_000;
-const FOLLOW_UP_POLL_INTERVAL_MS = 1500;
 
 export function InterviewSession({
   sessionId,
@@ -84,7 +80,6 @@ export function InterviewSession({
   const [checkingFollowUp, setCheckingFollowUp] = useState(false);
   const [pendingFollowUp, setPendingFollowUp] =
     useState<PendingFollowUp | null>(null);
-  const followUpPollAbort = useRef<{ cancelled: boolean } | null>(null);
 
   // Fetch this session's fixed question set — chosen once server-side at
   // session creation (see POST /api/interview/sessions) and reused verbatim
@@ -215,65 +210,19 @@ export function InterviewSession({
 
   useEffect(() => stopSpeaking, []);
 
-  const pollForFollowUp = (afterAnswerId: string) => {
-    const token = { cancelled: false };
-    followUpPollAbort.current = token;
-    setCheckingFollowUp(true);
-    const startedAt = Date.now();
-
-    const poll = async () => {
-      if (token.cancelled) return;
-      try {
-        const res = await fetch(
-          `/api/interview/sessions/${sessionId}/follow-up?afterAnswerId=${afterAnswerId}`,
-        );
-        if (token.cancelled) return;
-        if (res.ok) {
-          const data = await res.json();
-          if (data.followUp) {
-            setCheckingFollowUp(false);
-            setPendingFollowUp({
-              id: data.followUp.id,
-              questionText: data.followUp.questionText,
-              parentAnswerId: data.followUp.parentAnswerId,
-            });
-            return;
-          }
-          if (!data.processing) {
-            // Transcription/evaluation finished with no follow-up recommended.
-            setCheckingFollowUp(false);
-            advanceAfterFollowUpCheck();
-            return;
-          }
-        }
-      } catch (error) {
-        console.error("Follow-up poll failed:", error);
-      }
-
-      if (Date.now() - startedAt >= FOLLOW_UP_POLL_TIMEOUT_MS) {
-        setCheckingFollowUp(false);
-        advanceAfterFollowUpCheck();
-        return;
-      }
-      setTimeout(poll, FOLLOW_UP_POLL_INTERVAL_MS);
-    };
-
-    void poll();
-  };
-
-  useEffect(
-    () => () => {
-      if (followUpPollAbort.current) followUpPollAbort.current.cancelled = true;
-    },
-    [],
-  );
-
   const advanceAfterFollowUpCheck = () => {
     setCurrentQuestionIndex((prev) =>
       prev < questions.length - 1 ? prev + 1 : prev,
     );
   };
 
+  // Follow-up evaluation runs in the background (transcription + AI scoring,
+  // typically a few seconds but sometimes much longer) and is never worth
+  // blocking the candidate's flow for — they move straight to the next
+  // question after every answer, base or follow-up alike. Any follow-up
+  // that gets recommended is instead caught in one batch right before final
+  // submit (see handleSubmitSession), by which point evaluation has had the
+  // whole rest of the interview to finish.
   const handleAnswerSubmitted = (_blob: Blob, _duration: number) => {
     void _blob;
     void _duration;
@@ -282,49 +231,21 @@ export function InterviewSession({
     const newAnswered = new Set(answeredQuestions);
     newAnswered.add(currentQuestion.id);
     setAnsweredQuestions(newAnswered);
-
-    if (!followUpsSupported) return;
-
-    // Mark "checking" synchronously, before the async answer-id lookup
-    // below even starts — otherwise there's a real window (this fetch can
-    // take a couple of seconds) where answeredQuestions already shows every
-    // question answered (Submit becomes enabled) but pollForFollowUp/
-    // checkingFollowUp hasn't started yet, letting a candidate submit the
-    // whole session mid-flight on the final question and race the
-    // in-progress follow-up check against final submission.
-    setCheckingFollowUp(true);
-
-    // Interview Coach only: find the answer we just created for this
-    // question and start polling for whether it's flagged a follow-up.
-    // The upload response itself doesn't carry the new answerId, so we
-    // resolve it from the session refetch instead — simplest correct path
-    // given AudioRecorder's existing onUploadSuccess signature.
-    void fetch(`/api/interview/sessions?sessionId=${sessionId}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((payload) => {
-        const answer = (payload?.answers ?? []).find(
-          (a: { questionId: string }) => a.questionId === currentQuestion.id,
-        );
-        if (answer?.id) {
-          pollForFollowUp(answer.id);
-        } else {
-          // Couldn't resolve the new answer's id — nothing to poll, so
-          // don't leave the UI stuck in "checking" state forever.
-          setCheckingFollowUp(false);
-        }
-      })
-      .catch(() => setCheckingFollowUp(false));
+    advanceAfterFollowUpCheck();
   };
 
+  // Re-runs the same submit gate — if another follow-up is still pending
+  // (a session can have several flagged answers), it surfaces next; once
+  // none remain, submission proceeds for real.
   const handleFollowUpAnswerSubmitted = () => {
     if (!pendingFollowUp) return;
     setPendingFollowUp(null);
-    advanceAfterFollowUpCheck();
+    void handleSubmitSession();
   };
 
   const handleSkipFollowUp = () => {
     setPendingFollowUp(null);
-    advanceAfterFollowUpCheck();
+    void handleSubmitSession();
   };
 
   const handleNext = () => {
@@ -339,7 +260,42 @@ export function InterviewSession({
     }
   };
 
+  // Every follow-up that evaluation recommended across the whole session is
+  // caught here, one at a time, right before final submit — not mid-flow —
+  // since evaluation runs in the background and is never worth blocking the
+  // candidate's answer-to-answer pace for. Re-invoked after each follow-up
+  // is answered/skipped so a session with several flagged answers surfaces
+  // them all before actually submitting.
   const handleSubmitSession = async () => {
+    if (followUpsSupported) {
+      setCheckingFollowUp(true);
+      try {
+        const res = await fetch(
+          `/api/interview/sessions/${sessionId}/follow-up`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.followUp) {
+            setPendingFollowUp({
+              id: data.followUp.id,
+              questionText: data.followUp.questionText,
+              parentAnswerId: data.followUp.parentAnswerId,
+              parentQuestionText: data.followUp.parentQuestionText,
+            });
+            toast.message("One more follow-up question", {
+              description:
+                "The AI flagged one of your answers for a quick follow-up — answer it, then we'll submit.",
+            });
+            return;
+          }
+        }
+      } catch (error) {
+        console.error("Final follow-up check failed:", error);
+      } finally {
+        setCheckingFollowUp(false);
+      }
+    }
+
     setSubmitting(true);
     try {
       const response = await fetch(
@@ -467,6 +423,8 @@ export function InterviewSession({
             questionText={pendingFollowUp.questionText}
             standardResponses={[]}
             audioOnly={audioOnly}
+            isFollowUp
+            followUpOfQuestionText={pendingFollowUp.parentQuestionText}
             className="md:flex-1"
           />
           <AudioRecorder
@@ -498,11 +456,11 @@ export function InterviewSession({
                 />
                 <Loader2 className="h-8 w-8 animate-spin text-itbd-blue" />
                 <p className="text-base font-semibold text-white">
-                  Checking your answer…
+                  Checking for follow-ups…
                 </p>
                 <p className="max-w-xs text-sm text-white/50">
-                  We&apos;re reviewing your response to see if a follow-up
-                  question is needed. This takes a few seconds.
+                  Before we submit, we&apos;re confirming whether any of your
+                  answers need a quick follow-up.
                 </p>
               </div>
             ) : (
