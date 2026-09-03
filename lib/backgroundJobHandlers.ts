@@ -32,12 +32,10 @@ import {
   cleanupOldAudioFiles,
   getAudioStorageProvider,
 } from "@/lib/interview/audioStorage";
-import {
-  normalizeDimensionMap,
-  normalizeTotalScore,
-} from "@/lib/interview/evaluationMetrics";
+import { normalizeTotalScore } from "@/lib/interview/evaluationMetrics";
 import {
   CAPABILITY_KEYS,
+  getDimensionSet,
   getModuleCapability,
 } from "@/lib/interview/moduleCapabilities";
 import {
@@ -49,7 +47,7 @@ import {
   INTERVIEW_TRANSCRIPTION_JOB,
 } from "@/lib/interview/jobConstants";
 import type { AIEvaluationStructured } from "@/types/interview";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 type InterviewJobPayload = Record<string, unknown>;
@@ -84,6 +82,19 @@ function parseInterviewPayloadSource(value: unknown): InterviewJobPayload {
   return payloadCandidate as InterviewJobPayload;
 }
 
+// Used only by handleInterviewSessionSummary() to feed
+// generateSessionSummary(), which only ever reads total_score/strengths/
+// improvement_areas/final_summary off the result — never .dimensions — so
+// this intentionally does NOT try to reconstruct a shaped dimensions object
+// per dimension set (that would require knowing the module here, which this
+// pure value-normalizer doesn't). A minimal customer-service-shaped stub is
+// enough to satisfy the AIEvaluationStructured return type without being
+// read. What matters is NOT rejecting the row just because its raw JSON
+// uses technical-interview dimension keys (correctness/relevance/...)
+// instead of customer-service ones — the previous version's
+// normalizeDimensionMap() call (implicitly customer-service-only) returned
+// an empty map for those rows and silently dropped them from the summary
+// entirely, which is the actual bug this fixes.
 function normalizeEvaluationValue(
   value: unknown,
 ): AIEvaluationStructured | null {
@@ -105,28 +116,16 @@ function normalizeEvaluationValue(
     return null;
   }
 
-  const dimensions = normalizeDimensionMap(
-    isRecord(value.dimensions) ? value.dimensions : {},
-  );
-
-  if (Object.keys(dimensions).length === 0) {
-    return null;
-  }
+  const stubDimension = { score: 0, reason: "" };
 
   return {
     total_score: totalScore,
     dimensions: {
-      courtesy: normalizeDimension(dimensions.courtesy),
-      empathy: normalizeDimension(dimensions.empathy),
-      professionalism_and_tone: normalizeDimension(
-        dimensions.professionalism_and_tone,
-      ),
-      communication_clarity: normalizeDimension(
-        dimensions.communication_clarity,
-      ),
-      engagement_and_problem_handling: normalizeDimension(
-        dimensions.engagement_and_problem_handling,
-      ),
+      courtesy: stubDimension,
+      empathy: stubDimension,
+      professionalism_and_tone: stubDimension,
+      communication_clarity: stubDimension,
+      engagement_and_problem_handling: stubDimension,
     },
     strengths: Array.isArray(value.strengths)
       ? value.strengths.filter(
@@ -140,20 +139,6 @@ function normalizeEvaluationValue(
       : [],
     final_summary:
       typeof value.final_summary === "string" ? value.final_summary : "",
-  };
-}
-
-function normalizeDimension(value: unknown) {
-  if (!isRecord(value)) {
-    return { score: 0, reason: "" };
-  }
-
-  const score =
-    typeof value.score === "number" ? value.score : Number(value.score);
-
-  return {
-    score: Number.isFinite(score) ? score : 0,
-    reason: typeof value.reason === "string" ? value.reason : "",
   };
 }
 
@@ -265,17 +250,46 @@ async function handleInterviewSessionOrchestration(
       throw new Error("No interview answers found for orchestration");
     }
 
+    // An answer's transcriptStatus/evaluationStatus column is only ever
+    // updated by its job handler actually running (see
+    // handleInterviewTranscription/handleInterviewEvaluation below). If the
+    // job row itself failed before the handler body ran at all — e.g. "No
+    // handler registered for job type" from a hot-reload/restart race,
+    // where the job was dequeued before initializeBackgroundJobs() finished
+    // re-registering handlers — the answer row is silently left at
+    // "pending" forever, since nothing ever wrote to it. Cross-referencing
+    // each answer's transcriptJobId/evaluationJobId against the actual
+    // background_jobs row catches this: a job marked "failed" there means
+    // this answer is stuck regardless of what its own status column says.
+    const jobIds = answers
+      .flatMap((answer) => [answer.transcriptJobId, answer.evaluationJobId])
+      .filter((id): id is string => Boolean(id));
+    const jobRows =
+      jobIds.length > 0
+        ? await db
+            .select({ id: backgroundJobs.id, status: backgroundJobs.status })
+            .from(backgroundJobs)
+            .where(inArray(backgroundJobs.id, jobIds))
+        : [];
+    const failedJobIds = new Set(
+      jobRows.filter((job) => job.status === "failed").map((job) => job.id),
+    );
+
     const transcriptionCompleted = answers.filter(
       (answer) => answer.transcriptStatus === "completed",
     ).length;
     const transcriptionFailed = answers.filter(
-      (answer) => answer.transcriptStatus === "failed",
+      (answer) =>
+        answer.transcriptStatus === "failed" ||
+        (answer.transcriptJobId && failedJobIds.has(answer.transcriptJobId)),
     ).length;
     const evaluationCompleted = answers.filter(
       (answer) => answer.evaluationStatus === "completed",
     ).length;
     const evaluationFailed = answers.filter(
-      (answer) => answer.evaluationStatus === "failed",
+      (answer) =>
+        answer.evaluationStatus === "failed" ||
+        (answer.evaluationJobId && failedJobIds.has(answer.evaluationJobId)),
     ).length;
 
     await db
@@ -286,13 +300,15 @@ async function handleInterviewSessionOrchestration(
     const hasFailedJobs = transcriptionFailed > 0 || evaluationFailed > 0;
     const hasActiveTranscription = answers.some(
       (answer) =>
-        answer.transcriptStatus === "pending" ||
-        answer.transcriptStatus === "transcribing",
+        (answer.transcriptStatus === "pending" ||
+          answer.transcriptStatus === "transcribing") &&
+        !(answer.transcriptJobId && failedJobIds.has(answer.transcriptJobId)),
     );
     const hasActiveEvaluation = answers.some(
       (answer) =>
-        answer.evaluationStatus === "pending" ||
-        answer.evaluationStatus === "evaluating",
+        (answer.evaluationStatus === "pending" ||
+          answer.evaluationStatus === "evaluating") &&
+        !(answer.evaluationJobId && failedJobIds.has(answer.evaluationJobId)),
     );
 
     if (hasFailedJobs && !hasActiveTranscription && !hasActiveEvaluation) {
@@ -816,12 +832,18 @@ async function handleInterviewEvaluation(
       .filter((item) => item.trim().length > 0);
     const startedAt = Date.now();
 
-    const [groundedGradingCapability, followUpsCapabilityRaw] = moduleId
-      ? await Promise.all([
-          getModuleCapability(moduleId, CAPABILITY_KEYS.GROUNDED_GRADING),
-          getModuleCapability(moduleId, CAPABILITY_KEYS.FOLLOW_UPS),
-        ])
-      : [{ enabled: false, config: {} }, { enabled: false, config: {} }];
+    const [groundedGradingCapability, followUpsCapabilityRaw, dimensionSet] =
+      moduleId
+        ? await Promise.all([
+            getModuleCapability(moduleId, CAPABILITY_KEYS.GROUNDED_GRADING),
+            getModuleCapability(moduleId, CAPABILITY_KEYS.FOLLOW_UPS),
+            getDimensionSet(moduleId),
+          ])
+        : [
+            { enabled: false, config: {} },
+            { enabled: false, config: {} },
+            "customer-service" as const,
+          ];
 
     // Never chain a follow-up off another follow-up — one probe per weak
     // answer is the intended depth, matching the Python app's behavior.
@@ -837,6 +859,7 @@ async function handleInterviewEvaluation(
         moduleTitle: moduleRow?.name ?? undefined,
         standardResponses,
         requestFollowUp: followUpsCapability.enabled,
+        dimensionSet,
         ...(groundedGradingCapability.enabled
           ? {
               groundedAnswerKey: {

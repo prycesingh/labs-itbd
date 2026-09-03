@@ -78,12 +78,26 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
   }, [recordedUrl]);
 
   useEffect(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     setRecordedBlob(null);
     setDuration(0);
     setActualDuration(null);
     setAttemptNumber(1);
     setIsRecording(false);
   }, [questionId]);
+
+  // Belt-and-suspenders: clear the timer on unmount too, in case the
+  // component goes away mid-recording without onstop ever firing.
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, []);
 
   const startRecording = async () => {
     if (isLocked) return;
@@ -108,6 +122,15 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
       const chunks: BlobPart[] = [];
 
       mediaRecorder.onstart = () => {
+        // Clear any interval left over from a previous recording on this
+        // component instance (e.g. a discarded attempt) before starting a
+        // new one — otherwise the old interval keeps ticking in the
+        // background alongside the new one, and duration increments by 2,
+        // 3, 4+ seconds per tick the more times recording has been
+        // (re)started.
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+        }
         setDuration(0);
         setIsRecording(true);
         timerRef.current = setInterval(() => {

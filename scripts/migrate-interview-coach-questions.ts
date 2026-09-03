@@ -170,7 +170,10 @@ async function seedCapabilities(
   await setModuleCapability(
     interviewCoachModuleId,
     CAPABILITY_KEYS.EVALUATION_DEPTH,
-    { enabled: false, config: { depth: "full-rubric" } },
+    {
+      enabled: false,
+      config: { depth: "full-rubric", dimensionSet: "technical-interview" },
+    },
     updatedBy,
   );
   await setModuleCapability(
@@ -216,7 +219,10 @@ async function seedCapabilities(
   await setModuleCapability(
     customerCentricityId,
     CAPABILITY_KEYS.EVALUATION_DEPTH,
-    { enabled: false, config: { depth: "content-only" } },
+    {
+      enabled: false,
+      config: { depth: "content-only", dimensionSet: "customer-service" },
+    },
     updatedBy,
   );
   await setModuleCapability(

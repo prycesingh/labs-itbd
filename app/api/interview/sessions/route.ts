@@ -16,10 +16,12 @@ import {
 } from "@/DB/interviewSchema";
 import {
   calculateWeightedTotalScore,
-  EVALUATION_DIMENSION_ORDER,
+  DEFAULT_DIMENSION_SET,
+  DIMENSION_SETS,
   normalizeDimensionMap,
   normalizeTotalScore,
   totalScoreToPercentage,
+  type DimensionSetName,
 } from "@/lib/interview/evaluationMetrics";
 import {
   CAPABILITY_KEYS,
@@ -71,7 +73,11 @@ function normalizeStringList(value: unknown): string[] {
 
 function parseAiStructured(
   value: unknown,
-): { total_score?: number; dimensions?: unknown } | null {
+): {
+  total_score?: number;
+  dimensions?: unknown;
+  dimensionSet?: DimensionSetName;
+} | null {
   if (typeof value === "string") {
     try {
       return parseAiStructured(JSON.parse(value));
@@ -84,13 +90,18 @@ function parseAiStructured(
     return null;
   }
 
-  return value as { total_score?: number; dimensions?: unknown };
+  return value as {
+    total_score?: number;
+    dimensions?: unknown;
+    dimensionSet?: DimensionSetName;
+  };
 }
 
 function hasCompleteDimensionScores(
   dimensions: ReturnType<typeof normalizeDimensionMap>,
+  dimensionSet: DimensionSetName = DEFAULT_DIMENSION_SET,
 ) {
-  return EVALUATION_DIMENSION_ORDER.every(
+  return DIMENSION_SETS[dimensionSet].every(
     (key) => typeof dimensions[key]?.score === "number",
   );
 }
@@ -622,12 +633,21 @@ export async function GET(request: NextRequest) {
         : undefined;
 
       const aiStructured = parseAiStructured(ai?.structured);
+      const dimensionSet: DimensionSetName =
+        aiStructured?.dimensionSet ?? DEFAULT_DIMENSION_SET;
       const aiDimensions = normalizeDimensionMap(
         aiStructured?.dimensions ?? {},
+        dimensionSet,
       );
-      const computedAiTotal = calculateWeightedTotalScore(aiDimensions);
+      const computedAiTotal = calculateWeightedTotalScore(
+        aiDimensions,
+        dimensionSet,
+      );
       const modelAiTotal = normalizeTotalScore(aiStructured?.total_score);
-      const normalizedAiTotal = hasCompleteDimensionScores(aiDimensions)
+      const normalizedAiTotal = hasCompleteDimensionScores(
+        aiDimensions,
+        dimensionSet,
+      )
         ? (computedAiTotal ?? modelAiTotal)
         : (modelAiTotal ?? computedAiTotal);
       const normalizedAdminTotal = normalizeTotalScore(

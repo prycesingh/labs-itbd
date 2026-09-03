@@ -6,7 +6,14 @@ import { Progress } from "@/components/ui/progress";
 import { useInterviewSSE } from "@/hooks/useInterviewSSE";
 import { AlertTriangle, CheckCircle2, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+// After this long without completing, swap the reassurance copy so the
+// candidate isn't left guessing indefinitely — processing normally finishes
+// in well under a minute or two (see the copy below), so anything past this
+// point is worth calling out explicitly rather than repeating "usually
+// takes a minute or two" forever.
+const LONGER_THAN_USUAL_MS = 60_000;
 
 interface ProcessingProgressProps {
   sessionId: string;
@@ -15,6 +22,19 @@ interface ProcessingProgressProps {
 export function ProcessingProgress({ sessionId }: ProcessingProgressProps) {
   const router = useRouter();
   const stream = useInterviewSSE(sessionId, true);
+  const [takingLonger, setTakingLonger] = useState(false);
+
+  useEffect(() => {
+    if (stream.completed || stream.failed) {
+      setTakingLonger(false);
+      return;
+    }
+    const timer = window.setTimeout(
+      () => setTakingLonger(true),
+      LONGER_THAN_USUAL_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [stream.completed, stream.failed]);
 
   useEffect(() => {
     if (!stream.completed) {
@@ -92,7 +112,9 @@ export function ProcessingProgress({ sessionId }: ProcessingProgressProps) {
           <p className="max-w-md text-sm leading-6 text-slate-300">
             {stream.completed
               ? "Redirecting you to your results now."
-              : "This usually takes a minute or two. Feel free to keep this tab open — we'll take you to your results as soon as they're ready."}
+              : takingLonger
+                ? "This is taking longer than usual. Please keep this tab open — we'll take you to your results as soon as they're ready, or let you know if something went wrong."
+                : "This usually takes a minute or two. Feel free to keep this tab open — we'll take you to your results as soon as they're ready."}
           </p>
 
           <div className="w-full max-w-sm space-y-2">
@@ -103,6 +125,13 @@ export function ProcessingProgress({ sessionId }: ProcessingProgressProps) {
             <div className="flex items-center gap-2 text-sm text-emerald-300">
               <CheckCircle2 className="h-4 w-4" />
               Processing complete
+            </div>
+          )}
+
+          {!stream.completed && takingLonger && (
+            <div className="flex items-center gap-2 text-xs text-amber-300">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Still working — no action needed yet.
             </div>
           )}
         </CardContent>

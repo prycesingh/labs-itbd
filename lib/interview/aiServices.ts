@@ -429,6 +429,8 @@ export interface GroundedAnswerKey {
   coverage?: "full" | "partial" | "none" | null;
 }
 
+export type DimensionSet = "customer-service" | "technical-interview";
+
 export interface EvaluationPromptOptions {
   moduleTitle?: string;
   standardResponses?: string[];
@@ -441,15 +443,37 @@ export interface EvaluationPromptOptions {
   // True only when the module has follow_ups enabled — adds the
   // follow_up_recommended/follow_up_question fields to the requested schema.
   requestFollowUp?: boolean;
+  // Which of the two fixed dimension sets to grade against — resolved from
+  // the answering session's module via moduleCapabilities.ts's
+  // getDimensionSet(). Defaults to "customer-service" (the shape every
+  // module used before this concept existed), so any caller that doesn't
+  // pass this gets byte-for-byte the same prompt/schema/scoring as before.
+  dimensionSet?: DimensionSet;
 }
 
-const DEFAULT_SCORING_WEIGHTS: Record<string, number> = {
+const CUSTOMER_SERVICE_SCORING_WEIGHTS: Record<string, number> = {
   courtesy: 0.2,
   empathy: 0.2,
   professionalism_and_tone: 0.2,
   communication_clarity: 0.2,
   engagement_and_problem_handling: 0.2,
 };
+
+const TECHNICAL_INTERVIEW_SCORING_WEIGHTS: Record<string, number> = {
+  correctness: 0.2,
+  relevance: 0.2,
+  structure: 0.2,
+  specificity: 0.2,
+  completeness: 0.2,
+};
+
+function defaultScoringWeightsFor(
+  dimensionSet: DimensionSet,
+): Record<string, number> {
+  return dimensionSet === "technical-interview"
+    ? TECHNICAL_INTERVIEW_SCORING_WEIGHTS
+    : CUSTOMER_SERVICE_SCORING_WEIGHTS;
+}
 
 /**
  * Build evaluation prompt with structured output schema
@@ -459,13 +483,16 @@ function buildEvaluationPrompt(
   questionText: string,
   options: EvaluationPromptOptions = {},
 ): { systemPrompt: string; userMessage: string } {
-  const moduleTitle = options.moduleTitle?.trim() || "Customer Service";
+  const dimensionSet: DimensionSet = options.dimensionSet ?? "customer-service";
+  const moduleTitle =
+    options.moduleTitle?.trim() ||
+    (dimensionSet === "technical-interview" ? "Technical Interview" : "Customer Service");
   const standardResponses =
     options.standardResponses
       ?.map((item) => item.trim())
       .filter((item) => item.length > 0) ?? [];
   const scoringWeights = {
-    ...DEFAULT_SCORING_WEIGHTS,
+    ...defaultScoringWeightsFor(dimensionSet),
     ...(options.scoringWeights ?? {}),
   };
 
@@ -501,7 +528,15 @@ ${
 Also decide whether a follow-up question is warranted. If the answer is shallow, vague, or misses key points from the answer key (when provided), set "follow_up_recommended" to true and write one natural follow-up question in "follow_up_question" that probes the biggest gap. Otherwise set "follow_up_recommended" to false and leave "follow_up_question" as an empty string.`
     : "";
 
-  const systemPrompt = `You are evaluating a candidate's verbal response to a customer service scenario in the module "${moduleTitle}".
+  const isTechnical = dimensionSet === "technical-interview";
+
+  const systemPrompt = isTechnical
+    ? `You are an experienced IT/MSP hiring manager evaluating a candidate's verbal response to a technical interview question in the module "${moduleTitle}".
+
+Be strict about technical accuracy, but fair about intent. Judge what the candidate actually said in the transcript — restarts, self-corrections, and filler words are normal spoken disfluencies and do not reflect content quality. Do not invent details that are not in the transcript, and never claim something is missing that the transcript already covers — re-read the transcript before flagging any point as a gap.
+${hasGroundedPoints ? "\nWhen a source-grounded answer key is provided below, treat its ideal points as authoritative for judging correctness and completeness." : ""}
+Return ONLY a valid JSON object. No markdown, no explanation outside JSON.`
+    : `You are evaluating a candidate's verbal response to a customer service scenario in the module "${moduleTitle}".
 
 Be strict about accuracy, but fair about intent. Judge what the candidate actually said in the transcript, including wording mistakes, weak vocabulary, awkward phrasing, missing empathy, and incomplete handling steps. Do not invent details that are not in the transcript.
 
@@ -509,46 +544,62 @@ If the candidate makes language, wording, grammar, or vocabulary mistakes that a
 ${hasGroundedPoints ? "\nWhen a source-grounded answer key is provided below, treat its ideal points as authoritative for judging correctness and completeness." : ""}
 Return ONLY a valid JSON object. No markdown, no explanation outside JSON.`;
 
-  const userMessage = `─── SCENARIO / QUESTION ───
-${questionText}
-
-─── CANDIDATE'S RESPONSE (transcribed) ───
-${transcript}
-
-─── STANDARD REFERENCE RESPONSES ───
-${standardResponses.length > 0 ? standardResponses.map((item, index) => `${index + 1}. ${item}`).join("\n") : "No standard responses were configured for this question."}
-${groundedInstructions}
-─── SCORING WEIGHTS ───
-${JSON.stringify(scoringWeights, null, 2)}
-
-─── EVALUATION RUBRIC ───
-
-Rate the candidate's response on each dimension using a 0-10 scale. Apply the scoring weights above to calculate total_score as a weighted average normalized to a 0-1 scale.
-
-Dimensions:
+  const dimensionsBlock = isTechnical
+    ? `Dimensions:
+1. Correctness — Are the technical/factual claims true and not misleading.
+2. Relevance — Does it answer the exact question asked, with no drift or dodging.
+3. Structure — Do the ideas connect and progress so a listener can follow, regardless of truth or coverage.
+4. Specificity — Does it name concrete tools, commands, settings, or examples versus vague generalities.
+5. Completeness — Of the key points a strong answer needs (use the ideal points as reference, when provided), how many are covered and how thoroughly.`
+    : `Dimensions:
 1. Courtesy — Politeness, professional greeting, willingness to help.
 2. Empathy — Understanding the customer's frustration and acknowledging their feelings.
 3. Professionalism and Tone — Respectful, calm, professional delivery that maintains credibility.
 4. Communication Clarity — Clear language, avoidance of jargon, logical structure.
-5. Engagement and Problem Handling — Active listening, clarifying questions, ownership, and concrete next steps.
+5. Engagement and Problem Handling — Active listening, clarifying questions, ownership, and concrete next steps.`;
 
-─── SCORING GUIDELINES ───
+  const scoringGuidelines = isTechnical
+    ? `─── SCORING GUIDELINES ───
+- 0-2: Very poor — the central claim is wrong or invented, or the answer is off-topic/evasive.
+- 3-4: Below average — a clearly wrong claim on a core point, or mostly tangential to the question.
+- 5-6: Average — core claims sound but shallow, vague, or missing about half the expected points.
+- 7-8: Good — accurate, on-topic, reasonably concrete, most expected points covered.
+- 9-10: Excellent — every claim accurate, concrete commands/tools/settings named, essentially all expected points covered with real depth.
+
+Be fair and balanced: give credit for a correct, on-topic answer even if it is not perfectly polished. Do not penalize the candidate for omitting something the question did not actually ask for.`
+    : `─── SCORING GUIDELINES ───
 - 0-2: Very poor — rude, dismissive, or completely off-topic.
 - 3-4: Below average — minimal effort, lacks empathy or clarity.
 - 5-6: Average — acceptable but generic, room for improvement.
 - 7-8: Good — genuine empathy, clear communication, helpful approach.
 - 9-10: Excellent — outstanding empathy, proactive ownership, clear and warm.
 
-Be fair and balanced. Give credit for genuine effort, empathy, and willingness to help even if the response is not perfectly structured. Be constructive in your feedback.
-${followUpInstructions}
+Be fair and balanced. Give credit for genuine effort, empathy, and willingness to help even if the response is not perfectly structured. Be constructive in your feedback.`;
 
-─── REQUIRED JSON OUTPUT ───
-
-Return ONLY a valid JSON object with this structure:
-
-{
-  "total_score": 0.0,
-  "dimensions": {
+  const dimensionsJsonExample = isTechnical
+    ? `  "dimensions": {
+    "correctness": {
+      "score": 0.0,
+      "reason": "brief rationale"
+    },
+    "relevance": {
+      "score": 0.0,
+      "reason": "brief rationale"
+    },
+    "structure": {
+      "score": 0.0,
+      "reason": "brief rationale"
+    },
+    "specificity": {
+      "score": 0.0,
+      "reason": "brief rationale"
+    },
+    "completeness": {
+      "score": 0.0,
+      "reason": "brief rationale"
+    }
+  },`
+    : `  "dimensions": {
     "courtesy": {
       "score": 0.0,
       "reason": "brief rationale"
@@ -569,7 +620,36 @@ Return ONLY a valid JSON object with this structure:
       "score": 0.0,
       "reason": "brief rationale"
     }
-  },
+  },`;
+
+  const userMessage = `─── SCENARIO / QUESTION ───
+${questionText}
+
+─── CANDIDATE'S RESPONSE (transcribed) ───
+${transcript}
+
+─── STANDARD REFERENCE RESPONSES ───
+${standardResponses.length > 0 ? standardResponses.map((item, index) => `${index + 1}. ${item}`).join("\n") : "No standard responses were configured for this question."}
+${groundedInstructions}
+─── SCORING WEIGHTS ───
+${JSON.stringify(scoringWeights, null, 2)}
+
+─── EVALUATION RUBRIC ───
+
+Rate the candidate's response on each dimension using a 0-10 scale. Apply the scoring weights above to calculate total_score as a weighted average normalized to a 0-1 scale.
+
+${dimensionsBlock}
+
+${scoringGuidelines}
+${followUpInstructions}
+
+─── REQUIRED JSON OUTPUT ───
+
+Return ONLY a valid JSON object with this structure:
+
+{
+  "total_score": 0.0,
+${dimensionsJsonExample}
   "strengths": ["specific strength 1", "specific strength 2"],
   "improvement_areas": ["specific area 1", "specific area 2"],
   "final_summary": "A 2-3 sentence constructive summary of the candidate's performance."${
@@ -584,13 +664,34 @@ Return ONLY a valid JSON object with this structure:
   return { systemPrompt, userMessage };
 }
 
-const EVALUATION_DIMENSIONS = [
+const CUSTOMER_SERVICE_DIMENSION_KEYS = [
   "courtesy",
   "empathy",
   "professionalism_and_tone",
   "communication_clarity",
   "engagement_and_problem_handling",
 ] as const;
+
+const TECHNICAL_INTERVIEW_DIMENSION_KEYS = [
+  "correctness",
+  "relevance",
+  "structure",
+  "specificity",
+  "completeness",
+] as const;
+
+function dimensionKeysFor(
+  dimensionSet: DimensionSet,
+): readonly string[] {
+  return dimensionSet === "technical-interview"
+    ? TECHNICAL_INTERVIEW_DIMENSION_KEYS
+    : CUSTOMER_SERVICE_DIMENSION_KEYS;
+}
+
+// Retained for any code path that hasn't been migrated to pass an explicit
+// dimensionSet yet — defaults to the customer-service keys, the shape every
+// module used before this concept existed.
+const EVALUATION_DIMENSIONS = CUSTOMER_SERVICE_DIMENSION_KEYS;
 
 function isSchemaCapableEvaluationModel(modelName: string): boolean {
   return (
@@ -620,17 +721,42 @@ function resolveEvaluationModel(): {
   };
 }
 
+const DIMENSION_SCHEMA_ENTRY = {
+  type: "object",
+  additionalProperties: false,
+  required: ["score", "reason"],
+  properties: {
+    score: { type: "number", minimum: 0, maximum: 10 },
+    reason: { type: "string" },
+  },
+} as const;
+
 /**
- * Builds the strict-mode JSON schema for the evaluation response. When
- * `includeFollowUp` is true (only for modules with the follow_ups
+ * Builds the strict-mode JSON schema for the evaluation response.
+ *
+ * `dimensionSet` selects which 5 dimension keys the schema requires under
+ * `dimensions` — every dimension entry has the identical {score, reason}
+ * shape regardless of name, so it's generated from dimensionKeysFor()
+ * rather than hand-duplicated per key. Defaults to "customer-service", the
+ * shape every module used before this concept existed.
+ *
+ * When `includeFollowUp` is true (only for modules with the follow_ups
  * capability enabled), the schema additionally requires
  * follow_up_recommended/follow_up_question — OpenAI's strict json_schema
  * mode requires every declared property to be listed in `required`, so this
- * can't be a single static schema with optional fields; the two shapes are
+ * can't be a single static schema with optional fields; the shapes are
  * built on demand instead. Every module not opted into follow-ups gets the
  * exact same schema shape as before this feature existed.
  */
-function buildEvaluationJsonSchema(includeFollowUp: boolean) {
+function buildEvaluationJsonSchema(
+  includeFollowUp: boolean,
+  dimensionSet: DimensionSet = "customer-service",
+) {
+  const dimensionKeys = dimensionKeysFor(dimensionSet);
+  const dimensionProperties = Object.fromEntries(
+    dimensionKeys.map((key) => [key, DIMENSION_SCHEMA_ENTRY]),
+  );
+
   return {
     type: "object",
     additionalProperties: false,
@@ -653,54 +779,8 @@ function buildEvaluationJsonSchema(includeFollowUp: boolean) {
       dimensions: {
         type: "object",
         additionalProperties: false,
-        required: EVALUATION_DIMENSIONS,
-        properties: {
-          courtesy: {
-            type: "object",
-            additionalProperties: false,
-            required: ["score", "reason"],
-            properties: {
-              score: { type: "number", minimum: 0, maximum: 10 },
-              reason: { type: "string" },
-            },
-          },
-          empathy: {
-            type: "object",
-            additionalProperties: false,
-            required: ["score", "reason"],
-            properties: {
-              score: { type: "number", minimum: 0, maximum: 10 },
-              reason: { type: "string" },
-            },
-          },
-          professionalism_and_tone: {
-            type: "object",
-            additionalProperties: false,
-            required: ["score", "reason"],
-            properties: {
-              score: { type: "number", minimum: 0, maximum: 10 },
-              reason: { type: "string" },
-            },
-          },
-          communication_clarity: {
-            type: "object",
-            additionalProperties: false,
-            required: ["score", "reason"],
-            properties: {
-              score: { type: "number", minimum: 0, maximum: 10 },
-              reason: { type: "string" },
-            },
-          },
-          engagement_and_problem_handling: {
-            type: "object",
-            additionalProperties: false,
-            required: ["score", "reason"],
-            properties: {
-              score: { type: "number", minimum: 0, maximum: 10 },
-              reason: { type: "string" },
-            },
-          },
-        },
+        required: dimensionKeys,
+        properties: dimensionProperties,
       },
       strengths: {
         type: "array",
@@ -743,7 +823,9 @@ const EVALUATION_DIMENSION_ALIASES: Record<string, string> = {
   "problem handling approach": "engagement_and_problem_handling",
 };
 
-type CanonicalEvaluationDimension = (typeof EVALUATION_DIMENSIONS)[number];
+type CanonicalEvaluationDimension =
+  | (typeof CUSTOMER_SERVICE_DIMENSION_KEYS)[number]
+  | (typeof TECHNICAL_INTERVIEW_DIMENSION_KEYS)[number];
 
 type DimensionCandidate = {
   score: number | null;
@@ -775,6 +857,13 @@ const LEGACY_DIMENSION_GROUPS: Record<CanonicalEvaluationDimension, string[]> =
       "problem handling approach",
       "problemhandling",
     ],
+    // Technical-interview dimensions have no legacy aliases to reconcile —
+    // this is a new dimension set with a single, unambiguous name each.
+    correctness: ["correctness"],
+    relevance: ["relevance"],
+    structure: ["structure"],
+    specificity: ["specificity"],
+    completeness: ["completeness"],
   };
 
 function extractLikelyJson(content: string): unknown {
@@ -981,6 +1070,7 @@ function buildNormalizedDimension(
 
 function normalizeEvaluationPayload(
   data: unknown,
+  dimensionSet: DimensionSet = "customer-service",
 ): AIEvaluationStructured | null {
   if (!data || typeof data !== "object") {
     return null;
@@ -1010,9 +1100,15 @@ function normalizeEvaluationPayload(
     return null;
   }
 
-  const normalizedDimensions = {} as AIEvaluationStructured["dimensions"];
+  const dimensionKeys = dimensionKeysFor(
+    dimensionSet,
+  ) as readonly CanonicalEvaluationDimension[];
+  const normalizedDimensions = {} as Record<
+    CanonicalEvaluationDimension,
+    { score: number; reason: string }
+  >;
 
-  for (const key of EVALUATION_DIMENSIONS) {
+  for (const key of dimensionKeys) {
     const normalizedDimension = buildNormalizedDimension(key, dimensionsInput);
 
     if (!normalizedDimension) {
@@ -1023,9 +1119,11 @@ function normalizeEvaluationPayload(
   }
 
   const weightedFromDimensions = Number(
-    EVALUATION_DIMENSIONS.reduce((sum, key) => {
-      return sum + (normalizedDimensions[key].score / 10) * 0.2;
-    }, 0).toFixed(4),
+    dimensionKeys
+      .reduce((sum, key) => {
+        return sum + (normalizedDimensions[key].score / 10) * 0.2;
+      }, 0)
+      .toFixed(4),
   );
 
   const totalScore =
@@ -1057,7 +1155,8 @@ function normalizeEvaluationPayload(
 
   return {
     total_score: totalScore,
-    dimensions: normalizedDimensions,
+    dimensions: normalizedDimensions as unknown as AIEvaluationStructured["dimensions"],
+    dimensionSet,
     strengths: strengths.length > 0 ? strengths : ["Needs manual review"],
     improvement_areas:
       improvementAreas.length > 0 ? improvementAreas : ["Needs manual review"],
@@ -1077,6 +1176,7 @@ function buildFallbackEvaluation(
   transcript: string,
   questionText: string,
   reason: string,
+  dimensionSet: DimensionSet = "customer-service",
 ): AIEvaluationStructured {
   const clippedQuestion = questionText.trim().slice(0, 120);
   const baselineScore = 0.5;
@@ -1086,15 +1186,14 @@ function buildFallbackEvaluation(
     reason,
   };
 
+  const dimensions = Object.fromEntries(
+    dimensionKeysFor(dimensionSet).map((key) => [key, dimension]),
+  ) as unknown as AIEvaluationStructured["dimensions"];
+
   return {
     total_score: baselineScore,
-    dimensions: {
-      courtesy: dimension,
-      empathy: dimension,
-      professionalism_and_tone: dimension,
-      communication_clarity: dimension,
-      engagement_and_problem_handling: dimension,
-    },
+    dimensions,
+    dimensionSet,
     strengths: [
       "Candidate provided a response relevant to the prompt",
       "Response was captured successfully for review",
@@ -1124,6 +1223,7 @@ export async function evaluateAnswer(
 ): Promise<EvaluationResult> {
   const MAX_ATTEMPTS = INTERVIEW_CONFIG.EVALUATION_INTERNAL_MAX_ATTEMPTS;
   const { modelName, forcedFallback } = resolveEvaluationModel();
+  const dimensionSet: DimensionSet = options.dimensionSet ?? "customer-service";
 
   try {
     // Validate inputs
@@ -1153,7 +1253,10 @@ export async function evaluateAnswer(
           json_schema: {
             name: "interview_evaluation",
             strict: true,
-            schema: buildEvaluationJsonSchema(Boolean(options.requestFollowUp)),
+            schema: buildEvaluationJsonSchema(
+              Boolean(options.requestFollowUp),
+              dimensionSet,
+            ),
           },
         }
       : {
@@ -1210,7 +1313,7 @@ export async function evaluateAnswer(
       );
     }
 
-    const normalized = normalizeEvaluationPayload(parsed);
+    const normalized = normalizeEvaluationPayload(parsed, dimensionSet);
 
     if (!normalized) {
       throw new EvaluationError(
@@ -1270,6 +1373,7 @@ export async function evaluateAnswer(
             transcript,
             questionText,
             error.message,
+            dimensionSet,
           ),
           tokensUsed: { prompt: 0, completion: 0, total: 0 },
           rawResponse: {

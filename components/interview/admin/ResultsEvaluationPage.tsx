@@ -22,8 +22,6 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
   calculateWeightedTotalScore,
-  EVALUATION_DIMENSION_LABELS,
-  EVALUATION_DIMENSION_ORDER,
   mergeDimensionMaps,
   totalScoreToPercentage,
 } from "@/lib/interview/evaluationMetrics";
@@ -41,6 +39,37 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
+interface FollowUpSummary {
+  id: string;
+  sessionId: string;
+  parentAnswerId: string;
+  questionText: string;
+  status: "pending" | "answered" | "skipped";
+}
+
+interface DeliveryMetrics {
+  scores: {
+    pace?: number;
+    pausing?: number;
+    fluency?: number;
+    expressiveness?: number;
+  };
+  overall?: number;
+  calibrationMode: "static" | "population-relative";
+  wpm?: number;
+  pauseCount?: number;
+  totalPauseS?: number;
+  longestPauseS?: number;
+  pauseRatio?: number;
+  fillerCount?: number;
+  fillersPerMin?: number;
+  pitchMeanHz?: number;
+  pitchDynamismSt?: number;
+  pitchRangeSt?: number;
+  loudnessDbMean?: number;
+  loudnessVariationDb?: number;
+}
+
 interface SessionResult {
   id: string;
   candidateName?: string;
@@ -51,6 +80,7 @@ interface SessionResult {
   status: string;
   createdAt: Date;
   answers: AnswerDetail[];
+  followUps?: FollowUpSummary[];
   evaluation?: EvaluationDetail;
 }
 
@@ -63,9 +93,16 @@ interface AnswerDetail {
   transcript?: string;
   transcriptStatus?: "pending" | "transcribing" | "completed" | "failed";
   evaluationStatus?: "pending" | "evaluating" | "completed" | "failed";
+  isFollowUp?: boolean;
+  followUpOfAnswerId?: string;
+  deliveryMetrics?: DeliveryMetrics;
   aiEvaluation?: {
     total_score: number;
     dimensions?: Record<string, { score?: number; reason?: string }>;
+    // Which of the two fixed dimension sets `dimensions` uses — see
+    // lib/interview/evaluationMetrics.ts's DimensionSetName. Absent on rows
+    // written before this concept existed; treated as "customer-service".
+    dimensionSet?: "customer-service" | "technical-interview";
     strengths?: string;
     improvementAreas?: string;
     finalSummary?: string;
@@ -95,6 +132,44 @@ interface EvaluationDetail {
   adminOverallNotes?: string;
   aiDimensions?: Record<string, { score?: number; reason?: string }>;
   finalDimensions?: Record<string, { score?: number; reason?: string }>;
+  dimensionSet?: "customer-service" | "technical-interview";
+}
+
+const CUSTOMER_SERVICE_DIMENSION_ORDER = [
+  "courtesy",
+  "empathy",
+  "professionalism_and_tone",
+  "communication_clarity",
+  "engagement_and_problem_handling",
+] as const;
+
+const TECHNICAL_INTERVIEW_DIMENSION_ORDER = [
+  "correctness",
+  "relevance",
+  "structure",
+  "specificity",
+  "completeness",
+] as const;
+
+const DIMENSION_LABELS: Record<string, string> = {
+  courtesy: "Courtesy",
+  empathy: "Empathy",
+  professionalism_and_tone: "Professionalism & Tone",
+  communication_clarity: "Communication Clarity",
+  engagement_and_problem_handling: "Engagement & Problem Handling",
+  correctness: "Correctness",
+  relevance: "Relevance",
+  structure: "Structure",
+  specificity: "Specificity",
+  completeness: "Completeness",
+};
+
+function dimensionOrderFor(
+  dimensionSet: "customer-service" | "technical-interview" | undefined,
+): readonly string[] {
+  return dimensionSet === "technical-interview"
+    ? TECHNICAL_INTERVIEW_DIMENSION_ORDER
+    : CUSTOMER_SERVICE_DIMENSION_ORDER;
 }
 
 const REEVALUATION_POLL_INTERVAL_MS = 2000;
@@ -207,15 +282,18 @@ export default function ResultsEvaluationPage() {
         selectedSession.answers.map((answer) => [
           answer.id,
           Object.fromEntries(
-            EVALUATION_DIMENSION_ORDER.map((key) => [
-              key,
-              answer.adminEvaluation?.dimensionOverrides?.[key]?.score !==
-              undefined
-                ? String(
-                    answer.adminEvaluation?.dimensionOverrides?.[key]?.score,
-                  )
-                : "",
-            ]),
+            dimensionOrderFor(answer.aiEvaluation?.dimensionSet).map(
+              (key) => [
+                key,
+                answer.adminEvaluation?.dimensionOverrides?.[key]?.score !==
+                undefined
+                  ? String(
+                      answer.adminEvaluation?.dimensionOverrides?.[key]
+                        ?.score,
+                    )
+                  : "",
+              ],
+            ),
           ),
         ]),
       ),
@@ -248,27 +326,32 @@ export default function ResultsEvaluationPage() {
       const answer = selectedSession?.answers.find(
         (item) => item.id === answerId,
       );
+      const dimensionSet = answer?.aiEvaluation?.dimensionSet;
       const dimensionOverrides = Object.fromEntries(
-        EVALUATION_DIMENSION_ORDER.map((key) => {
-          const rawScore = adminDimensionScores[answerId]?.[key];
-          const score =
-            rawScore !== undefined && rawScore !== ""
-              ? Number(rawScore)
-              : undefined;
+        dimensionOrderFor(dimensionSet)
+          .map((key) => {
+            const rawScore = adminDimensionScores[answerId]?.[key];
+            const score =
+              rawScore !== undefined && rawScore !== ""
+                ? Number(rawScore)
+                : undefined;
 
-          return [
-            key,
-            score !== undefined && Number.isFinite(score)
-              ? { score }
-              : undefined,
-          ];
-        }).filter((entry) => Boolean(entry[1])),
+            return [
+              key,
+              score !== undefined && Number.isFinite(score)
+                ? { score }
+                : undefined,
+            ];
+          })
+          .filter((entry) => Boolean(entry[1])),
       );
       const computedTotal = calculateWeightedTotalScore(
         mergeDimensionMaps(
           answer?.aiEvaluation?.dimensions ?? {},
           dimensionOverrides,
+          dimensionSet,
         ),
+        dimensionSet,
       );
 
       const res = await fetch("/api/interview/evaluations", {
@@ -550,25 +633,35 @@ export default function ResultsEvaluationPage() {
   };
 
   const getPreviewTotal = (answer: AnswerDetail) => {
+    const dimensionSet = answer.aiEvaluation?.dimensionSet;
     const overrides = Object.fromEntries(
-      EVALUATION_DIMENSION_ORDER.map((key) => {
-        const rawScore = adminDimensionScores[answer.id]?.[key];
-        const score =
-          rawScore !== undefined && rawScore !== ""
-            ? Number(rawScore)
-            : undefined;
+      dimensionOrderFor(dimensionSet)
+        .map((key) => {
+          const rawScore = adminDimensionScores[answer.id]?.[key];
+          const score =
+            rawScore !== undefined && rawScore !== ""
+              ? Number(rawScore)
+              : undefined;
 
-        return [
-          key,
-          score !== undefined && Number.isFinite(score) ? { score } : undefined,
-        ];
-      }).filter((entry) => Boolean(entry[1])),
+          return [
+            key,
+            score !== undefined && Number.isFinite(score)
+              ? { score }
+              : undefined,
+          ];
+        })
+        .filter((entry) => Boolean(entry[1])),
     );
 
     return (
       totalScoreToPercentage(
         calculateWeightedTotalScore(
-          mergeDimensionMaps(answer.aiEvaluation?.dimensions ?? {}, overrides),
+          mergeDimensionMaps(
+            answer.aiEvaluation?.dimensions ?? {},
+            overrides,
+            dimensionSet,
+          ),
+          dimensionSet,
         ),
       ) ??
       answer.adminEvaluation?.total_score ??
@@ -699,13 +792,14 @@ export default function ResultsEvaluationPage() {
                   )}
 
                   <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-                    {EVALUATION_DIMENSION_ORDER.map((key) => (
+                    {dimensionOrderFor(selectedSession.evaluation?.dimensionSet).map(
+                      (key) => (
                       <div
                         key={key}
                         className="rounded-md border border-cyan-500/20 bg-black/20 p-2"
                       >
                         <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-                          {EVALUATION_DIMENSION_LABELS[key]}
+                          {DIMENSION_LABELS[key]}
                         </div>
                         <div className="mt-1 flex items-center justify-between text-xs">
                           <span>AI</span>
@@ -728,7 +822,12 @@ export default function ResultsEvaluationPage() {
                     ))}
                   </div>
 
-                  {selectedSession.status === "failed" && (
+                  {(selectedSession.status === "failed" ||
+                    selectedSession.answers.some(
+                      (answer) =>
+                        answer.transcriptStatus === "failed" ||
+                        answer.evaluationStatus === "failed",
+                    )) && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -747,7 +846,15 @@ export default function ResultsEvaluationPage() {
                     size="sm"
                     variant="outline"
                     className="w-fit"
-                    disabled={reEvaluatingSession}
+                    disabled={
+                      reEvaluatingSession ||
+                      !selectedSession.answers.some((answer) => answer.transcript)
+                    }
+                    title={
+                      selectedSession.answers.some((answer) => answer.transcript)
+                        ? undefined
+                        : "No answers have a transcript yet — use Retry Failed Jobs first"
+                    }
                     onClick={() => {
                       void reEvaluateSession();
                     }}
@@ -764,6 +871,20 @@ export default function ResultsEvaluationPage() {
                   >
                     Delete Results
                   </Button>
+
+                  {selectedSession.followUps?.some(
+                    (f) => f.status === "pending",
+                  ) && (
+                    <div className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
+                      {
+                        selectedSession.followUps.filter(
+                          (f) => f.status === "pending",
+                        ).length
+                      }{" "}
+                      follow-up question(s) never answered — the candidate may
+                      have abandoned the flow mid-interview.
+                    </div>
+                  )}
                 </div>
 
                 {/* Answers List */}
@@ -778,9 +899,27 @@ export default function ResultsEvaluationPage() {
                         className="w-full p-3 flex items-center justify-between hover:bg-cyan-500/5 transition-colors text-left"
                       >
                         <div className="flex-1">
-                          <div className="text-sm font-medium">
+                          <div className="flex items-center gap-2 text-sm font-medium">
+                            {answer.isFollowUp && (
+                              <Badge className="bg-purple-600/80 shrink-0">
+                                Follow-up
+                              </Badge>
+                            )}
                             {answer.questionText}
                           </div>
+                          {answer.isFollowUp &&
+                            answer.followUpOfAnswerId &&
+                            (() => {
+                              const parent = selectedSession.answers.find(
+                                (a) => a.id === answer.followUpOfAnswerId,
+                              );
+                              return parent ? (
+                                <div className="text-xs text-purple-300/80 mt-0.5">
+                                  Follow-up to: {parent.questionText.slice(0, 80)}
+                                  {parent.questionText.length > 80 ? "…" : ""}
+                                </div>
+                              ) : null;
+                            })()}
                           {answer.aiEvaluation?.total_score !== undefined && (
                             <div className="text-xs text-muted-foreground mt-1">
                               AI Score:{" "}
@@ -940,13 +1079,14 @@ export default function ResultsEvaluationPage() {
                                   </span>
                                 </div>
                                 <div className="grid gap-2 pt-1 md:grid-cols-2 xl:grid-cols-3">
-                                  {EVALUATION_DIMENSION_ORDER.map((key) => (
+                                  {dimensionOrderFor(answer.aiEvaluation?.dimensionSet).map(
+                                    (key) => (
                                     <div
                                       key={`${answer.id}-ai-${key}`}
                                       className="rounded bg-black/20 px-2 py-1"
                                     >
                                       <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                                        {EVALUATION_DIMENSION_LABELS[key]}
+                                        {DIMENSION_LABELS[key]}
                                       </div>
                                       <div className="text-sm text-blue-300">
                                         {answer.aiEvaluation?.dimensions?.[key]
@@ -966,6 +1106,99 @@ export default function ResultsEvaluationPage() {
                                     {answer.aiEvaluation.improvementAreas}
                                   </div>
                                 )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Delivery Scoring — only present for modules with
+                              delivery_scoring enabled (Interview Coach);
+                              silently absent for Customer Cetricity answers. */}
+                          {answer.deliveryMetrics && (
+                            <div className="space-y-2 p-2 bg-purple-500/10 rounded border border-purple-500/20">
+                              <div className="flex items-center justify-between">
+                                <div className="text-xs font-medium">
+                                  Delivery Scoring
+                                </div>
+                                <Badge className="bg-purple-600/70 text-[10px]">
+                                  {answer.deliveryMetrics.calibrationMode}
+                                </Badge>
+                              </div>
+                              <div className="text-xs space-y-1">
+                                <div>
+                                  Overall:{" "}
+                                  <span className="text-purple-300 font-bold">
+                                    {answer.deliveryMetrics.overall ?? "-"} / 5
+                                  </span>
+                                </div>
+                                <div className="grid gap-2 pt-1 md:grid-cols-2 xl:grid-cols-4">
+                                  {(
+                                    [
+                                      ["pace", "Pace"],
+                                      ["pausing", "Pausing"],
+                                      ["fluency", "Fluency"],
+                                      ["expressiveness", "Expressiveness"],
+                                    ] as const
+                                  ).map(([key, label]) => (
+                                    <div
+                                      key={`${answer.id}-delivery-${key}`}
+                                      className="rounded bg-black/20 px-2 py-1"
+                                    >
+                                      <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                                        {label}
+                                      </div>
+                                      <div className="text-sm text-purple-300">
+                                        {answer.deliveryMetrics?.scores[key] ??
+                                          "-"}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="pt-1 text-[11px] text-muted-foreground">
+                                  {answer.deliveryMetrics.wpm !== undefined && (
+                                    <>WPM: {answer.deliveryMetrics.wpm} · </>
+                                  )}
+                                  {answer.deliveryMetrics.pauseCount !==
+                                    undefined && (
+                                    <>
+                                      Pauses: {answer.deliveryMetrics.pauseCount}{" "}
+                                      (longest{" "}
+                                      {answer.deliveryMetrics.longestPauseS ??
+                                        "-"}
+                                      s) ·{" "}
+                                    </>
+                                  )}
+                                  {answer.deliveryMetrics.fillerCount !==
+                                    undefined && (
+                                    <>
+                                      Fillers:{" "}
+                                      {answer.deliveryMetrics.fillerCount} (
+                                      {answer.deliveryMetrics.fillersPerMin ??
+                                        "-"}
+                                      /min) ·{" "}
+                                    </>
+                                  )}
+                                  {answer.deliveryMetrics.pitchMeanHz !==
+                                    undefined && (
+                                    <>
+                                      Pitch: {answer.deliveryMetrics.pitchMeanHz}
+                                      Hz (dynamism{" "}
+                                      {answer.deliveryMetrics.pitchDynamismSt ??
+                                        "-"}
+                                      st) ·{" "}
+                                    </>
+                                  )}
+                                  {answer.deliveryMetrics.loudnessDbMean !==
+                                    undefined && (
+                                    <>
+                                      Loudness:{" "}
+                                      {answer.deliveryMetrics.loudnessDbMean}dB
+                                      (var{" "}
+                                      {answer.deliveryMetrics
+                                        .loudnessVariationDb ?? "-"}
+                                      )
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           )}
@@ -1005,10 +1238,11 @@ export default function ResultsEvaluationPage() {
                                 </div>
                               </div>
                               <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                                {EVALUATION_DIMENSION_ORDER.map((key) => (
+                                {dimensionOrderFor(answer.aiEvaluation?.dimensionSet).map(
+                                  (key) => (
                                   <div key={`${answer.id}-override-${key}`}>
                                     <label className="text-xs text-muted-foreground block mb-1">
-                                      {EVALUATION_DIMENSION_LABELS[key]}
+                                      {DIMENSION_LABELS[key]}
                                     </label>
                                     <Input
                                       type="number"

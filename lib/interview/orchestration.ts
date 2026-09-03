@@ -233,6 +233,64 @@ export async function getSessionProcessingStatus(
 
     const currentSession = session[0];
 
+    // Answers whose transcription/evaluation permanently failed. This
+    // matters most for Interview Coach: its answers are often already
+    // transcribed/evaluated immediately during the interview (see
+    // upload-audio/route.ts's immediate-processing path for follow_ups-
+    // enabled modules), so initiateSessionProcessing() skips re-queuing a
+    // job for them at final submission (it only queues for
+    // transcriptStatus !== "completed" && !transcriptJobId). If that
+    // earlier immediate job failed, no new job is ever queued to retry or
+    // surface it — without this check, evaluationCompleted can never reach
+    // totalAnswers and the session sits in "evaluating" indefinitely until
+    // the orchestration job's own 10-minute maxExecutionTimeMs eventually
+    // times it out, instead of failing promptly with a clear reason.
+    const answerRows = await db
+      .select({
+        id: candidateInterviewAnswers.id,
+        transcriptStatus: candidateInterviewAnswers.transcriptStatus,
+        evaluationStatus: candidateInterviewAnswers.evaluationStatus,
+        transcriptJobId: candidateInterviewAnswers.transcriptJobId,
+        evaluationJobId: candidateInterviewAnswers.evaluationJobId,
+      })
+      .from(candidateInterviewAnswers)
+      .where(eq(candidateInterviewAnswers.sessionId, sessionId));
+
+    // An answer's own transcriptStatus/evaluationStatus column only updates
+    // when its job handler actually runs. If the underlying job row itself
+    // failed before the handler body ran (e.g. "No handler registered for
+    // job type" from a hot-reload/restart race — the job was dequeued
+    // before initializeBackgroundJobs() finished re-registering handlers),
+    // the answer column is left stuck at "pending" forever even though the
+    // job is dead. Cross-referencing each answer's transcriptJobId/
+    // evaluationJobId against the actual job row's status (regardless of
+    // correlationId, unlike the scoped queries below) catches this case too
+    // — without it, a session like this sits in "processing" forever
+    // instead of surfacing as failed.
+    const answerJobIds = answerRows
+      .flatMap((row) => [row.transcriptJobId, row.evaluationJobId])
+      .filter((id): id is string => Boolean(id));
+    const answerJobRows =
+      answerJobIds.length > 0
+        ? await db
+            .select({ id: backgroundJobs.id, status: backgroundJobs.status })
+            .from(backgroundJobs)
+            .where(inArray(backgroundJobs.id, answerJobIds))
+        : [];
+    const failedAnswerJobIds = new Set(
+      answerJobRows
+        .filter((job) => job.status === "failed")
+        .map((job) => job.id),
+    );
+
+    const failedAnswerRows = answerRows.filter(
+      (row) =>
+        row.transcriptStatus === "failed" ||
+        row.evaluationStatus === "failed" ||
+        (row.transcriptJobId && failedAnswerJobIds.has(row.transcriptJobId)) ||
+        (row.evaluationJobId && failedAnswerJobIds.has(row.evaluationJobId)),
+    );
+
     // Find orchestration job for this session
     const [orchestrationJob] = await db
       .select()
@@ -290,16 +348,18 @@ export async function getSessionProcessingStatus(
 
     // Calculate progress
     const totalAnswers = currentSession.totalQuestions;
+    const computedStatus = determineStatus(
+      orchestrationJob.status,
+      transcriptionCompleted,
+      evaluationCompleted,
+      totalAnswers,
+      failedAnswerRows.length > 0,
+    );
     const progress: ProcessingProgress = {
       transcriptedAnswers: transcriptionCompleted,
       evaluatedAnswers: evaluationCompleted,
       totalAnswers,
-      status: determineStatus(
-        orchestrationJob.status,
-        transcriptionCompleted,
-        evaluationCompleted,
-        totalAnswers,
-      ),
+      status: computedStatus,
       currentStep:
         transcriptionCompleted < totalAnswers
           ? "transcribing"
@@ -308,20 +368,67 @@ export async function getSessionProcessingStatus(
             : "summarizing",
     };
 
+    // Correct the stored session row as soon as anyone observes a failure
+    // here (the SSE stream polls this every 500ms while a candidate has the
+    // processing page open, and the admin sessions list calls this
+    // indirectly too) — otherwise a session whose orchestration job died
+    // without reaching its own status-writing branch (see
+    // handleInterviewSessionOrchestration in backgroundJobHandlers.ts)
+    // stays stuck showing "processing" in the admin panel forever, even
+    // though this function has already determined it failed.
+    if (
+      computedStatus === "failed" &&
+      currentSession.status !== "failed" &&
+      currentSession.status !== "completed"
+    ) {
+      await db
+        .update(candidateInterviewSessions)
+        .set({ status: "failed", completedAt: new Date().toISOString() })
+        .where(eq(candidateInterviewSessions.id, sessionId));
+    }
+
     // Collect errors from failed jobs
     const failedJobs = [
       ...transcriptionJobs.filter((j) => j.status === "failed"),
       ...evaluationJobs.filter((j) => j.status === "failed"),
     ];
 
-    const errors = failedJobs.map((job) => ({
-      answerId:
-        (job.result as { answerId?: string } | null | undefined)?.answerId ??
-        job.id,
-      step: job.name.includes("transcription") ? "transcription" : "evaluation",
-      error: job.error || "Unknown error",
-      attempt: job.attempts || 0,
-    }));
+    const failedJobAnswerIds = new Set(
+      failedJobs
+        .map(
+          (job) =>
+            (job.result as { answerId?: string } | null | undefined)
+              ?.answerId,
+        )
+        .filter((id): id is string => Boolean(id)),
+    );
+
+    const errors = [
+      ...failedJobs.map((job) => ({
+        answerId:
+          (job.result as { answerId?: string } | null | undefined)
+            ?.answerId ?? job.id,
+        step: job.name.includes("transcription")
+          ? "transcription"
+          : "evaluation",
+        error: job.error || "Unknown error",
+        attempt: job.attempts || 0,
+      })),
+      // Failed answers with no corresponding background-job row at all —
+      // i.e. their only processing attempt was the immediate per-answer job
+      // from upload-audio, which isn't re-surfaced here via the
+      // correlationId-scoped queries above (it predates the orchestration
+      // job's own correlationId).
+      ...failedAnswerRows
+        .filter((row) => !failedJobAnswerIds.has(row.id))
+        .map((row) => ({
+          answerId: row.id,
+          step:
+            row.transcriptStatus === "failed" ? "transcription" : "evaluation",
+          error: "Processing failed for this answer",
+          attempt: 1,
+        })),
+    ];
 
     return {
       orchestrationJobId: orchestrationJob.id,
@@ -366,10 +473,10 @@ export async function retryFailedProcessing(
     }
 
     // Fetch failed answers
-    let failedAnswers;
+    let candidateAnswers;
 
     if (answerIds && answerIds.length > 0) {
-      failedAnswers = await db
+      candidateAnswers = await db
         .select()
         .from(candidateInterviewAnswers)
         .where(
@@ -379,14 +486,62 @@ export async function retryFailedProcessing(
           ),
         );
     } else {
-      failedAnswers = await db
+      candidateAnswers = await db
         .select()
         .from(candidateInterviewAnswers)
         .where(eq(candidateInterviewAnswers.sessionId, sessionId));
-      failedAnswers = failedAnswers.filter(
-        (row) =>
-          row.transcriptStatus === "failed" ||
-          row.evaluationStatus === "failed",
+    }
+
+    // An answer's own transcriptStatus/evaluationStatus column only
+    // updates when its job handler actually runs. If the underlying job
+    // row died before the handler body ran (e.g. "No handler registered
+    // for job type" from a hot-reload/restart race), the answer column is
+    // left stuck at "pending" forever even though the job is dead —
+    // filtering on the column alone (as this used to) finds zero "failed"
+    // answers in that case, so retry silently queues nothing and this
+    // function returns an empty retryJobIds array without ever failing
+    // visibly. Cross-referencing each answer's transcriptJobId/
+    // evaluationJobId against the actual background_jobs row status
+    // catches this — see the identical fix in getSessionProcessingStatus
+    // above and handleInterviewSessionOrchestration in
+    // backgroundJobHandlers.ts.
+    const candidateJobIds = candidateAnswers
+      .flatMap((row) => [row.transcriptJobId, row.evaluationJobId])
+      .filter((id): id is string => Boolean(id));
+    const candidateJobRows =
+      candidateJobIds.length > 0
+        ? await db
+            .select({ id: backgroundJobs.id, status: backgroundJobs.status })
+            .from(backgroundJobs)
+            .where(inArray(backgroundJobs.id, candidateJobIds))
+        : [];
+    const deadJobIds = new Set(
+      candidateJobRows
+        .filter((job) => job.status === "failed")
+        .map((job) => job.id),
+    );
+    const transcriptDead = (
+      row: (typeof candidateAnswers)[number],
+    ): boolean =>
+      row.transcriptStatus === "failed" ||
+      Boolean(row.transcriptJobId && deadJobIds.has(row.transcriptJobId));
+    const evaluationDead = (
+      row: (typeof candidateAnswers)[number],
+    ): boolean =>
+      row.evaluationStatus === "failed" ||
+      Boolean(row.evaluationJobId && deadJobIds.has(row.evaluationJobId));
+
+    const failedAnswers =
+      answerIds && answerIds.length > 0
+        ? candidateAnswers
+        : candidateAnswers.filter(
+            (row) => transcriptDead(row) || evaluationDead(row),
+          );
+
+    if (failedAnswers.length === 0) {
+      throw new SessionError(
+        "No failed answers found to retry for this session.",
+        "SESSION_INVALID_STATE",
       );
     }
 
@@ -413,7 +568,7 @@ export async function retryFailedProcessing(
 
     for (const answer of failedAnswers) {
       // Retry transcription if failed
-      if (answer.transcriptStatus === "failed") {
+      if (transcriptDead(answer)) {
         const jobId = `${INTERVIEW_TRANSCRIPTION_JOB}_${sessionId}_${answer.questionIndex}_retry_${Date.now()}`;
 
         await db.insert(backgroundJobs).values({
@@ -447,8 +602,12 @@ export async function retryFailedProcessing(
           .where(eq(candidateInterviewAnswers.id, answer.id));
       }
 
-      // Retry evaluation if failed
-      if (answer.evaluationStatus === "failed") {
+      // Retry evaluation if failed (but not if transcription itself is
+      // being retried too — there's no transcript yet to evaluate against
+      // until that finishes; the orchestration job picks up evaluation
+      // once transcription completes, same as the initial processing
+      // flow).
+      if (!transcriptDead(answer) && evaluationDead(answer)) {
         const jobId = `${INTERVIEW_EVALUATION_JOB}_${sessionId}_${answer.questionIndex}_retry_${Date.now()}`;
 
         await db.insert(backgroundJobs).values({
@@ -543,8 +702,15 @@ export async function reEvaluateSessionProcessing(
     );
 
     if (answersWithTranscript.length === 0) {
+      // Re-evaluation only re-runs AI scoring against an existing
+      // transcript — it can't produce one. If every targeted answer is
+      // missing a transcript (e.g. its transcription job itself failed),
+      // there's nothing here to re-evaluate; the fix is "Retry Failed
+      // Jobs" (retryFailedProcessing / initiateSessionProcessing), which
+      // re-queues transcription too, not re-evaluation.
       throw new SessionError(
-        "No answers with transcripts are available for reevaluation",
+        "None of the selected answers have a transcript yet, so there's nothing to re-evaluate. Use \"Retry Failed Jobs\" instead — it re-runs transcription first.",
+        "SESSION_INVALID_STATE",
       );
     }
 
@@ -630,8 +796,9 @@ function determineStatus(
   transcriptionCompleted: number,
   evaluationCompleted: number,
   totalAnswers: number,
+  hasFailedAnswers: boolean,
 ): SessionProcessingStatus["status"] {
-  if (orchestrationStatus === "failed") {
+  if (orchestrationStatus === "failed" || hasFailedAnswers) {
     return "failed";
   }
 

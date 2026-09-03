@@ -35,6 +35,13 @@ export type CapabilityKey =
 export type CalibrationMode = "static" | "population-relative";
 export type EvaluationDepth = "full-rubric" | "content-only" | "delivery-only";
 export type AttemptCadence = "daily" | "weekly";
+// "customer-service" — the original 5 dimensions (courtesy, empathy, ...).
+// "technical-interview" — correctness/relevance/structure/specificity/
+// completeness, matching interview-coach-main's actual content rubric.
+// See lib/interview/evaluationMetrics.ts's DimensionSetName (kept in sync
+// manually — that file is the source of truth for the dimension keys
+// themselves; this type just needs to match its two names).
+export type DimensionSet = "customer-service" | "technical-interview";
 
 export interface DeliveryScoringConfig {
   calibrationMode: CalibrationMode;
@@ -42,6 +49,11 @@ export interface DeliveryScoringConfig {
 
 export interface EvaluationDepthConfig {
   depth: EvaluationDepth;
+  // Folded into evaluation_depth's config rather than a new capability key,
+  // since both answer "how should this module's content be evaluated" —
+  // absent on modules configured before this existed, which fall back to
+  // "customer-service" (the only dimension set that ever existed).
+  dimensionSet?: DimensionSet;
 }
 
 export interface AttemptCadenceConfig {
@@ -162,6 +174,24 @@ export async function getEvaluationDepth(
   );
   const depth = (config as Partial<EvaluationDepthConfig>).depth;
   return depth ?? "content-only";
+}
+
+/**
+ * Convenience: resolve which of the two fixed evaluation dimension sets
+ * this module's content grading should use. Defaults to "customer-service"
+ * — the shape every module used before this concept existed, and the only
+ * shape safe to assume for an unconfigured module.
+ */
+export async function getDimensionSet(
+  moduleId: string,
+): Promise<DimensionSet> {
+  const { config } = await getModuleCapability(
+    moduleId,
+    CAPABILITY_KEYS.EVALUATION_DEPTH,
+  );
+  const dimensionSet = (config as Partial<EvaluationDepthConfig>)
+    .dimensionSet;
+  return dimensionSet ?? "customer-service";
 }
 
 /**

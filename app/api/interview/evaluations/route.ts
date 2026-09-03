@@ -10,7 +10,9 @@ import {
 import {
   averageTotalScores,
   calculateWeightedTotalScore,
-  EVALUATION_DIMENSION_ORDER,
+  DEFAULT_DIMENSION_SET,
+  DIMENSION_SETS,
+  type DimensionSetName,
   mergeDimensionMaps,
   normalizeDimensionMap,
   normalizeScore,
@@ -31,6 +33,10 @@ type DimensionValue = {
 type AiStructured = {
   total_score?: number;
   dimensions?: Record<string, DimensionValue>;
+  // See evaluationMetrics.ts's DimensionSetName — which of the two fixed
+  // dimension sets `dimensions` uses. Absent on rows written before this
+  // concept existed; every reader below falls back to "customer-service".
+  dimensionSet?: DimensionSetName;
   strengths?: string[] | string;
   improvement_areas?: string[] | string;
   final_summary?: string;
@@ -51,8 +57,9 @@ const uuidSchema = z.string().uuid();
 
 function hasCompleteDimensionScores(
   dimensions: ReturnType<typeof normalizeDimensionMap>,
+  dimensionSet: DimensionSetName = DEFAULT_DIMENSION_SET,
 ) {
-  return EVALUATION_DIMENSION_ORDER.every(
+  return DIMENSION_SETS[dimensionSet].every(
     (key) => typeof dimensions[key]?.score === "number",
   );
 }
@@ -113,16 +120,19 @@ function normalizeTextList(value: unknown): string[] {
 
 function normalizeAiEvaluation(value: unknown) {
   const structured = toAiStructured(value);
-  const dimensions = normalizeDimensionMap(structured.dimensions);
-  const computedTotal = calculateWeightedTotalScore(dimensions);
+  const dimensionSet: DimensionSetName =
+    structured.dimensionSet ?? DEFAULT_DIMENSION_SET;
+  const dimensions = normalizeDimensionMap(structured.dimensions, dimensionSet);
+  const computedTotal = calculateWeightedTotalScore(dimensions, dimensionSet);
   const modelTotal = normalizeTotalScore(structured.total_score);
-  const normalizedTotal = hasCompleteDimensionScores(dimensions)
+  const normalizedTotal = hasCompleteDimensionScores(dimensions, dimensionSet)
     ? (computedTotal ?? modelTotal ?? 0)
     : (modelTotal ?? computedTotal ?? 0);
 
   return {
     total_score: totalScoreToPercentage(normalizedTotal) ?? 0,
     dimensions,
+    dimensionSet,
     strengths: normalizeTextList(structured.strengths),
     improvement_areas: normalizeTextList(structured.improvement_areas),
     final_summary:
@@ -391,21 +401,34 @@ export async function PATCH(request: NextRequest) {
     }
 
     const aiStructured = toAiStructured(aiEvaluation.evaluationJsonStructured);
-    const aiDimensions = normalizeDimensionMap(aiStructured.dimensions);
-    const computedAiTotal = calculateWeightedTotalScore(aiDimensions);
+    const dimensionSet: DimensionSetName =
+      aiStructured.dimensionSet ?? DEFAULT_DIMENSION_SET;
+    const aiDimensions = normalizeDimensionMap(
+      aiStructured.dimensions,
+      dimensionSet,
+    );
+    const computedAiTotal = calculateWeightedTotalScore(
+      aiDimensions,
+      dimensionSet,
+    );
     const modelAiTotal = normalizeTotalScore(aiStructured.total_score);
-    const aiTotalScore = hasCompleteDimensionScores(aiDimensions)
+    const aiTotalScore = hasCompleteDimensionScores(aiDimensions, dimensionSet)
       ? (computedAiTotal ?? modelAiTotal ?? 0)
       : (modelAiTotal ?? computedAiTotal ?? 0);
 
-    const normalizedOverrides = normalizeDimensionMap(dimensionOverrides);
+    const normalizedOverrides = normalizeDimensionMap(
+      dimensionOverrides,
+      dimensionSet,
+    );
     const mergedDimensions = mergeDimensionMaps(
       aiDimensions,
       normalizedOverrides,
+      dimensionSet,
     );
     const normalizedTotal =
       Object.keys(normalizedOverrides).length > 0
-        ? (calculateWeightedTotalScore(mergedDimensions) ?? aiTotalScore)
+        ? (calculateWeightedTotalScore(mergedDimensions, dimensionSet) ??
+          aiTotalScore)
         : (normalizeTotalScore(totalScoreOverride) ?? aiTotalScore);
 
     const aiTotalPct = totalScoreToPercentage(aiTotalScore) ?? 0;

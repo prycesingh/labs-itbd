@@ -446,13 +446,6 @@ export function InterviewSession({
         </div>
       )}
 
-      {checkingFollowUp && (
-        <div className="itbd-glow-border flex items-center gap-3 rounded-xl border border-itbd-blue/30 bg-itbd-blue/10 px-4 py-2 text-sm text-itbd-blue">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Checking your answer…
-        </div>
-      )}
-
       {pendingFollowUp ? (
         <div className="flex min-h-90 w-full flex-1 flex-col gap-4 md:h-[min(38rem,calc(100dvh-19rem))] md:flex-row">
           <QuestionPlayer
@@ -484,15 +477,32 @@ export function InterviewSession({
               audioOnly={audioOnly}
               className="md:flex-1"
             />
-            <AudioRecorder
-              ref={recorderRef}
-              sessionId={sessionId}
-              questionId={currentQuestion.id}
-              questionIndex={currentQuestionIndex}
-              isLocked={currentQuestionAnswered}
-              onUploadSuccess={handleAnswerSubmitted}
-              className="md:flex-1"
-            />
+            {checkingFollowUp ? (
+              <div className="itbd-glow-border relative flex w-full flex-1 flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl bg-black/40 p-6 text-center backdrop-blur-md md:flex-1">
+                <span
+                  aria-hidden
+                  className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+                />
+                <Loader2 className="h-8 w-8 animate-spin text-itbd-blue" />
+                <p className="text-base font-semibold text-white">
+                  Checking your answer…
+                </p>
+                <p className="max-w-xs text-sm text-white/50">
+                  We&apos;re reviewing your response to see if a follow-up
+                  question is needed. This takes a few seconds.
+                </p>
+              </div>
+            ) : (
+              <AudioRecorder
+                ref={recorderRef}
+                sessionId={sessionId}
+                questionId={currentQuestion.id}
+                questionIndex={currentQuestionIndex}
+                isLocked={currentQuestionAnswered}
+                onUploadSuccess={handleAnswerSubmitted}
+                className="md:flex-1"
+              />
+            )}
           </div>
         )
       )}

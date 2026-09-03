@@ -1,4 +1,26 @@
-export const EVALUATION_DIMENSION_ORDER = [
+/**
+ * Two evaluation dimension sets exist:
+ * - "customer-service" — the original 5 dimensions this app was built with
+ *   (courtesy, empathy, professionalism_and_tone, communication_clarity,
+ *   engagement_and_problem_handling). Every Customer Cetricity answer uses
+ *   this set, and always has.
+ * - "technical-interview" — correctness/relevance/structure/specificity/
+ *   completeness, matching interview-coach-main's actual content rubric
+ *   (llm.py's _COACH_SYS). Used by modules with grounded_grading enabled
+ *   (Interview Coach), since customer-service dimensions like "empathy"
+ *   don't meaningfully score a technical troubleshooting answer.
+ *
+ * Which set applies to a given evaluation is decided by the answering
+ * session's module (see moduleCapabilities.ts's getDimensionSet()) and
+ * stamped onto the stored evaluation as `dimensionSet` so every reader
+ * (admin UI, session-summary aggregation, this file's own scoring math)
+ * knows which key set to expect without guessing from which keys are
+ * present. Rows written before this dimensionSet concept existed have no
+ * tag — callers treat a missing tag as "customer-service", since that was
+ * the only shape that ever existed before now.
+ */
+
+export const CUSTOMER_SERVICE_DIMENSION_ORDER = [
   "courtesy",
   "empathy",
   "professionalism_and_tone",
@@ -6,8 +28,32 @@ export const EVALUATION_DIMENSION_ORDER = [
   "engagement_and_problem_handling",
 ] as const;
 
+export const TECHNICAL_INTERVIEW_DIMENSION_ORDER = [
+  "correctness",
+  "relevance",
+  "structure",
+  "specificity",
+  "completeness",
+] as const;
+
+export const DIMENSION_SETS = {
+  "customer-service": CUSTOMER_SERVICE_DIMENSION_ORDER,
+  "technical-interview": TECHNICAL_INTERVIEW_DIMENSION_ORDER,
+} as const;
+
+export type DimensionSetName = keyof typeof DIMENSION_SETS;
+
+export const DEFAULT_DIMENSION_SET: DimensionSetName = "customer-service";
+
+/** @deprecated Use DIMENSION_SETS["customer-service"] or resolve the
+ * evaluation's actual dimensionSet — kept only so any code that hasn't been
+ * migrated yet still compiles against the customer-service set it always
+ * meant. New code should not reference this. */
+export const EVALUATION_DIMENSION_ORDER = CUSTOMER_SERVICE_DIMENSION_ORDER;
+
 export type EvaluationDimensionKey =
-  (typeof EVALUATION_DIMENSION_ORDER)[number];
+  | (typeof CUSTOMER_SERVICE_DIMENSION_ORDER)[number]
+  | (typeof TECHNICAL_INTERVIEW_DIMENSION_ORDER)[number];
 
 export type DimensionScore = {
   score?: number;
@@ -27,6 +73,11 @@ export const EVALUATION_DIMENSION_LABELS: Record<
   professionalism_and_tone: "Professionalism & Tone",
   communication_clarity: "Communication Clarity",
   engagement_and_problem_handling: "Engagement & Problem Handling",
+  correctness: "Correctness",
+  relevance: "Relevance",
+  structure: "Structure",
+  specificity: "Specificity",
+  completeness: "Completeness",
 };
 
 export const EVALUATION_SCORING_WEIGHTS: Record<
@@ -38,6 +89,11 @@ export const EVALUATION_SCORING_WEIGHTS: Record<
   professionalism_and_tone: 0.2,
   communication_clarity: 0.2,
   engagement_and_problem_handling: 0.2,
+  correctness: 0.2,
+  relevance: 0.2,
+  structure: 0.2,
+  specificity: 0.2,
+  completeness: 0.2,
 };
 
 const LEGACY_DIMENSION_ALIASES: Record<EvaluationDimensionKey, string[]> = {
@@ -51,7 +107,18 @@ const LEGACY_DIMENSION_ALIASES: Record<EvaluationDimensionKey, string[]> = {
     "problem_handling",
     "problem_handling_approach",
   ],
+  correctness: ["correctness"],
+  relevance: ["relevance"],
+  structure: ["structure"],
+  specificity: ["specificity"],
+  completeness: ["completeness"],
 };
+
+function resolveOrder(
+  dimensionSet: DimensionSetName = DEFAULT_DIMENSION_SET,
+): readonly EvaluationDimensionKey[] {
+  return DIMENSION_SETS[dimensionSet];
+}
 
 function clampDimensionScore(value: number): number {
   return Math.max(0, Math.min(10, value));
@@ -131,7 +198,10 @@ export function normalizeScore(value: unknown): number | undefined {
   return undefined;
 }
 
-export function normalizeDimensionMap(value: unknown): DimensionScoreMap {
+export function normalizeDimensionMap(
+  value: unknown,
+  dimensionSet: DimensionSetName = DEFAULT_DIMENSION_SET,
+): DimensionScoreMap {
   if (!value || typeof value !== "object") {
     return {};
   }
@@ -139,7 +209,7 @@ export function normalizeDimensionMap(value: unknown): DimensionScoreMap {
   const source = value as Record<string, unknown>;
   const normalized: DimensionScoreMap = {};
 
-  for (const key of EVALUATION_DIMENSION_ORDER) {
+  for (const key of resolveOrder(dimensionSet)) {
     const candidates = LEGACY_DIMENSION_ALIASES[key]
       .map((alias) => normalizeDimensionEntry(source[alias]))
       .filter((item): item is DimensionScore => Boolean(item));
@@ -178,10 +248,11 @@ export function normalizeDimensionMap(value: unknown): DimensionScoreMap {
 export function mergeDimensionMaps(
   base: DimensionScoreMap,
   overrides: DimensionScoreMap,
+  dimensionSet: DimensionSetName = DEFAULT_DIMENSION_SET,
 ): DimensionScoreMap {
   const merged: DimensionScoreMap = {};
 
-  for (const key of EVALUATION_DIMENSION_ORDER) {
+  for (const key of resolveOrder(dimensionSet)) {
     const override = overrides[key];
     const baseValue = base[key];
     merged[key] = {
@@ -195,11 +266,12 @@ export function mergeDimensionMaps(
 
 export function calculateWeightedTotalScore(
   dimensions: DimensionScoreMap,
+  dimensionSet: DimensionSetName = DEFAULT_DIMENSION_SET,
 ): number | undefined {
   let weightedScore = 0;
   let totalWeight = 0;
 
-  for (const key of EVALUATION_DIMENSION_ORDER) {
+  for (const key of resolveOrder(dimensionSet)) {
     const weight = EVALUATION_SCORING_WEIGHTS[key];
     if (weight <= 0) {
       continue;
@@ -223,10 +295,11 @@ export function calculateWeightedTotalScore(
 
 export function averageDimensionMaps(
   dimensionsList: DimensionScoreMap[],
+  dimensionSet: DimensionSetName = DEFAULT_DIMENSION_SET,
 ): DimensionScoreMap {
   const aggregated: DimensionScoreMap = {};
 
-  for (const key of EVALUATION_DIMENSION_ORDER) {
+  for (const key of resolveOrder(dimensionSet)) {
     const scores = dimensionsList
       .map((item) => item[key]?.score)
       .filter((score): score is number => typeof score === "number");

@@ -152,7 +152,11 @@ export interface EvaluationDimension {
   reason: string;
 }
 
-export interface EvaluationDimensions {
+/**
+ * The original 5 dimensions — always used by Customer Cetricity, and by
+ * any module without a dimensionSet override.
+ */
+export interface CustomerServiceDimensions {
   courtesy: EvaluationDimension;
   empathy: EvaluationDimension;
   professionalism_and_tone: EvaluationDimension;
@@ -160,9 +164,37 @@ export interface EvaluationDimensions {
   engagement_and_problem_handling: EvaluationDimension;
 }
 
+/**
+ * Content-quality dimensions for technical/interview answers, matching
+ * interview-coach-main's actual rubric (llm.py's _COACH_SYS) — used by
+ * modules with grounded_grading enabled (Interview Coach), since the
+ * customer-service dimensions above don't meaningfully score a technical
+ * troubleshooting answer.
+ */
+export interface TechnicalInterviewDimensions {
+  correctness: EvaluationDimension;
+  relevance: EvaluationDimension;
+  structure: EvaluationDimension;
+  specificity: EvaluationDimension;
+  completeness: EvaluationDimension;
+}
+
+export type EvaluationDimensions =
+  | CustomerServiceDimensions
+  | TechnicalInterviewDimensions;
+
+/** @deprecated Superseded by CustomerServiceDimensions / TechnicalInterviewDimensions
+ * — kept only for any code not yet migrated to check `dimensionSet` first. */
+export type LegacyEvaluationDimensions = CustomerServiceDimensions;
+
 export interface AIEvaluationStructured {
   total_score: number; // 0-1 normalized score
   dimensions: EvaluationDimensions;
+  // Which of the two fixed dimension sets `dimensions` uses — see
+  // lib/interview/evaluationMetrics.ts's DimensionSetName. Absent on rows
+  // written before this concept existed; every reader treats an absent tag
+  // as "customer-service", since that was the only shape that ever existed.
+  dimensionSet?: "customer-service" | "technical-interview";
   strengths: string[];
   improvement_areas: string[];
   final_summary: string;
