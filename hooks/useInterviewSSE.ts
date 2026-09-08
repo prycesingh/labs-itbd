@@ -81,6 +81,34 @@ const parseData = <T>(input: string): T | null => {
   }
 };
 
+// Enterprise proxies/load balancers commonly kill idle long-lived
+// connections after roughly a minute, silently dropping the SSE stream
+// without the client ever receiving a clean "error" event — EventSource's
+// own auto-reconnect doesn't reliably recover from this in practice, and a
+// candidate can be left staring at "Reviewing your answers…" long after the
+// backend job has actually finished. This fallback poll is a completely
+// independent safety net: a plain fetch against the same status the SSE
+// route itself polls internally, run on its own interval regardless of the
+// EventSource's health, so completion/failure is always eventually detected
+// even if the stream connection is dead the whole time.
+const FALLBACK_POLL_INTERVAL_MS = 5_000;
+
+type PlainStatusPayload = {
+  status?: ProcessingStatus;
+  progress?: {
+    transcriptedAnswers?: number;
+    evaluatedAnswers?: number;
+    totalAnswers?: number;
+    currentStep?: string;
+  };
+  errors?: Array<{
+    answerId: string;
+    step: string;
+    error: string;
+    attempt: number;
+  }>;
+};
+
 export function useInterviewSSE(sessionId: string | null, enabled = true) {
   const [state, setState] = useState<InterviewSSEState>(initialState);
   const sourceRef = useRef<EventSource | null>(null);
@@ -203,6 +231,99 @@ export function useInterviewSSE(sessionId: string | null, enabled = true) {
       sourceRef.current = null;
     };
   }, [enabled, streamUrl]);
+
+  // Independent fallback poll — see FALLBACK_POLL_INTERVAL_MS above. Runs on
+  // its own timer the whole time this hook is enabled, regardless of
+  // whether the SSE connection is alive, so a silently-dead stream can never
+  // strand the candidate once the backend has actually finished.
+  useEffect(() => {
+    if (!enabled || !sessionId) {
+      return;
+    }
+
+    let cancelled = false;
+    let settled = false;
+
+    const poll = async () => {
+      if (settled) {
+        return;
+      }
+      try {
+        const res = await fetch(
+          `/api/interview/process?sessionId=${encodeURIComponent(sessionId)}`,
+        );
+        if (cancelled || !res.ok) {
+          return;
+        }
+
+        const payload = (await res.json()) as PlainStatusPayload;
+        if (cancelled) {
+          return;
+        }
+
+        if (payload.status === "completed") {
+          settled = true;
+          setState((prev) =>
+            prev.completed
+              ? prev
+              : {
+                  ...prev,
+                  status: "completed",
+                  completed: true,
+                  failed: false,
+                  transcriptedAnswers:
+                    payload.progress?.transcriptedAnswers ??
+                    prev.transcriptedAnswers,
+                  evaluatedAnswers:
+                    payload.progress?.evaluatedAnswers ??
+                    prev.evaluatedAnswers,
+                  totalAnswers:
+                    payload.progress?.totalAnswers ?? prev.totalAnswers,
+                  lastMessage: "complete-fallback-poll",
+                },
+          );
+          if (sourceRef.current) {
+            sourceRef.current.close();
+            sourceRef.current = null;
+          }
+        } else if (payload.status === "failed") {
+          settled = true;
+          setState((prev) =>
+            prev.completed || prev.failed
+              ? prev
+              : {
+                  ...prev,
+                  status: "failed",
+                  completed: false,
+                  failed: true,
+                  errors: payload.errors ?? prev.errors,
+                  lastMessage: "error-fallback-poll",
+                },
+          );
+          if (sourceRef.current) {
+            sourceRef.current.close();
+            sourceRef.current = null;
+          }
+        }
+      } catch {
+        // Transient network error on the fallback poll itself — the next
+        // interval tick will simply try again.
+      }
+    };
+
+    const interval = window.setInterval(() => {
+      if (settled) {
+        window.clearInterval(interval);
+        return;
+      }
+      void poll();
+    }, FALLBACK_POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [enabled, sessionId]);
 
   if (!enabled || !streamUrl) {
     return initialState;
