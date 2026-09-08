@@ -627,8 +627,13 @@ async function handleInterviewTranscription(
 
     // Delivery/acoustic scoring: capability gate first (Customer Centricity
     // and any other non-opted-in module never reaches scoreAndPersistDelivery
-    // at all). Failures here are logged and swallowed, never thrown — a
-    // scoring bug must not fail the transcription job or block evaluation.
+    // at all, and its deliveryStatus column stays at its "not_applicable"
+    // default). A failure here is still swallowed rather than thrown — a
+    // scoring bug must not fail the transcription job or block evaluation —
+    // but is now recorded on the answer itself (deliveryStatus/deliveryError)
+    // instead of only console.warn, so it's visible to admins and can be
+    // retried, rather than silently leaving a session with no Delivery Score
+    // and no trace of why.
     const [sessionForDelivery] = await db
       .select({ moduleId: candidateInterviewSessions.moduleId })
       .from(candidateInterviewSessions)
@@ -640,6 +645,11 @@ async function handleInterviewTranscription(
         CAPABILITY_KEYS.DELIVERY_SCORING,
       );
       if (deliveryCapability.enabled) {
+        await db
+          .update(candidateInterviewAnswers)
+          .set({ deliveryStatus: "pending", deliveryError: null })
+          .where(eq(candidateInterviewAnswers.id, answerId));
+
         try {
           const { scoreAndPersistDelivery } = await import(
             "@/lib/interview/deliveryScoring"
@@ -650,11 +660,25 @@ async function handleInterviewTranscription(
             audioBuffer,
             words: transcriptResult.words,
           });
+          await db
+            .update(candidateInterviewAnswers)
+            .set({ deliveryStatus: "completed" })
+            .where(eq(candidateInterviewAnswers.id, answerId));
         } catch (deliveryError) {
           console.warn(
             `[deliveryScoring] Failed for answer ${answerId}, continuing without delivery metrics:`,
             deliveryError,
           );
+          await db
+            .update(candidateInterviewAnswers)
+            .set({
+              deliveryStatus: "failed",
+              deliveryError:
+                deliveryError instanceof Error
+                  ? deliveryError.message
+                  : String(deliveryError),
+            })
+            .where(eq(candidateInterviewAnswers.id, answerId));
         }
       }
     }

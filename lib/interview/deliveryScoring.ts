@@ -16,7 +16,6 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import ffmpegPath from "ffmpeg-static";
 import { PitchDetector } from "pitchy";
 import Pitchfinder from "pitchfinder";
 import Meyda from "meyda";
@@ -133,6 +132,43 @@ export function computePaceMetrics(
 // AUDIO DECODE (ffmpeg-static → 16kHz mono f32le PCM)
 // ─────────────────────────────────────────────
 
+// ffmpeg-static's own entry point computes its bundled binary's path from
+// its own __dirname at require-time. A static `import ffmpegPath from
+// "ffmpeg-static"` lets Turbopack trace into and bundle that module into a
+// server chunk — which changes what __dirname resolves to there, and on
+// this project's Next 16/Turbopack production build has been observed to
+// go further and rewrite the require into a hashed module id
+// ("ffmpeg-static-<hash>") that doesn't exist in the deployed output at
+// all, hard-crashing with "Cannot find module" (serverExternalPackages in
+// next.config.ts was expected to prevent this but did not, in practice, on
+// this setup). Resolving it via createRequire at the moment this function
+// actually runs is a genuine dynamic call whose target Turbopack cannot
+// see/rewrite at build time, so Node's real module resolution (against the
+// real node_modules on disk) runs unmodified, exactly as it would outside
+// any bundler.
+let cachedFfmpegPath: string | null | undefined;
+
+async function resolveFfmpegPath(): Promise<string | null> {
+  if (cachedFfmpegPath !== undefined) {
+    return cachedFfmpegPath;
+  }
+
+  try {
+    const { createRequire } = await import("node:module");
+    const runtimeRequire = createRequire(import.meta.url);
+    const resolved = runtimeRequire("ffmpeg-static") as string | null;
+    cachedFfmpegPath = resolved ?? null;
+  } catch (error) {
+    console.warn(
+      "[deliveryScoring] Failed to resolve ffmpeg-static binary path:",
+      error,
+    );
+    cachedFfmpegPath = null;
+  }
+
+  return cachedFfmpegPath;
+}
+
 /**
  * Decode any ffmpeg-readable input (webm/opus, m4a, wav, ...) to raw
  * 16kHz mono 32-bit float PCM samples — the format pitchy/pitchfinder/meyda
@@ -144,6 +180,7 @@ export function computePaceMetrics(
 async function decodeToFloat32PCM(
   audioBuffer: Buffer,
 ): Promise<{ samples: Float32Array; sampleRate: number }> {
+  const ffmpegPath = await resolveFfmpegPath();
   if (!ffmpegPath) {
     throw new Error("ffmpeg-static binary not found");
   }

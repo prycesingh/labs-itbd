@@ -377,8 +377,18 @@ export async function getSessionProcessingStatus(
       (j) => j.status === "completed",
     ).length;
 
-    // Calculate progress
-    const totalAnswers = currentSession.totalQuestions;
+    // Calculate progress. Deliberately the real answer-row count, NOT
+    // currentSession.totalQuestions — for follow-ups-enabled modules
+    // (Interview Coach), candidateInterviewAnswers can hold more rows than
+    // totalQuestions once follow-up answers are recorded (each spawns its
+    // own transcription/evaluation job, counted in transcriptionCompleted/
+    // evaluationCompleted below). Using the fixed question count here made
+    // evaluationCompleted (e.g. 7, with follow-ups) permanently unequal to
+    // totalAnswers (5) in determineStatus's completed check, so a session
+    // with any follow-ups could never leave "summarizing" — this mirrors
+    // the correct denominator handleInterviewSessionOrchestration already
+    // uses (answers.length) in backgroundJobHandlers.ts.
+    const totalAnswers = answerRows.length;
     const computedStatus = determineStatus(
       orchestrationJob.status,
       transcriptionCompleted,
@@ -833,10 +843,14 @@ function determineStatus(
     return "failed";
   }
 
-  if (
-    orchestrationStatus === "completed" &&
-    evaluationCompleted === totalAnswers
-  ) {
+  // >= rather than === / < throughout: totalAnswers is a best-effort
+  // snapshot of the answer-row count, and transcriptionCompleted/
+  // evaluationCompleted are independently queried job counts — under any
+  // transient skew between the two reads (or a future miscount like the
+  // totalQuestions-vs-real-row-count bug this replaced), an exact equality
+  // check could get permanently stuck one branch short of "completed"
+  // instead of degrading gracefully.
+  if (orchestrationStatus === "completed" && evaluationCompleted >= totalAnswers) {
     return "completed";
   }
 

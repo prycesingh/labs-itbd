@@ -1,0 +1,2 @@
+ALTER TABLE `candidate_interview_answers` ADD `delivery_status` enum('not_applicable','pending','completed','failed') DEFAULT 'not_applicable' NOT NULL;--> statement-breakpoint
+ALTER TABLE `candidate_interview_answers` ADD `delivery_error` text;

@@ -428,6 +428,24 @@ export const candidateInterviewAnswers = mysqlTable(
     evaluationJobId: varchar("evaluation_job_id", { length: 255 }), // FK to backgroundJobs
     aiEvaluationId: varchar("ai_evaluation_id", { length: 36 }), // FK to ai_interview_evaluations
     adminEvaluationId: varchar("admin_evaluation_id", { length: 36 }), // FK to admin_interview_evaluations
+    // Delivery/acoustic scoring outcome — only ever meaningful for modules
+    // with the delivery_scoring capability enabled; every other module's
+    // answers stay at the "not_applicable" default. Tracked here (not just
+    // inferred from a missing interview_delivery_metrics row) because
+    // scoreAndPersistDelivery only ever gets one attempt, chained off
+    // transcription completing, and previously swallowed its own failures
+    // into console.warn with zero trace — a session could show no Delivery
+    // Score anywhere with no way to tell "never attempted" from "attempted
+    // and failed" apart, or to retry it.
+    deliveryStatus: mysqlEnum("delivery_status", [
+      "not_applicable",
+      "pending",
+      "completed",
+      "failed",
+    ])
+      .notNull()
+      .default("not_applicable"),
+    deliveryError: text("delivery_error"),
     createdAt: timestamp("created_at", { mode: "string" })
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),
