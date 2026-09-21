@@ -18,6 +18,7 @@ const submissionSchema = z.object({
   assessmentId: z.string().uuid(),
   subject: z.string().trim().min(1).max(500).optional(),
   content: z.string().trim().min(50).max(10_000),
+  violation: z.enum(["tab_switch"]).optional(),
 });
 
 export async function POST(request: Request) {
@@ -56,7 +57,10 @@ export async function POST(request: Request) {
   }
 
   if (assessment.dueAt < new Date()) {
-    await db.update(assessments).set({ status: "expired" }).where(eq(assessments.id, assessment.id));
+    await db
+      .update(assessments)
+      .set({ status: "expired", endReason: "timeout" })
+      .where(eq(assessments.id, assessment.id));
     return jsonError("The assessment timer has expired.", 409);
   }
 
@@ -79,6 +83,7 @@ export async function POST(request: Request) {
     .set({
       status: "evaluating",
       submittedAt: new Date(),
+      ...(parsed.data.violation ? { endReason: parsed.data.violation } : {}),
     })
     .where(eq(assessments.id, assessment.id));
 

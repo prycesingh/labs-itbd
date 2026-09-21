@@ -1,0 +1,1 @@
+ALTER TABLE `email_assessment_assessments` ADD `end_reason` enum('timeout','tab_switch','cascaded_tab_switch','evaluation_failed');

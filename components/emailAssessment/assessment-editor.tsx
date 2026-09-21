@@ -62,7 +62,7 @@ export function AssessmentEditor({
     if (secondsLeft > 0 || hasSubmittedRef.current) return;
 
     hasSubmittedRef.current = true;
-    const body = JSON.stringify({ assessmentId });
+    const body = JSON.stringify({ assessmentId, reason: "timeout" });
 
     if (navigator.sendBeacon) {
       const blob = new Blob([body], { type: "application/json" });
@@ -127,12 +127,18 @@ export function AssessmentEditor({
       // before navigating - using sendBeacon here is unreliable because the
       // submission request also runs the (slow) AI evaluation server-side, and
       // navigating away aborts it before the row is persisted.
+      // The placeholder content must clear the submissions API's 50-char
+      // minimum, or the POST 400s and this assessment never gets a
+      // submission row at all (only the dueAt/session-expiry fallback in
+      // session-results.ts eventually finalizes it as zero).
       const currentBody = JSON.stringify({
         assessmentId,
         subject:
           subject.trim() || "(no subject - auto-submitted on tab switch)",
         content:
-          content.trim() || "(no response - auto-submitted on tab switch)",
+          content.trim() ||
+          "(no response was written before the candidate switched away from this tab; auto-submitted as a violation)",
+        violation: "tab_switch",
       });
 
       // End all OTHER remaining session assessments. These are lightweight and
@@ -141,7 +147,10 @@ export function AssessmentEditor({
         (id) => id !== assessmentId,
       );
       for (const id of idsToEnd) {
-        const endBody = JSON.stringify({ assessmentId: id });
+        const endBody = JSON.stringify({
+          assessmentId: id,
+          reason: "cascaded_tab_switch",
+        });
         if (navigator.sendBeacon) {
           navigator.sendBeacon(
             `${API_BASE}/assessments/end`,

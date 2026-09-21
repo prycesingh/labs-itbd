@@ -53,6 +53,15 @@ export type SessionScenarioResult = {
   copyPenalty: number;
   submittedAt: Date | null;
   submissionId: string | null;
+  endReason: (typeof assessments.$inferSelect)["endReason"];
+  /** Why this scenario contributes a final 0 instead of a real AI score, for
+   *  the admin UI — null while still genuinely in flight. */
+  zeroReason:
+    | "timeout"
+    | "tab_switch"
+    | "cascaded_tab_switch"
+    | "evaluation_failed"
+    | null;
   evaluationStatus: (typeof evaluations.$inferSelect)["status"] | null;
   evaluationOverallScore: number | null;
   evaluationGrade: (typeof evaluations.$inferSelect)["grade"] | null;
@@ -279,6 +288,14 @@ export async function getSessionSummaries(options: SessionSummaryOptions = {}) {
         row.assessment.status === "failed" ||
         isStaleUnsubmitted);
     const isFinalized = isEvaluated || isAutoScoredZero;
+    // Prefer the persisted endReason (set by the API routes at the moment the
+    // assessment actually ended); isStaleUnsubmitted's read-time fallback
+    // covers rows whose end-of-session beacon never landed, so those default
+    // to "timeout" since a cascaded tab-switch would normally have persisted
+    // its own endReason already.
+    const zeroReason = !isAutoScoredZero
+      ? null
+      : (row.assessment.endReason ?? (isStaleUnsubmitted ? "timeout" : null));
 
     const scenarioResult: SessionScenarioResult = {
       assessmentId: row.assessment.id,
@@ -301,6 +318,8 @@ export async function getSessionSummaries(options: SessionSummaryOptions = {}) {
       copyPenalty: (row.submission?.copyPenalty ?? 0) / 100, // stored as x100 integer
       submittedAt: row.submission?.submittedAt ?? null,
       submissionId: row.submission?.id ?? null,
+      endReason: row.assessment.endReason,
+      zeroReason,
       evaluationStatus: row.evaluation?.status ?? null,
       evaluationOverallScore: row.evaluation?.overallScore ?? null,
       evaluationGrade: row.evaluation?.grade ?? null,

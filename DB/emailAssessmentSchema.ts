@@ -55,6 +55,14 @@ export const eaScenarioDifficultyEnum = (name: string) =>
   mysqlEnum(name, ["beginner", "intermediate", "advanced"]);
 export const eaAssessmentStatusEnum = (name: string) =>
   mysqlEnum(name, ["in_progress", "submitted", "evaluating", "completed", "expired", "failed"]);
+export const eaAssessmentEndReasonEnum = (name: string) =>
+  // Why an assessment stopped accepting input: candidate ran out of time,
+  // switched tabs on this scenario (recorded on a real, if placeholder,
+  // submission), or was auto-ended because a SIBLING scenario in the same
+  // session triggered the tab-switch (no submission of its own — see the
+  // sessionsWithExpiry cascade in lib/emailAssessment/session-results.ts),
+  // or the AI evaluation permanently failed after retries.
+  mysqlEnum(name, ["timeout", "tab_switch", "cascaded_tab_switch", "evaluation_failed"]);
 export const eaEvaluationStatusEnum = (name: string) =>
   mysqlEnum(name, ["pending", "completed", "failed_validation", "pending_retry", "failed"]);
 export const eaAiRequestStatusEnum = (name: string) =>
@@ -194,6 +202,7 @@ export const emailAssessmentAssessments = mysqlTable(
     sessionId: varchar("session_id", { length: 36 }),
     sessionIndex: int("session_index"),
     status: eaAssessmentStatusEnum("status").notNull().default("in_progress"),
+    endReason: eaAssessmentEndReasonEnum("end_reason"),
     timeLimitMinutes: int("time_limit_minutes").notNull().default(30),
     startedAt: timestamp("started_at").notNull().defaultNow(),
     dueAt: timestamp("due_at").notNull(),

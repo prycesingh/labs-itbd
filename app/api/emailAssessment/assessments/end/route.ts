@@ -8,6 +8,7 @@ import { jsonError, requireApiUser } from "@/lib/emailAssessment/auth";
 
 const endSchema = z.object({
   assessmentId: z.string().uuid(),
+  reason: z.enum(["timeout", "tab_switch", "cascaded_tab_switch"]).optional(),
 });
 
 export async function POST(request: Request) {
@@ -36,7 +37,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  await db.update(assessments).set({ status: "expired" }).where(eq(assessments.id, assessment.id));
+  await db
+    .update(assessments)
+    .set({ status: "expired", endReason: parsed.data.reason ?? "timeout" })
+    .where(eq(assessments.id, assessment.id));
 
   return NextResponse.json({ ok: true });
 }

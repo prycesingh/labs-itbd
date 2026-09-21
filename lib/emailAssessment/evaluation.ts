@@ -153,6 +153,21 @@ async function markEvaluationStatus(
     });
 }
 
+/**
+ * The evaluations row tracks AI-call status, but the session/assessment
+ * totals in session-results.ts only finalize off `assessments.status`. Without
+ * this, a submission whose evaluation permanently fails leaves its assessment
+ * stuck at "evaluating" forever — the session never completes and the admin
+ * dashboard shows it as indefinitely "Pending" with no way to tell it apart
+ * from one still genuinely in flight.
+ */
+async function markAssessmentEvaluationFailed(assessmentId: string) {
+  await db
+    .update(assessments)
+    .set({ status: "failed", endReason: "evaluation_failed" })
+    .where(eq(assessments.id, assessmentId));
+}
+
 export async function evaluateSubmission(submissionId: string) {
   const [submissionContext] = await db
     .select({
@@ -193,6 +208,13 @@ export async function evaluateSubmission(submissionId: string) {
   };
 
   if (!process.env.OPENAI_API_KEY) {
+    // Despite the name, "pending_retry" is never actually retried: the job
+    // queue only gives this job one attempt (see
+    // EMAIL_ASSESSMENT_EVALUATION_JOB_MAX_ATTEMPTS) because evaluateSubmission
+    // is expected to exhaust its own retry loop internally, and this early
+    // return skips that loop entirely. Left unfinalized, the assessment would
+    // hang at "evaluating" forever the same way retry-exhausted submissions
+    // used to. Finalize it here too so an admin sees it and can act.
     await markEvaluationStatus(submissionId, "pending_retry");
     await db.insert(aiRequests).values({
       id: randomUUID(),
@@ -203,6 +225,7 @@ export async function evaluateSubmission(submissionId: string) {
       requestPayload,
       errorMessage: "OPENAI_API_KEY is not configured.",
     });
+    await markAssessmentEvaluationFailed(submissionContext.assessmentId);
 
     return { status: "pending_retry" as const };
   }
@@ -367,11 +390,13 @@ ${submissionContext.content}`;
 
       if (attempt === MAX_EVALUATION_ATTEMPTS) {
         await markEvaluationStatus(submissionId, "pending_retry");
+        await markAssessmentEvaluationFailed(submissionContext.assessmentId);
         return { status: "pending_retry" as const };
       }
     }
   }
 
   await markEvaluationStatus(submissionId, "failed");
+  await markAssessmentEvaluationFailed(submissionContext.assessmentId);
   return { status: "failed" as const };
 }

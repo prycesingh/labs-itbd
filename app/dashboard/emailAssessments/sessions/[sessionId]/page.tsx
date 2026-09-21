@@ -14,6 +14,18 @@ import {
 
 const MODULE_BASE = "/dashboard/emailAssessments";
 
+const ZERO_REASON_LABEL: Record<string, string> = {
+  timeout: "Session timed out with no submission",
+  tab_switch: "Auto-submitted — candidate switched tabs (violation)",
+  cascaded_tab_switch: "Ended — a tab-switch violation on another scenario in this session ended it",
+  evaluation_failed: "AI evaluation failed and could not be retried",
+};
+
+function zeroReasonLabel(reason: string | null) {
+  if (!reason) return null;
+  return ZERO_REASON_LABEL[reason] ?? "Auto-scored 0 — no submission was evaluated";
+}
+
 export default async function EmailAssessmentsSessionDetailPage({
   params,
 }: {
@@ -187,14 +199,25 @@ export default async function EmailAssessmentsSessionDetailPage({
                     {scenario.subject?.trim() ? scenario.subject : "No subject submitted"}
                   </td>
                   <td className="px-4 py-4">
-                    {scenario.evaluationOverallScore != null
-                      ? `${scenario.evaluationOverallScore} / 100`
-                      : "Pending"}
+                    {scenario.evaluationOverallScore != null ? (
+                      `${scenario.evaluationOverallScore} / 100`
+                    ) : scenario.zeroReason ? (
+                      <span className="text-orange-300">0 / 100</span>
+                    ) : (
+                      "Pending"
+                    )}
                   </td>
                   <td className="px-4 py-4">
-                    {scenario.aiWeightedScore != null
-                      ? `${scenario.aiWeightedScore.toFixed(2)} / ${scenario.scenarioMaxScore}`
-                      : "Pending"}
+                    {scenario.aiWeightedScore != null ? (
+                      `${scenario.aiWeightedScore.toFixed(2)} / ${scenario.scenarioMaxScore}`
+                    ) : scenario.zeroReason ? (
+                      <div>
+                        <span className="text-orange-300">0.00 / {scenario.scenarioMaxScore}</span>
+                        <p className="mt-1 text-xs text-white/50">{zeroReasonLabel(scenario.zeroReason)}</p>
+                      </div>
+                    ) : (
+                      "Pending"
+                    )}
                   </td>
                   <td className="px-4 py-4">
                     {scenario.copyPenalty > 0 ? (
@@ -249,13 +272,22 @@ export default async function EmailAssessmentsSessionDetailPage({
 
               <StandardResponseToggle modelAnswer={scenario.scenarioModelAnswer} />
 
+              {scenario.zeroReason ? (
+                <div className="rounded-xl border border-orange-400/40 bg-orange-500/10 p-4">
+                  <p className="text-sm font-semibold text-orange-300">Scored 0 — not pending AI review</p>
+                  <p className="mt-1 text-sm text-orange-200/80">{zeroReasonLabel(scenario.zeroReason)}</p>
+                </div>
+              ) : null}
+
               <div className="grid gap-4 md:grid-cols-3">
                 <MetricCard
                   label="AI percentage"
                   value={
                     scenario.evaluationOverallScore != null
                       ? `${scenario.evaluationOverallScore} / 100`
-                      : "Pending"
+                      : scenario.zeroReason
+                        ? "0 / 100"
+                        : "Pending"
                   }
                 />
                 <MetricCard
@@ -263,7 +295,9 @@ export default async function EmailAssessmentsSessionDetailPage({
                   value={
                     scenario.aiWeightedScore != null
                       ? `${scenario.aiWeightedScore.toFixed(2)} / ${scenario.scenarioMaxScore}`
-                      : "Pending"
+                      : scenario.zeroReason
+                        ? `0.00 / ${scenario.scenarioMaxScore}`
+                        : "Pending"
                   }
                   hint={scenario.evaluationGrade ? `Grade ${scenario.evaluationGrade}` : undefined}
                 />
