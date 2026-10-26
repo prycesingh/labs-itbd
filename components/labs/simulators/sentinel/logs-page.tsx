@@ -12,7 +12,7 @@
 // result.
 //
 // Time-range chips are cosmetic, matching source's original behavior: source's
-// `timeRange` only ever fed the auto-inserted `ago(...)` clause in `useTable()`,
+// `timeRange` only ever fed the auto-inserted `ago(...)` clause in `selectTable()`,
 // and the real engine treats any `ago(...)` predicate as a graceful time-window
 // no-op (see kql-engine.ts's parseWhereClause) since the synthetic tables don't
 // model a meaningful "now" cutoff. Selecting a range still changes what gets
@@ -104,7 +104,7 @@ export function LogsPage({ state, dispatch }: { state: SentinelState; dispatch: 
     }
   }
 
-  function useTable(name: string) {
+  function selectTable(name: string) {
     setKql(`${name}\n| where TimeGenerated > ago(${timeRange})\n| take 50`);
   }
 
@@ -167,7 +167,7 @@ export function LogsPage({ state, dispatch }: { state: SentinelState; dispatch: 
                   {TABLES.filter((t) => t.category === cat).map((t) => (
                     <div
                       key={t.name}
-                      onClick={() => useTable(t.name)}
+                      onClick={() => selectTable(t.name)}
                       title={t.desc}
                       style={{
                         padding: "5px 6px",
