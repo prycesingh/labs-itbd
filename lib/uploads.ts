@@ -101,7 +101,7 @@ export async function saveUploadAs(
 
   const safeName = sanitizeFileName(targetFileName);
   const relativeId = path.posix.join(...safeCategoryPath, safeName);
-  const absolutePath = path.join(root, ...safeCategoryPath, safeName);
+  const absolutePath = path.join(/*turbopackIgnore: true*/ root, ...safeCategoryPath, safeName);
 
   const buffer = Buffer.from(await file.arrayBuffer());
   await fs.writeFile(absolutePath, buffer);
