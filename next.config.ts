@@ -16,6 +16,14 @@ const nextConfig: NextConfig = {
   // answer to pace-only delivery metrics with no visible error. Marking it
   // external keeps its own module resolution (and __dirname) intact.
   serverExternalPackages: ["ffmpeg-static"],
+  experimental: {
+    // Hostinger's build container reports the host's 64 CPUs, so Next spawns
+    // 63 build workers — each loading the native SWC binding with its own
+    // per-CPU thread pool. That exceeds the container's thread limit and the
+    // build aborts with "OS can't spawn worker thread (os error 11)". Cap the
+    // worker count so the build fits regardless of what the host reports.
+    cpus: 4,
+  },
 };
 
 export default nextConfig;
