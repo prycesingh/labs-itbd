@@ -80,24 +80,33 @@ export function normalizeHrisPayload(payload: unknown): HrisEmployee[] {
   for (const row of rows) {
     if (!row || typeof row !== "object" || !isActiveRecord(row)) continue;
 
+    // Workforce feed (documented): employeeCode (unique, stable key),
+    // officialMail, employeeName, first/middle/lastName, employmentStatus.
+    // Its fields are listed FIRST so they win over any generic alias that may
+    // also be present (e.g. an internal numeric `id`); the rest are fallbacks.
     const empId = pickString(row, [
-      "emp_id", "empId", "employee_id", "employeeId", "employee_code",
-      "employeeCode", "emp_code", "empCode", "code", "id",
+      "employeeCode", "employee_code", "emp_id", "empId", "employee_id",
+      "employeeId", "emp_code", "empCode", "code", "id",
     ]);
     const email = pickString(row, [
-      "email", "work_email", "workEmail", "official_email", "officialEmail",
-      "company_email", "companyEmail",
+      "officialMail", "official_mail", "officialEmail", "official_email", "email",
+      "work_email", "workEmail", "company_email", "companyEmail",
     ])?.toLowerCase();
     let fullName = pickString(row, [
-      "full_name", "fullName", "name", "employee_name", "employeeName", "display_name",
+      "employeeName", "employee_name", "full_name", "fullName", "name", "display_name",
     ]);
     if (!fullName) {
-      const first = pickString(row, ["first_name", "firstName"]);
-      const last = pickString(row, ["last_name", "lastName"]);
-      fullName = [first, last].filter(Boolean).join(" ") || null;
+      const parts = ["firstName", "middleName", "lastName"].map((k) => pickString(row, [k]));
+      fullName = parts.filter(Boolean).join(" ") || null;
     }
 
+    // No official email = can't be matched to an SSO login; skip.
     if (!empId || !email || !fullName) continue;
+    if (empId.length > 20) {
+      // emp_id is varchar(20); truncating could merge two employees.
+      console.warn(`[lab-practice] skipping HRIS employee with over-long code: ${empId}`);
+      continue;
+    }
     // Duplicate emp_id/email in the feed would violate our unique indexes;
     // keep the first occurrence.
     if (seenEmp.has(empId) || seenEmail.has(email)) continue;
@@ -105,7 +114,7 @@ export function normalizeHrisPayload(payload: unknown): HrisEmployee[] {
     seenEmail.add(email);
 
     out.push({
-      empId: empId.slice(0, 20),
+      empId,
       fullName: fullName.slice(0, 150),
       email: email.slice(0, 255),
     });
