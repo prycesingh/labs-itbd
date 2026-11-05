@@ -4,7 +4,7 @@
 
 import { z } from "zod";
 
-import { PROGRESSION_MODES } from "@/DB/labPracticeSchema";
+import { PROGRESSION_MODES } from "@/lib/labPractice/constants";
 
 const title = z.string().trim().min(1, "Title is required").max(200);
 const longText = z.string().trim().max(20_000).optional().nullable();
@@ -69,6 +69,4 @@ export const rejectSchema = z.object({
 });
 
 // Photo limits (shared by API + client dialog)
-export const PHOTO_MAX_FILES = 10;
-export const PHOTO_MAX_BYTES = 10 * 1024 * 1024;
-export const PHOTO_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
+export { PHOTO_MAX_BYTES, PHOTO_MAX_FILES, PHOTO_MIME_TYPES } from "@/lib/labPractice/constants";

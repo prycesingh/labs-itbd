@@ -104,6 +104,16 @@ export const ROUTE_RULES: readonly RouteRule[] = [
     note: "Labs content administration (glossary, seed/import)",
   },
 
+  // Practice Lab admin (trainer registry + HRIS sync). The trainer workspace
+  // (/dashboard/practice/trainer) is deliberately NOT listed: trainer status
+  // lives in the lab_practice_trainers table, not a role, so it is enforced
+  // by requirePageTrainer()/requireApiTrainer() in lib/labPractice/identity.ts.
+  {
+    prefix: "/dashboard/practice/admin",
+    allow: ADMIN_ROLES,
+    note: "Practice Lab trainer registry",
+  },
+
   // Interview admin
   {
     prefix: "/dashboard/interview/Module",

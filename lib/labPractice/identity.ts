@@ -71,6 +71,25 @@ async function getActiveTrainer(employeeId: number): Promise<Trainer | null> {
   return row ?? null;
 }
 
+/** Cheap single-query trainer check for the dashboard layout/nav. Never
+ *  triggers an HRIS sync (it runs on every dashboard page load). */
+export async function isActiveTrainerEmail(email: string | null | undefined): Promise<boolean> {
+  if (!email) return false;
+  const [row] = await db
+    .select({ id: labPracticeTrainers.id })
+    .from(labPracticeTrainers)
+    .innerJoin(labPracticeEmployees, eq(labPracticeEmployees.id, labPracticeTrainers.employeeId))
+    .where(
+      and(
+        eq(labPracticeEmployees.email, email.toLowerCase()),
+        eq(labPracticeEmployees.isActive, true),
+        eq(labPracticeTrainers.isActive, true),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
 /** Resolve the current user. Null when not signed in. */
 export async function getPracticeActor(): Promise<PracticeActor | null> {
   const session = await auth();

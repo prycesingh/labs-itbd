@@ -11,6 +11,7 @@ import {
   FileText,
   GitBranch,
   GraduationCap,
+  Hammer,
   Home,
   LayoutDashboard,
   LayoutGrid,
@@ -19,9 +20,11 @@ import {
   MessagesSquare,
   MonitorPlay,
   ShieldAlert,
+  ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   TerminalSquare,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -30,6 +33,9 @@ export type NavLink = {
   label: string;
   icon: LucideIcon;
   adminOnly?: boolean;
+  /** Lab Practice trainers only (resolved from the trainer registry in the
+   *  dashboard layout, not from an app role). */
+  trainerOnly?: boolean;
 };
 export type NavSubgroup = { label: string; links: NavLink[] };
 export type NavSection = {
@@ -214,6 +220,36 @@ export const SECTIONS: NavSection[] = [
             href: "/dashboard/labs/admin/seed",
             label: "Content Import",
             icon: DatabaseZap,
+            adminOnly: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    key: "practice-lab",
+    href: "/dashboard/practice",
+    label: "Practice Lab",
+    icon: Hammer,
+    subgroups: [
+      {
+        label: "Practice Lab",
+        links: [
+          {
+            href: "/dashboard/practice",
+            label: "My Practice",
+            icon: ClipboardCheck,
+          },
+          {
+            href: "/dashboard/practice/trainer",
+            label: "Trainer Workspace",
+            icon: Users,
+            trainerOnly: true,
+          },
+          {
+            href: "/dashboard/practice/admin/trainers",
+            label: "Trainers",
+            icon: ShieldCheck,
             adminOnly: true,
           },
         ],

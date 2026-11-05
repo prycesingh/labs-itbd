@@ -38,14 +38,13 @@ import {
 } from "drizzle-orm/mysql-core";
 
 // ─────────────────────────────────────────────
-// Enums
+// Enums (values live in a client-safe module so UI code can import them
+// without pulling drizzle into the browser bundle)
 // ─────────────────────────────────────────────
-export const PROGRESSION_MODES = [
-  "free_order", // anything, any time
-  "steps_in_order", // steps inside a task sequential; labs/tasks free
-  "fully_sequential", // DEFAULT — step, task and lab each unlock after the previous
-] as const;
-export type ProgressionMode = (typeof PROGRESSION_MODES)[number];
+import { PROGRESSION_MODES, type ProgressionMode } from "../lib/labPractice/constants";
+
+export { PROGRESSION_MODES };
+export type { ProgressionMode };
 
 // ─────────────────────────────────────────────
 // People
