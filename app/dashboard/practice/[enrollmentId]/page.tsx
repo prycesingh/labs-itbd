@@ -30,11 +30,15 @@ export default async function TraineeEnrollmentPage({
   if (!enrollment) notFound();
 
   const access = enrollmentAccessFor(actor, enrollment);
-  if (!access) notFound();
-  if (access === "trainer") redirect(`/dashboard/practice/trainer/trainees/${enrollment.id}`);
+  if (access.length === 0) notFound();
+  // Trainee wins: a trainer who enrolled themselves practices here. Only a
+  // trainer who is NOT the trainee is sent to the review page.
+  const isTrainee = access.includes("trainee");
+  if (!isTrainee && access.includes("trainer")) {
+    redirect(`/dashboard/practice/trainer/trainees/${enrollment.id}`);
+  }
 
   const data = serializeEnrollment(enrollment, await getEnrollmentView(enrollment));
-  const isTrainee = access === "trainee";
 
   return (
     <main className="flex w-full flex-col gap-6 pb-10">

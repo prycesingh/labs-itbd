@@ -180,18 +180,21 @@ export async function getEnrollment(enrollmentId: number): Promise<Enrollment | 
 }
 
 /**
- * How (if at all) the actor may access an enrollment:
+ * Every way the actor may access an enrollment (empty = no access):
  *   trainee — it is their own enrollment
  *   trainer — they are the trainer who owns it
  *   admin   — app admin (read access to everything)
- * Order matters: a trainer viewing their own trainee record gets "trainer".
+ * These are NOT exclusive: a trainer who enrolls themselves is both trainee
+ * and trainer on that enrollment and must be able to act as either (practice
+ * on the trainee page, review on the trainer page).
  */
 export function enrollmentAccessFor(
   actor: PracticeActor,
   enrollment: Enrollment,
-): EnrollmentAccess | null {
-  if (actor.trainer && enrollment.trainerId === actor.trainer.id) return "trainer";
-  if (actor.employee && enrollment.traineeId === actor.employee.id) return "trainee";
-  if (actor.isAdmin) return "admin";
-  return null;
+): EnrollmentAccess[] {
+  const access: EnrollmentAccess[] = [];
+  if (actor.employee && enrollment.traineeId === actor.employee.id) access.push("trainee");
+  if (actor.trainer && enrollment.trainerId === actor.trainer.id) access.push("trainer");
+  if (actor.isAdmin) access.push("admin");
+  return access;
 }

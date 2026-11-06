@@ -52,7 +52,7 @@ export async function loadEnrollmentFor(
   const enrollment = id ? await getEnrollment(id) : null;
   if (!enrollment) return { enrollment: null, access: null, response: jsonError("Not found.", 404) };
   const access = enrollmentAccessFor(actor, enrollment);
-  if (!access || !allowed.includes(access)) {
+  if (!access.some((a) => allowed.includes(a))) {
     return { enrollment: null, access: null, response: jsonError("Not allowed.", 403) };
   }
   return { enrollment, access, response: null };

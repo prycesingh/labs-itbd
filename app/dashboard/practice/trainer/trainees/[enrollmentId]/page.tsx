@@ -25,7 +25,7 @@ export default async function TrainerTraineePage({
   const actor = await requirePageTrainer();
   const id = Number((await params).enrollmentId);
   const enrollment = Number.isInteger(id) && id > 0 ? await getEnrollment(id) : null;
-  if (!enrollment || enrollmentAccessFor(actor, enrollment) !== "trainer") notFound();
+  if (!enrollment || !enrollmentAccessFor(actor, enrollment).includes("trainer")) notFound();
 
   const [[trainee], view] = await Promise.all([
     db

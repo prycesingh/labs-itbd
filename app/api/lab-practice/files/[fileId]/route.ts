@@ -46,7 +46,9 @@ export async function GET(_req: Request, context: { params: Promise<{ fileId: st
   if (!row) return jsonError("Not found.", 404);
 
   const enrollment = await getEnrollment(row.enrollmentId);
-  if (!enrollment || !enrollmentAccessFor(actor, enrollment)) return jsonError("Not found.", 404);
+  if (!enrollment || enrollmentAccessFor(actor, enrollment).length === 0) {
+    return jsonError("Not found.", 404);
+  }
 
   try {
     const { stream, stats } = await openReadStream(row.filePath);
