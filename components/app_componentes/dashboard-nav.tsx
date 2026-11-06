@@ -55,7 +55,7 @@ export function DashboardNav({
   isTrainer = false,
 }: {
   user: { name?: string | null; email?: string | null; role?: string };
-  /** Lab Practice trainer (DB registry, not an app role) — shows trainerOnly links. */
+  /** Guided Labs trainer (DB registry, not an app role) — shows trainerOnly links. */
   isTrainer?: boolean;
 }) {
   const pathname = usePathname();

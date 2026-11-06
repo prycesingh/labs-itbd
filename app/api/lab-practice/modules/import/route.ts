@@ -20,7 +20,7 @@ export async function GET() {
   return new NextResponse(new Uint8Array(file), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": 'attachment; filename="lab-practice-curriculum-template.xlsx"',
+      "Content-Disposition": 'attachment; filename="guided-labs-module-template.xlsx"',
       "Cache-Control": "no-store",
     },
   });

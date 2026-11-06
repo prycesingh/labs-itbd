@@ -45,7 +45,7 @@ export function CreateModuleForm() {
     setBusy(false);
     if (res) {
       toast.success("Module created.");
-      router.push(`/dashboard/practice/trainer/modules/${res.id}`);
+      router.push(`/dashboard/guided-labs/trainer/modules/${res.id}`);
     }
   }
 
@@ -184,7 +184,7 @@ export function EnrollmentPanel({
           enrollments.map((e) => (
             <div key={e.id} className="flex items-center gap-3 p-3">
               <Link
-                href={`/dashboard/practice/trainer/trainees/${e.id}`}
+                href={`/dashboard/guided-labs/trainer/trainees/${e.id}`}
                 className="min-w-0 flex-1 space-y-1.5 hover:opacity-90"
               >
                 <p className="truncate text-sm font-medium text-white">

@@ -15,13 +15,13 @@ export default async function PracticeHomePage() {
 
   return (
     <main className="flex w-full flex-col gap-6 pb-10">
-      <PageTitle title="Practice" accent="Lab" sub="Hands-on labs assigned to you by your trainer." />
+      <PageTitle title="Guided" accent="Labs" sub="Hands-on labs assigned to you by your trainer." />
 
       {(actor.trainer || actor.isAdmin) && (
         <div className="flex flex-wrap gap-3">
           {actor.trainer && (
             <Link
-              href="/dashboard/practice/trainer"
+              href="/dashboard/guided-labs/trainer"
               className="inline-flex items-center gap-2 rounded-lg border border-itbd-blue/40 px-3 py-2 text-sm text-white hover:bg-itbd-blue/10"
             >
               <GraduationCap className="size-4 text-itbd-blue" /> Trainer workspace
@@ -29,7 +29,7 @@ export default async function PracticeHomePage() {
           )}
           {actor.isAdmin && (
             <Link
-              href="/dashboard/practice/admin/trainers"
+              href="/dashboard/guided-labs/admin/trainers"
               className="inline-flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-sm text-white hover:bg-white/5"
             >
               <ShieldCheck className="size-4 text-itbd-blue" /> Manage trainers
@@ -56,7 +56,7 @@ export default async function PracticeHomePage() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {enrollments.map((e, i) => (
             <AdminMotionCard key={e.id} className="p-5" delay={i * 0.04}>
-              <Link href={`/dashboard/practice/${e.id}`} className="relative z-10 flex h-full flex-col gap-3">
+              <Link href={`/dashboard/guided-labs/${e.id}`} className="relative z-10 flex h-full flex-col gap-3">
                 <div className="flex items-start justify-between gap-2">
                   <h2 className="text-lg font-bold text-white">{e.moduleTitle}</h2>
                   {(!e.isActive || !e.moduleActive) && (

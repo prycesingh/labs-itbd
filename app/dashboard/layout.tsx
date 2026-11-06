@@ -33,7 +33,7 @@ export default async function DashboardLayout({
     redirect("/admin/password");
   }
 
-  // Lab Practice trainer status lives in a DB registry, not the app role.
+  // Guided Labs (lab-practice) trainer status lives in a DB registry, not the app role.
   // Swallow errors so a missing table (migration not yet pushed) can never
   // take down the whole dashboard.
   const isTrainer = await isActiveTrainerEmail(session.user.email).catch(() => false);

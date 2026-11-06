@@ -55,7 +55,7 @@ export default async function TrainerHomePage() {
                 {modules.map((m) => (
                   <Link
                     key={m.id}
-                    href={`/dashboard/practice/trainer/modules/${m.id}`}
+                    href={`/dashboard/guided-labs/trainer/modules/${m.id}`}
                     className="flex items-center justify-between gap-3 p-3 hover:bg-white/5"
                   >
                     <span className="min-w-0">
@@ -90,7 +90,7 @@ export default async function TrainerHomePage() {
               {trainees.map((t) => (
                 <Link
                   key={t.id}
-                  href={`/dashboard/practice/trainer/trainees/${t.id}`}
+                  href={`/dashboard/guided-labs/trainer/trainees/${t.id}`}
                   className="space-y-2 rounded-lg border border-white/10 p-3 hover:border-itbd-blue/50"
                 >
                   <div className="flex items-start justify-between gap-2">

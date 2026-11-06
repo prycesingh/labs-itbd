@@ -42,7 +42,7 @@ export default async function PracticeTrainersAdminPage() {
   return (
     <main className="flex w-full flex-col gap-6 pb-10">
       <PageTitle
-        title="Practice Lab"
+        title="Guided Labs"
         accent="Trainers"
         sub="Register who can build modules and coach trainees. Employees come from the HRIS."
       />

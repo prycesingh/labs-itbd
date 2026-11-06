@@ -35,7 +35,7 @@ export default async function TraineeEnrollmentPage({
   // trainer who is NOT the trainee is sent to the review page.
   const isTrainee = access.includes("trainee");
   if (!isTrainee && access.includes("trainer")) {
-    redirect(`/dashboard/practice/trainer/trainees/${enrollment.id}`);
+    redirect(`/dashboard/guided-labs/trainer/trainees/${enrollment.id}`);
   }
 
   const data = serializeEnrollment(enrollment, await getEnrollmentView(enrollment));

@@ -154,13 +154,13 @@ export async function requirePageActor(): Promise<PracticeActor> {
 
 export async function requirePageTrainer(): Promise<TrainerActor> {
   const actor = await requirePageActor();
-  if (!actor.trainer || !actor.employee) redirect("/dashboard/practice");
+  if (!actor.trainer || !actor.employee) redirect("/dashboard/guided-labs");
   return actor as TrainerActor;
 }
 
 export async function requirePageAdmin(): Promise<PracticeActor> {
   const actor = await requirePageActor();
-  if (!actor.isAdmin) redirect("/dashboard/practice");
+  if (!actor.isAdmin) redirect("/dashboard/guided-labs");
   return actor;
 }
 

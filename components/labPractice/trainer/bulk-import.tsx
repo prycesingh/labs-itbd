@@ -88,9 +88,17 @@ export function BulkImportCard() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-white/60">
-        Build several modules at once: fill one row per step in the Excel template, then upload it.
-      </p>
+      <div className="space-y-1.5 text-sm text-white/60">
+        <p>Build several modules at once from one Excel file.</p>
+        <ul className="list-disc space-y-0.5 pl-5 text-xs text-white/50">
+          <li>One row = one step.</li>
+          <li>
+            Type a module, lab or task title only on its first row. Leave it blank below to stay in the same
+            one.
+          </li>
+          <li>The template&apos;s Instructions sheet explains every column and its allowed values.</li>
+        </ul>
+      </div>
 
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="outline" size="sm">
@@ -173,7 +181,7 @@ export function BulkImportCard() {
           {created.map((c) => (
             <Link
               key={c.id}
-              href={`/dashboard/practice/trainer/modules/${c.id}`}
+              href={`/dashboard/guided-labs/trainer/modules/${c.id}`}
               className="block truncate text-itbd-blue hover:underline"
             >
               {c.title}

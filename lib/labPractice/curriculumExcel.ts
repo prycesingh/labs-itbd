@@ -54,21 +54,91 @@ type ColumnKey =
   | "stepInstructions"
   | "requiresPhoto";
 
-type Column = { key: ColumnKey; header: string; width: number; note: string; wrap?: boolean };
+type Column = {
+  key: ColumnKey;
+  header: string;
+  width: number;
+  /** "Required?" column on the Instructions sheet. */
+  required: string;
+  /** What to type — used for the guide row, header note and cell prompt. */
+  what: string;
+  /** Allowed values / format. */
+  allowed: string;
+  wrap?: boolean;
+};
 
 const COLUMNS: Column[] = [
-  { key: "moduleTitle", header: "Module Title *", width: 28, note: "Required on the module's first row. Leave blank on following rows to stay in the same module. Must not match an existing module." },
-  { key: "moduleInfo", header: "Module Info", width: 36, wrap: true, note: "Optional overview shown to trainees." },
-  { key: "progressionMode", header: "Progression Mode", width: 20, note: "fully_sequential (default), steps_in_order or free_order." },
-  { key: "labTitle", header: "Lab Title *", width: 28, note: "Required on the lab's first row. Leave blank to stay in the same lab." },
-  { key: "labDescription", header: "Lab Description *", width: 40, wrap: true, note: "Required once per lab (on any of its rows)." },
-  { key: "labScenario", header: "Lab Scenario", width: 40, wrap: true, note: "Optional real-world situation the trainee works through." },
-  { key: "taskTitle", header: "Task Title", width: 28, note: "Leave blank to stay in the same task." },
-  { key: "taskDescription", header: "Task Description", width: 36, wrap: true, note: "Optional." },
-  { key: "stepTitle", header: "Step Title", width: 30, note: "One step per row. Must be unique within its task." },
-  { key: "stepInstructions", header: "Step Instructions", width: 44, wrap: true, note: "Optional." },
-  { key: "requiresPhoto", header: "Requires Photo", width: 16, note: "Yes / No (blank = No)." },
+  {
+    key: "moduleTitle", header: "Module Title *", width: 28,
+    required: "Yes — on the module's FIRST row only",
+    what: "Name of the module. Type it on the first row of the module, then leave blank on that module's next rows.",
+    allowed: "Text, max 200 characters. Must be a NEW module name.",
+  },
+  {
+    key: "moduleInfo", header: "Module Info", width: 36, wrap: true,
+    required: "No",
+    what: "Short overview of the module shown to trainees. Fill once, on the module's first row.",
+    allowed: "Text.",
+  },
+  {
+    key: "progressionMode", header: "Progression Mode", width: 22,
+    required: "No (default: fully_sequential)",
+    what: "How steps unlock. Fill once, on the module's first row.",
+    allowed: "Pick from the dropdown: fully_sequential = one step at a time across the whole module; steps_in_order = in order within each task; free_order = any order.",
+  },
+  {
+    key: "labTitle", header: "Lab Title *", width: 28,
+    required: "Yes — on the lab's FIRST row only",
+    what: "Name of the lab. Type it on the first row of the lab, then leave blank on that lab's next rows.",
+    allowed: "Text, max 200 characters. Unique within the module.",
+  },
+  {
+    key: "labDescription", header: "Lab Description *", width: 40, wrap: true,
+    required: "Yes — once per lab",
+    what: "What the lab covers. Fill once, on the lab's first row.",
+    allowed: "Text.",
+  },
+  {
+    key: "labScenario", header: "Lab Scenario", width: 40, wrap: true,
+    required: "No",
+    what: "A real-world situation the trainee works through in this lab. Fill once, on the lab's first row.",
+    allowed: "Text.",
+  },
+  {
+    key: "taskTitle", header: "Task Title", width: 28,
+    required: "Yes, if the row has a step — on the task's FIRST row only",
+    what: "Name of the task. Type it on the first row of the task, then leave blank on that task's next rows.",
+    allowed: "Text, max 200 characters. Unique within the lab.",
+  },
+  {
+    key: "taskDescription", header: "Task Description", width: 36, wrap: true,
+    required: "No",
+    what: "What the task is about. Fill once, on the task's first row.",
+    allowed: "Text.",
+  },
+  {
+    key: "stepTitle", header: "Step Title", width: 30,
+    required: "Yes — every row is one step",
+    what: "Name of the step. Every row = one step, in the order trainees do them.",
+    allowed: "Text, max 200 characters. Unique within the task.",
+  },
+  {
+    key: "stepInstructions", header: "Step Instructions", width: 44, wrap: true,
+    required: "No",
+    what: "How to do this step.",
+    allowed: "Text.",
+  },
+  {
+    key: "requiresPhoto", header: "Requires Photo", width: 18,
+    required: "No (default: No)",
+    what: "Must the trainee upload a photo/screenshot to complete this step?",
+    allowed: "Pick from the dropdown: Yes or No. Blank = No.",
+  },
 ];
+
+/** Text in the first cell of the template's guide row; rows starting with
+ *  it are skipped on import (in case the trainer forgets to delete it). */
+const GUIDE_MARKER = "DELETE THIS ROW";
 
 type RowValues = Record<ColumnKey, string>;
 
@@ -82,89 +152,279 @@ const LEVEL_COLUMNS = {
 // ─────────────────────────────────────────────
 // Template
 // ─────────────────────────────────────────────
-const EXAMPLE_ROWS: Partial<RowValues>[] = [
+// ITBD brand palette (ARGB) — Excel renders on white, so: blue headers with
+// white text, black banner, light-gray guide row with black text.
+const C_BLUE = "FF00ADDA";
+const C_WHITE = "FFFFFFFF";
+const C_BLACK = "FF000000";
+const C_LIGHT_GRAY = "FFBFBFBF";
+const C_NEUTRAL_GRAY = "FF252525";
+
+const HEADER_ROW = 2; // row 1 = banner
+const GUIDE_ROW = 3;
+const VALIDATION_LAST_ROW = 1000;
+
+const EXAMPLE_ROWS: { values: Partial<RowValues>; explain: string }[] = [
   {
-    moduleTitle: "Windows Server Fundamentals",
-    moduleInfo: "Core server administration for new L1 engineers.",
-    progressionMode: "fully_sequential",
-    labTitle: "Active Directory setup",
-    labDescription: "Stand up a domain controller and manage users.",
-    labScenario: "A new 20-seat client needs a fresh domain before Monday.",
-    taskTitle: "Install AD DS",
-    taskDescription: "Promote the server to a domain controller.",
-    stepTitle: "Add the AD DS role",
-    stepInstructions: "Server Manager → Add Roles and Features → Active Directory Domain Services.",
-    requiresPhoto: "No",
+    values: {
+      moduleTitle: "Windows Server Fundamentals",
+      moduleInfo: "Core server administration for new L1 engineers.",
+      progressionMode: "fully_sequential",
+      labTitle: "Active Directory setup",
+      labDescription: "Stand up a domain controller and manage users.",
+      labScenario: "A new 20-seat client needs a fresh domain before Monday.",
+      taskTitle: "Install AD DS",
+      taskDescription: "Promote the server to a domain controller.",
+      stepTitle: "Add the AD DS role",
+      stepInstructions: "Server Manager → Add Roles and Features → Active Directory Domain Services.",
+      requiresPhoto: "No",
+    },
+    explain: "NEW module + NEW lab + NEW task + its 1st step. Module/lab/task details are filled here, on their first row.",
   },
   {
-    stepTitle: "Promote to domain controller",
-    stepInstructions: "Create a new forest named lab.local.",
-    requiresPhoto: "Yes",
+    values: {
+      stepTitle: "Promote to domain controller",
+      stepInstructions: "Create a new forest named lab.local.",
+      requiresPhoto: "Yes",
+    },
+    explain: "Titles blank = same module, lab and task as above → 2nd step of \"Install AD DS\".",
   },
   {
-    taskTitle: "Manage users",
-    stepTitle: "Create an OU structure",
-    requiresPhoto: "No",
-  },
-  { stepTitle: "Create 5 test users", requiresPhoto: "Yes" },
-  {
-    labTitle: "DNS and DHCP",
-    labDescription: "Configure name resolution and address leasing.",
-    taskTitle: "Configure DHCP scope",
-    stepTitle: "Create a scope for 10.0.0.0/24",
-    requiresPhoto: "Yes",
+    values: { taskTitle: "Manage users", stepTitle: "Create an OU structure", requiresPhoto: "No" },
+    explain: "Same module and lab → NEW task \"Manage users\" + its 1st step.",
   },
   {
-    moduleTitle: "Networking Basics",
-    progressionMode: "free_order",
-    labTitle: "Cabling",
-    labDescription: "Terminate and test Ethernet cables.",
-    taskTitle: "Crimp a patch cable",
-    stepTitle: "Crimp both ends to T568B",
-    requiresPhoto: "Yes",
+    values: { stepTitle: "Create 5 test users", requiresPhoto: "Yes" },
+    explain: "Same module, lab and task → 2nd step of \"Manage users\".",
+  },
+  {
+    values: {
+      labTitle: "DNS and DHCP",
+      labDescription: "Configure name resolution and address leasing.",
+      taskTitle: "Configure DHCP scope",
+      stepTitle: "Create a scope for 10.0.0.0/24",
+      requiresPhoto: "Yes",
+    },
+    explain: "Same module → NEW lab \"DNS and DHCP\" (with its description) + NEW task + 1st step.",
+  },
+  {
+    values: {
+      moduleTitle: "Networking Basics",
+      progressionMode: "free_order",
+      labTitle: "Cabling",
+      labDescription: "Terminate and test Ethernet cables.",
+      taskTitle: "Crimp a patch cable",
+      stepTitle: "Crimp both ends to T568B",
+      requiresPhoto: "Yes",
+    },
+    explain: "A SECOND module starts — module, lab and task titles must all be typed again.",
   },
 ];
 
-function styleHeader(ws: ExcelJS.Worksheet) {
-  ws.columns = COLUMNS.map((c) => ({ key: c.key, width: c.width }));
-  const header = ws.getRow(1);
-  COLUMNS.forEach((c, i) => {
+const thinBorder: Partial<ExcelJS.Borders> = {
+  top: { style: "thin", color: { argb: C_LIGHT_GRAY } },
+  bottom: { style: "thin", color: { argb: C_LIGHT_GRAY } },
+  left: { style: "thin", color: { argb: C_LIGHT_GRAY } },
+  right: { style: "thin", color: { argb: C_LIGHT_GRAY } },
+};
+
+function solid(argb: string): ExcelJS.Fill {
+  return { type: "pattern", pattern: "solid", fgColor: { argb } };
+}
+
+function styleHeaderCell(cell: ExcelJS.Cell) {
+  cell.font = { bold: true, color: { argb: C_WHITE } };
+  cell.fill = solid(C_BLUE);
+  cell.alignment = { vertical: "middle", wrapText: true };
+  cell.border = thinBorder;
+}
+
+/** Banner (row 1) + blue column headers (row 2), frozen. */
+function setupSheet(ws: ExcelJS.Worksheet, banner: string, extraColumns: { header: string; width: number }[] = []) {
+  const all = [...COLUMNS.map((c) => ({ header: c.header, width: c.width })), ...extraColumns];
+  all.forEach((c, i) => {
+    ws.getColumn(i + 1).width = c.width;
+  });
+
+  ws.mergeCells(1, 1, 1, all.length);
+  const b = ws.getCell(1, 1);
+  b.value = banner;
+  b.font = { bold: true, color: { argb: C_WHITE }, size: 11 };
+  b.fill = solid(C_BLACK);
+  b.alignment = { vertical: "middle", wrapText: true, indent: 1 };
+  ws.getRow(1).height = 48;
+
+  const header = ws.getRow(HEADER_ROW);
+  all.forEach((c, i) => {
     const cell = header.getCell(i + 1);
     cell.value = c.header;
-    cell.note = c.note;
-    cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
-    // ITBD Blue header on the brand's black foundation.
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF00ADDA" } };
-    cell.alignment = { vertical: "middle" };
+    styleHeaderCell(cell);
+    const col = COLUMNS[i];
+    if (col) cell.note = `${col.what}\n\n${col.allowed}`;
   });
-  header.height = 22;
-  ws.views = [{ state: "frozen", ySplit: 1 }];
+  header.height = 24;
+  ws.views = [{ state: "frozen", ySplit: HEADER_ROW }];
   COLUMNS.forEach((c, i) => {
     if (c.wrap) ws.getColumn(i + 1).alignment = { wrapText: true, vertical: "top" };
   });
 }
 
-function addValidations(ws: ExcelJS.Worksheet, lastRow: number) {
-  const modeCol = COLUMNS.findIndex((c) => c.key === "progressionMode") + 1;
-  const photoCol = COLUMNS.findIndex((c) => c.key === "requiresPhoto") + 1;
-  for (let r = 2; r <= lastRow; r++) {
-    ws.getCell(r, modeCol).dataValidation = {
-      type: "list",
-      allowBlank: true,
-      formulae: [`"${PROGRESSION_MODES.join(",")}"`],
-      showErrorMessage: true,
-      errorTitle: "Progression mode",
-      error: `Pick one of: ${PROGRESSION_MODES.join(", ")}`,
-    };
-    ws.getCell(r, photoCol).dataValidation = {
-      type: "list",
-      allowBlank: true,
-      formulae: ['"Yes,No"'],
-      showErrorMessage: true,
-      errorTitle: "Requires photo",
-      error: "Pick Yes or No",
-    };
-  }
+/** Grey guide row describing every column; skipped by the parser. */
+function addGuideRow(ws: ExcelJS.Worksheet) {
+  const row = ws.getRow(GUIDE_ROW);
+  COLUMNS.forEach((c, i) => {
+    const cell = row.getCell(i + 1);
+    const body = `${c.what}\n\nAllowed: ${c.allowed}`;
+    cell.value = i === 0 ? `${GUIDE_MARKER} before uploading (guide only)\n\n${body}` : body;
+    cell.font = { italic: true, size: 9, color: { argb: C_BLACK }, bold: false };
+    cell.fill = solid(C_LIGHT_GRAY);
+    cell.alignment = { wrapText: true, vertical: "top" };
+    cell.border = thinBorder;
+  });
+  // Make the first cell's marker stand out.
+  row.getCell(1).font = { bold: true, size: 9, color: { argb: C_BLACK } };
+  row.height = 170;
+}
+
+/** Dropdowns + click-to-show hints for every input cell. */
+function addValidations(ws: ExcelJS.Worksheet, firstRow: number, lastRow: number) {
+  const prompt = (c: Column) => `${c.what} ${c.allowed}`.slice(0, 250);
+  const promptTitle = (c: Column) => c.header.replace(" *", "").slice(0, 32);
+
+  COLUMNS.forEach((c, i) => {
+    let v: ExcelJS.DataValidation;
+    if (c.key === "progressionMode") {
+      v = {
+        type: "list",
+        allowBlank: true,
+        formulae: [`"${PROGRESSION_MODES.join(",")}"`],
+        showErrorMessage: true,
+        errorTitle: "Progression mode",
+        error: `Pick one of: ${PROGRESSION_MODES.join(", ")}`,
+      };
+    } else if (c.key === "requiresPhoto") {
+      v = {
+        type: "list",
+        allowBlank: true,
+        formulae: ['"Yes,No"'],
+        showErrorMessage: true,
+        errorTitle: "Requires photo",
+        error: "Pick Yes or No (or leave blank for No).",
+      };
+    } else {
+      const max = c.key.endsWith("Title") ? TITLE_MAX : TEXT_MAX;
+      v = {
+        type: "textLength",
+        operator: "lessThanOrEqual",
+        allowBlank: true,
+        formulae: [max],
+        showErrorMessage: true,
+        errorTitle: "Too long",
+        error: `Maximum ${max.toLocaleString()} characters.`,
+      };
+    }
+    v.showInputMessage = true;
+    v.promptTitle = promptTitle(c);
+    v.prompt = prompt(c);
+    for (let r = firstRow; r <= lastRow; r++) ws.getCell(r, i + 1).dataValidation = v;
+  });
+}
+
+/** Writes `rows` as a bordered table starting at `startRow`; returns next free row. */
+function writeTable(
+  ws: ExcelJS.Worksheet,
+  startRow: number,
+  header: string[],
+  rows: string[][],
+  opts: { merges?: [number, number][]; height?: number } = {},
+) {
+  // merges: [fromCol, toCol] (1-based) per logical column.
+  const spans = opts.merges ?? header.map((_, i) => [i + 1, i + 1] as [number, number]);
+  const put = (r: number, values: string[], isHeader: boolean) => {
+    values.forEach((text, i) => {
+      const [from, to] = spans[i];
+      if (to > from) ws.mergeCells(r, from, r, to);
+      const cell = ws.getCell(r, from);
+      cell.value = text;
+      if (isHeader) styleHeaderCell(cell);
+      else {
+        const blank = text === "(blank)";
+        cell.font = blank ? { italic: true, color: { argb: C_LIGHT_GRAY } } : { color: { argb: C_NEUTRAL_GRAY } };
+        cell.alignment = { wrapText: true, vertical: "top" };
+        cell.border = thinBorder;
+      }
+      for (let c = from + 1; c <= to; c++) ws.getCell(r, c).border = thinBorder;
+    });
+    if (!isHeader && opts.height) ws.getRow(r).height = opts.height;
+  };
+  put(startRow, header, true);
+  rows.forEach((row, i) => put(startRow + 1 + i, row, false));
+  return startRow + rows.length + 2;
+}
+
+function buildInstructions(ws: ExcelJS.Worksheet) {
+  [24, 26, 26, 26, 26, 50].forEach((w, i) => (ws.getColumn(i + 1).width = w));
+  let r = 1;
+  const line = (text: string, font: Partial<ExcelJS.Font> = {}, height?: number) => {
+    ws.mergeCells(r, 1, r, 6);
+    const cell = ws.getCell(r, 1);
+    cell.value = text;
+    cell.font = { color: { argb: C_NEUTRAL_GRAY }, ...font };
+    cell.alignment = { wrapText: true, vertical: "top" };
+    if (height) ws.getRow(r).height = height;
+    r++;
+  };
+  const heading = (text: string) => {
+    r++;
+    line(text, { bold: true, size: 13, color: { argb: C_BLUE } });
+  };
+
+  line("Guided Labs — bulk module import", { bold: true, size: 18, color: { argb: C_BLUE } }, 28);
+  line("Create several modules (with their labs, tasks and steps) in one upload. Read this page once — it takes 2 minutes.", { italic: true });
+
+  heading("Quick start");
+  line(`1. Open the "${TEMPLATE_SHEET}" sheet. Delete the grey guide row (row ${GUIDE_ROW}) — if you forget, it is skipped anyway.`);
+  line("2. Fill in ONE ROW PER STEP, top to bottom, in the order trainees should do them.");
+  line("3. Type a Module / Lab / Task title only on its FIRST row. On the rows below, leave it BLANK — blank means \"same as the row above\".");
+  line("4. Put descriptions (Module Info, Lab Description, Lab Scenario, Task Description) on the same row where you typed that title.");
+  line("5. Save as .xlsx and upload it in Trainer Workspace → Bulk import. You see a preview — or the problems, by row number — before anything is created.");
+
+  heading("How rows build a module  (one row = one step)");
+  r = writeTable(
+    ws,
+    r,
+    ["Row", "Module Title", "Lab Title", "Task Title", "Step Title", "What this row creates"],
+    [
+      ["1", "Windows Server Fundamentals", "Active Directory setup", "Install AD DS", "Add the AD DS role", "New module + new lab + new task + 1st step"],
+      ["2", "(blank)", "(blank)", "(blank)", "Promote to domain controller", "2nd step of \"Install AD DS\" (everything above carries down)"],
+      ["3", "(blank)", "(blank)", "Manage users", "Create an OU structure", "New task in the same lab + its 1st step"],
+      ["4", "(blank)", "(blank)", "(blank)", "Create 5 test users", "2nd step of \"Manage users\""],
+      ["5", "(blank)", "DNS and DHCP", "Configure DHCP scope", "Create a scope", "New lab in the same module + new task + 1st step"],
+      ["6", "Networking Basics", "Cabling", "Crimp a patch cable", "Crimp both ends", "A second module — every title typed again"],
+    ],
+    { height: 32 },
+  );
+  line("Result:  Windows Server Fundamentals → 2 labs → 3 tasks → 5 steps.   Networking Basics → 1 lab → 1 task → 1 step.", { bold: true });
+  line("So a module with 20 steps takes 20 rows — but you type the module name once, each lab name once and each task name once.");
+  line(`The "Example" sheet has these rows fully filled in (descriptions included) — it is NOT imported.`, { italic: true });
+
+  heading("Columns and allowed values");
+  r = writeTable(
+    ws,
+    r,
+    ["Column", "Required?", "What to enter", "Allowed values"],
+    COLUMNS.map((c) => [c.header.replace(" *", ""), c.required, c.what, c.allowed]),
+    { merges: [[1, 1], [2, 2], [3, 4], [5, 6]], height: 58 },
+  );
+
+  heading("Rules (the upload checks these)");
+  line("• Every lab needs a Lab Description.");
+  line("• Module names must be NEW. To change an existing module, open it in the builder in the app.");
+  line("• A blank title only carries down within the same parent: after a new Module Title, type the Lab and Task titles again.");
+  line("• The same step name can't appear twice in one task; the same lab name can't appear twice in one module.");
+  line("• Requires Photo: Yes or No (blank = No). Progression Mode: fully_sequential, steps_in_order or free_order (blank = fully_sequential).");
+  line("• If anything is wrong, NOTHING is imported — fix the listed rows and upload again.");
+  line(`• Only the "${TEMPLATE_SHEET}" sheet is imported. This sheet and "Example" are ignored.`);
 }
 
 export async function buildTemplate(): Promise<Buffer> {
@@ -172,46 +432,42 @@ export async function buildTemplate(): Promise<Buffer> {
   wb.creator = "Labs ITBD";
   wb.created = new Date();
 
-  // Instructions
-  const help = wb.addWorksheet("Instructions");
-  help.getColumn(1).width = 110;
-  const lines: [string, Partial<ExcelJS.Font>?][] = [
-    ["Lab Practice — bulk curriculum import", { bold: true, size: 14, color: { argb: "FF00ADDA" } }],
-    [""],
-    ["How to fill it in", { bold: true }],
-    [`1. Enter your curriculum on the "${TEMPLATE_SHEET}" sheet — one row per step. Only that sheet is imported.`],
-    ["2. A blank Module / Lab / Task title means \"same as the row above\", so type each title only once."],
-    ["3. Every lab needs a Lab Description (put it on any one of that lab's rows). Lab Scenario is optional."],
-    ["4. A row may stop early: a row with only a Lab (no task/step) creates an empty lab you can fill later."],
-    ["5. Rows are imported in sheet order — that order becomes the lab / task / step sequence."],
-    ["6. Module titles must be NEW. To change an existing module, use the builder in the app."],
-    ["7. Progression Mode: fully_sequential (default), steps_in_order, or free_order."],
-    ["8. Requires Photo: Yes / No (blank = No)."],
-    [""],
-    ["If anything is wrong, nothing is imported — the upload lists each problem with its row number.", { italic: true }],
-    [`See the "Example" sheet for a filled-in sample (it is NOT imported).`, { italic: true }],
-    [""],
-    ["Columns", { bold: true }],
-    ...COLUMNS.map((c): [string] => [`${c.header} — ${c.note}`]),
-  ];
-  lines.forEach(([text, font], i) => {
-    const cell = help.getCell(i + 1, 1);
-    cell.value = text;
-    if (font) cell.font = font;
-    cell.alignment = { wrapText: true };
+  buildInstructions(wb.addWorksheet("Instructions", { properties: { tabColor: { argb: C_BLUE } } }));
+
+  // Curriculum — the only sheet that is imported.
+  const sheet = wb.addWorksheet(TEMPLATE_SHEET);
+  setupSheet(
+    sheet,
+    `ONE ROW = ONE STEP.  Type a Module / Lab / Task title only on its FIRST row — leave it blank on the rows below and those rows stay in the same module / lab / task.  ` +
+      `Delete the grey guide row (row ${GUIDE_ROW}) before uploading.  Help: "Instructions" sheet · filled sample: "Example" sheet.`,
+  );
+  addGuideRow(sheet);
+  addValidations(sheet, GUIDE_ROW + 1, VALIDATION_LAST_ROW);
+
+  // Example — NOT imported; extra column explains each row.
+  const example = wb.addWorksheet("Example");
+  setupSheet(
+    example,
+    `EXAMPLE ONLY — this sheet is NOT imported.  Read the last column ("What this row creates") to see how blank titles carry down from the row above.`,
+    [{ header: "What this row creates", width: 50 }],
+  );
+  EXAMPLE_ROWS.forEach((ex, i) => {
+    const r = HEADER_ROW + 1 + i;
+    COLUMNS.forEach((c, ci) => {
+      const cell = example.getCell(r, ci + 1);
+      cell.value = ex.values[c.key] ?? null;
+      cell.border = thinBorder;
+    });
+    const explain = example.getCell(r, COLUMNS.length + 1);
+    explain.value = ex.explain;
+    explain.font = { italic: true, color: { argb: C_NEUTRAL_GRAY } };
+    explain.fill = solid(C_LIGHT_GRAY);
+    explain.alignment = { wrapText: true, vertical: "top" };
+    explain.border = thinBorder;
+    example.getRow(r).height = 48;
   });
 
-  // Curriculum (blank, to fill)
-  const sheet = wb.addWorksheet(TEMPLATE_SHEET);
-  styleHeader(sheet);
-  addValidations(sheet, 1000);
-
-  // Example (ignored on import)
-  const example = wb.addWorksheet("Example");
-  styleHeader(example);
-  for (const row of EXAMPLE_ROWS) example.addRow(row);
-
-  wb.views = [{ x: 0, y: 0, width: 20000, height: 12000, firstSheet: 0, activeTab: 1, visibility: "visible" }];
+  wb.views = [{ x: 0, y: 0, width: 20000, height: 12000, firstSheet: 0, activeTab: 0, visibility: "visible" }];
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
@@ -303,21 +559,34 @@ export async function parseCurriculumWorkbook(buffer: ArrayBuffer): Promise<Pars
     return empty;
   }
 
-  // Map columns by header text so reordered/extra columns still work.
+  // Find the header row (row 2 under the banner; row 1 in older templates)
+  // and map columns by header text so reordered/extra columns still work.
   const colOf = new Map<ColumnKey, number>();
-  ws.getRow(1).eachCell((cell, col) => {
-    const h = normHeader(cellText(cell.value));
-    const match = COLUMNS.find((c) => normHeader(c.header) === h);
-    if (match && !colOf.has(match.key)) colOf.set(match.key, col);
-  });
-  for (const req of ["moduleTitle", "labTitle", "labDescription"] as const) {
+  let headerRow = 0;
+  for (let r = 1; r <= Math.min(5, ws.rowCount) && !headerRow; r++) {
+    const found = new Map<ColumnKey, number>();
+    ws.getRow(r).eachCell((cell, col) => {
+      const h = normHeader(cellText(cell.value));
+      const match = COLUMNS.find((c) => normHeader(c.header) === h);
+      if (match && !found.has(match.key)) found.set(match.key, col);
+    });
+    if (found.has("moduleTitle")) {
+      headerRow = r;
+      found.forEach((col, key) => colOf.set(key, col));
+    }
+  }
+  if (!headerRow) {
+    fail(null, "Couldn't find the column headers (Module Title, Lab Title, …) — download a fresh template.");
+    return empty;
+  }
+  for (const req of ["labTitle", "labDescription"] as const) {
     if (!colOf.has(req)) {
-      fail(1, `Missing column "${COLUMNS.find((c) => c.key === req)!.header}" — download a fresh template.`);
+      fail(headerRow, `Missing column "${COLUMNS.find((c) => c.key === req)!.header}" — download a fresh template.`);
     }
   }
   if (errors.length) return empty;
 
-  if (ws.rowCount - 1 > MAX_ROWS) {
+  if (ws.rowCount - headerRow > MAX_ROWS) {
     fail(null, `Too many rows (max ${MAX_ROWS}). Split the file into smaller uploads.`);
     return empty;
   }
@@ -340,11 +609,13 @@ export async function parseCurriculumWorkbook(buffer: ArrayBuffer): Promise<Pars
     if (value.length > max) fail(row, `${label} is too long (max ${max.toLocaleString()} characters).`);
   };
 
-  for (let r = 2; r <= ws.rowCount; r++) {
+  for (let r = headerRow + 1; r <= ws.rowCount; r++) {
     const row = ws.getRow(r);
     const v = Object.fromEntries(
       COLUMNS.map((c) => [c.key, colOf.has(c.key) ? cellText(row.getCell(colOf.get(c.key)!).value) : ""]),
     ) as RowValues;
+    // The template's grey guide row — skip it if the trainer left it in.
+    if (v.moduleTitle.toUpperCase().startsWith(GUIDE_MARKER)) continue;
     // An explicit "No" (the dropdown default people tend to fill) carries no
     // information — treat it as blank so it doesn't count as step content.
     if (parseYesNo(v.requiresPhoto) === false) v.requiresPhoto = "";

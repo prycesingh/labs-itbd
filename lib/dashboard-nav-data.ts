@@ -33,7 +33,7 @@ export type NavLink = {
   label: string;
   icon: LucideIcon;
   adminOnly?: boolean;
-  /** Lab Practice trainers only (resolved from the trainer registry in the
+  /** Guided Labs trainers only (resolved from the trainer registry in the
    *  dashboard layout, not from an app role). */
   trainerOnly?: boolean;
 };
@@ -227,27 +227,27 @@ export const SECTIONS: NavSection[] = [
     ],
   },
   {
-    key: "practice-lab",
-    href: "/dashboard/practice",
-    label: "Practice Lab",
+    key: "guided-labs",
+    href: "/dashboard/guided-labs",
+    label: "Guided Labs",
     icon: Hammer,
     subgroups: [
       {
-        label: "Practice Lab",
+        label: "Guided Labs",
         links: [
           {
-            href: "/dashboard/practice",
-            label: "My Practice",
+            href: "/dashboard/guided-labs",
+            label: "My Labs",
             icon: ClipboardCheck,
           },
           {
-            href: "/dashboard/practice/trainer",
+            href: "/dashboard/guided-labs/trainer",
             label: "Trainer Workspace",
             icon: Users,
             trainerOnly: true,
           },
           {
-            href: "/dashboard/practice/admin/trainers",
+            href: "/dashboard/guided-labs/admin/trainers",
             label: "Trainers",
             icon: ShieldCheck,
             adminOnly: true,
