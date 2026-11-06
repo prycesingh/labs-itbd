@@ -163,12 +163,12 @@ export function LabCard({
         {/* Icon + title */}
         <div className="flex gap-3">
           <span className={cn("flex shrink-0 items-center justify-center", accentText)}>
-            <Icon className="h-10 w-10 sm:h-12 sm:w-12 md:h-14 md:w-14 lg:h-16 lg:w-16" />
+            <Icon className="h-9 w-9 md:h-10 md:w-10 2xl:h-12 2xl:w-12" />
           </span>
           <div className="flex min-w-0 flex-col">
             <h3
               className={cn(
-                "text-lg font-bold tracking-wide uppercase sm:text-lg md:text-xl lg:text-2xl",
+                "text-lg font-bold tracking-wide uppercase 2xl:text-xl",
                 accentText,
               )}
             >
