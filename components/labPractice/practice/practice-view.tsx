@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { localIsoDate } from "@/lib/labPractice/dates";
+import { formatEt, formatPlainDate, localIsoDate } from "@/lib/labPractice/dates";
 import type { EnrollmentDTO, StepDTO } from "@/lib/labPractice/serialize";
 import { cn } from "@/lib/utils";
 import {
@@ -43,8 +43,8 @@ export type ViewerRole = "trainee" | "trainer" | "admin";
 
 const noopSubscribe = () => () => {};
 
-/** The trainee's local date. Null during SSR (server timezone may differ),
- *  the browser's local date after hydration. */
+/** Today's ET date. Null during SSR (avoids a hydration mismatch right
+ *  at midnight), the ET date in the browser after hydration. */
 function useToday() {
   return useSyncExternalStore(noopSubscribe, () => localIsoDate(), () => null);
 }
@@ -311,6 +311,11 @@ function StepRow({
             {latestRejection && (
               <MessageSquareWarning className="size-3.5 shrink-0 text-white/70" aria-label="Rejected by trainer" />
             )}
+            {step.completion && (
+              <span className="ml-2 hidden shrink-0 text-xs text-white/40 sm:inline">
+                {formatEt(step.completion.completedAt)}
+              </span>
+            )}
             <ChevronRight className={cn("ml-auto size-4 shrink-0 text-white/40 transition-transform", open && "rotate-90")} />
           </button>
         </CollapsibleTrigger>
@@ -342,13 +347,13 @@ function StepRow({
           <div className="rounded-lg border border-white/15 bg-white/5 p-3">
             <p className="text-xs font-semibold tracking-wide text-white/60 uppercase">Trainer feedback</p>
             <p className="mt-1 whitespace-pre-wrap text-white">{latestRejection.reason}</p>
-            <p className="mt-1 text-xs text-white/40">{new Date(latestRejection.rejectedAt).toLocaleString()}</p>
+            <p className="mt-1 text-xs text-white/40">{formatEt(latestRejection.rejectedAt)}</p>
           </div>
         )}
         {step.completion && (
           <div className="space-y-2">
             <p className="text-xs text-white/50">
-              Completed {step.completion.practiceDate ?? new Date(step.completion.completedAt).toLocaleDateString()}
+              Completed {formatEt(step.completion.completedAt)}
             </p>
             {step.completion.files.length > 0 && (
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
@@ -409,7 +414,7 @@ function TodayPanel({ data }: { data: EnrollmentDTO }) {
     <div className="space-y-3">
       <div className="flex items-baseline justify-between">
         <h2 className="text-lg font-bold text-white">Today</h2>
-        <span className="text-sm text-white/50">{today ?? ""}</span>
+        <span className="text-sm text-white/50">{today ? `${formatPlainDate(today)} (ET)` : ""}</span>
       </div>
       <p className="text-sm text-white/60">
         {session ? `${session.completedStepIds.length} step(s) completed today.` : "No practice logged yet today."}
@@ -437,19 +442,29 @@ function TodayPanel({ data }: { data: EnrollmentDTO }) {
 // ─────────────────────────────────────────────
 export function SessionHistory({ data }: { data: EnrollmentDTO }) {
   const titleOf = useStepTitles(data);
+  const completedAtOf = new Map(
+    data.labs.flatMap((l) =>
+      l.tasks.flatMap((t) => t.steps.map((s) => [s.id, s.completion?.completedAt ?? null] as const)),
+    ),
+  );
   if (data.sessions.length === 0) return <p className="text-sm text-white/50">No practice sessions yet.</p>;
   return (
     <ol className="space-y-3">
       {data.sessions.map((s) => (
         <li key={s.id} className="rounded-lg border border-white/10 p-3">
           <div className="flex items-baseline justify-between gap-2">
-            <p className="text-sm font-semibold text-white">{s.practiceDate}</p>
+            <p className="text-sm font-semibold text-white">{formatPlainDate(s.practiceDate)}</p>
             <p className="text-xs text-white/50">{s.completedStepIds.length} step(s)</p>
           </div>
           {s.completedStepIds.length > 0 && (
             <ul className="mt-1 list-disc pl-5 text-xs text-white/60">
               {s.completedStepIds.map((id) => (
-                <li key={id}>{titleOf.get(id) ?? `Step ${id}`}</li>
+                <li key={id}>
+                  {titleOf.get(id) ?? `Step ${id}`}
+                  {completedAtOf.get(id) && (
+                    <span className="text-white/40"> · {formatEt(completedAtOf.get(id))}</span>
+                  )}
+                </li>
               ))}
             </ul>
           )}
@@ -494,6 +509,9 @@ export function PracticeTree({ data, role }: { data: EnrollmentDTO; role: Viewer
         <ProgressBar percent={data.module.rollup.percent} label="Module progress" className="h-2.5" />
         <p className="text-sm text-white/60">
           {data.module.rollup.done}/{data.module.rollup.total} steps · {data.module.rollup.percent}%
+          {data.module.completedAt && (
+            <span className="text-itbd-blue"> · Module completed {formatEt(data.module.completedAt)}</span>
+          )}
         </p>
       </div>
 
@@ -510,6 +528,9 @@ export function PracticeTree({ data, role }: { data: EnrollmentDTO; role: Viewer
                   {lab.title}
                 </span>
                 <ProgressBar percent={lab.rollup.percent} label={`${lab.title} progress`} className="mt-1.5 h-1.5" />
+                {lab.completedAt && (
+                  <span className="mt-1 block text-xs text-itbd-blue">Lab completed {formatEt(lab.completedAt)}</span>
+                )}
               </span>
               <span className="shrink-0 text-xs text-white/50">
                 {lab.rollup.done}/{lab.rollup.total}
@@ -538,6 +559,9 @@ export function PracticeTree({ data, role }: { data: EnrollmentDTO; role: Viewer
                     {task.rollup.done}/{task.rollup.total}
                   </span>
                 </div>
+                {task.completedAt && (
+                  <p className="pb-1 text-xs text-itbd-blue/90">Task completed {formatEt(task.completedAt)}</p>
+                )}
                 {task.description && (
                   <p className="pb-1 text-xs whitespace-pre-wrap text-white/50">{task.description}</p>
                 )}
