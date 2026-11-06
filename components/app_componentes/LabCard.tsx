@@ -159,7 +159,7 @@ export function LabCard({
         />
       )}
 
-      <div className="relative z-10 flex flex-col">
+      <div className="relative z-10 flex flex-1 flex-col">
         {/* Icon + title */}
         <div className="flex gap-3">
           <span className={cn("flex shrink-0 items-center justify-center", accentText)}>
@@ -208,7 +208,7 @@ export function LabCard({
                   ) : null}
                 </div>
                 {section.variant === "grid" && section.gridItems?.length ? (
-                  <GridItems items={section.gridItems} className="mt-0" />
+                  <GridItems items={section.gridItems} className="mt-0" compact />
                 ) : null}
                 {section.variant === "list" && section.listItems?.length ? (
                   <ListItems items={section.listItems} accentText={accentText} className="mt-0" />
@@ -220,7 +220,7 @@ export function LabCard({
           <>
             {variant === "grid" && gridItems && gridItems.length > 0 ? <GridItems items={gridItems} /> : null}
             {variant === "list" && listItems && listItems.length > 0 ? (
-              <ListItems items={listItems} accentText={accentText} />
+              <ListItems items={listItems} accentText={accentText} fill />
             ) : null}
           </>
         )}
@@ -251,14 +251,26 @@ export function LabCard({
 const HAIRLINE = "linear-gradient(to right, transparent, var(--itbd-blue), transparent) 1";
 
 /** Tight grid of icon tiles (simulator consoles). */
-function GridItems({ items, className }: { items: LabCardGridItem[]; className?: string }) {
+function GridItems({
+  items,
+  className,
+  compact,
+}: {
+  items: LabCardGridItem[];
+  className?: string;
+  /** Fixed-height tiles instead of squares — keeps a wide card from growing tall. */
+  compact?: boolean;
+}) {
   return (
     <ul className={cn("mt-5 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5", className)}>
       {items.map((item) => (
         <li key={item.href}>
           <Link
             href={item.href}
-            className="flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-lg border-t border-b bg-white/5 p-1 text-center transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-itbd-blue focus-visible:outline-none"
+            className={cn(
+              "flex w-full flex-col items-center justify-center gap-1 rounded-lg border-t border-b bg-white/5 p-1 text-center transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-itbd-blue focus-visible:outline-none",
+              compact ? "h-24" : "aspect-square",
+            )}
             style={{ borderImage: HAIRLINE }}
           >
             <Image
@@ -267,7 +279,7 @@ function GridItems({ items, className }: { items: LabCardGridItem[]; className?:
               aria-hidden
               width={60}
               height={60}
-              className="h-12 w-12 object-contain sm:h-15 sm:w-15"
+              className={cn("object-contain", compact ? "h-10 w-10 sm:h-11 sm:w-11" : "h-12 w-12 sm:h-15 sm:w-15")}
             />
             <span className="line-clamp-2 text-[12px] leading-tight text-white/75">{item.label}</span>
           </Link>
@@ -282,13 +294,16 @@ function ListItems({
   items,
   accentText,
   className,
+  fill,
 }: {
   items: LabCardListItem[];
   accentText: string;
   className?: string;
+  /** Stretch rows to equal heights filling the card (when it sits beside a taller one). */
+  fill?: boolean;
 }) {
   return (
-    <ul className={cn("mt-5 space-y-3", className)}>
+    <ul className={cn("mt-5", fill ? "grid flex-1 auto-rows-fr gap-3" : "space-y-3", className)}>
       {items.map((item) => (
         <li
           key={item.label}

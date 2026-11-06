@@ -277,7 +277,10 @@ export function DashboardHomeClient({
         </div>
       </motion.div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      {/* Asymmetric split: Technical Lab carries two sub-sections (Simulators
+          + Guided Labs), Communication Lab one list — so Technical gets the
+          wider track and the two cards end up about the same height. */}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <LabCard
           icon="technical"
           title="Technical Lab"
