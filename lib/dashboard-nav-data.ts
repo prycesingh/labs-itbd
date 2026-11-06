@@ -11,7 +11,6 @@ import {
   FileText,
   GitBranch,
   GraduationCap,
-  Hammer,
   Home,
   LayoutDashboard,
   LayoutGrid,
@@ -148,7 +147,7 @@ export const SECTIONS: NavSection[] = [
     icon: LayoutDashboard,
     subgroups: [
       {
-        label: "Technical Lab",
+        label: "Simulators & Resources",
         links: [
           {
             href: "/dashboard/labs",
@@ -224,14 +223,6 @@ export const SECTIONS: NavSection[] = [
           },
         ],
       },
-    ],
-  },
-  {
-    key: "guided-labs",
-    href: "/dashboard/guided-labs",
-    label: "Guided Labs",
-    icon: Hammer,
-    subgroups: [
       {
         label: "Guided Labs",
         links: [

@@ -542,7 +542,7 @@ export function PracticeTree({ data, role }: { data: EnrollmentDTO; role: Viewer
               <p className="text-sm whitespace-pre-wrap text-white/60">{lab.description}</p>
             )}
             {lab.scenario && (
-              <div className="rounded-lg border-l-2 border-itbd-blue bg-itbd-blue/5 px-3 py-2">
+              <div className="rounded-lg bg-itbd-blue/8 px-3 py-2 ring-1 ring-itbd-blue/20">
                 <p className="text-xs font-semibold tracking-wide text-itbd-blue uppercase">Scenario</p>
                 <p className="mt-1 text-sm whitespace-pre-wrap text-white/70">{lab.scenario}</p>
               </div>
