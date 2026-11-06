@@ -1,5 +1,4 @@
 import { Providers } from "@/components/themes/sessionProvider";
-import { ThemeProvider } from "@/components/themes/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
@@ -33,20 +32,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    // The app is permanently dark (ITBD brand foundation), so the `dark` class
+    // is rendered statically. next-themes was previously used with
+    // forcedTheme="dark", which did nothing but inject an inline anti-flash
+    // <script> — React 19 logs a console error for scripts rendered by
+    // components. Reintroduce a theme provider only if light mode returns.
+    <html lang="en" className="dark" style={{ colorScheme: "dark" }} suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <Providers>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="dark"
-            forcedTheme="dark"
-            disableTransitionOnChange
-          >
-            <Toaster position="bottom-right" />
-            {children}
-          </ThemeProvider>
+          <Toaster position="bottom-right" theme="dark" />
+          {children}
         </Providers>
       </body>
     </html>
