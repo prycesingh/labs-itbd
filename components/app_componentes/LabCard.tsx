@@ -269,7 +269,7 @@ function GridItems({
             href={item.href}
             className={cn(
               "flex w-full flex-col items-center justify-center gap-1 rounded-lg border-t border-b bg-white/5 p-1 text-center transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-itbd-blue focus-visible:outline-none",
-              compact ? "h-24" : "aspect-square",
+              compact ? "h-20 2xl:h-24" : "aspect-square",
             )}
             style={{ borderImage: HAIRLINE }}
           >
@@ -279,7 +279,7 @@ function GridItems({
               aria-hidden
               width={60}
               height={60}
-              className={cn("object-contain", compact ? "h-10 w-10 sm:h-11 sm:w-11" : "h-12 w-12 sm:h-15 sm:w-15")}
+              className={cn("object-contain", compact ? "h-8 w-8 2xl:h-10 2xl:w-10" : "h-12 w-12 sm:h-15 sm:w-15")}
             />
             <span className="line-clamp-2 text-[12px] leading-tight text-white/75">{item.label}</span>
           </Link>
