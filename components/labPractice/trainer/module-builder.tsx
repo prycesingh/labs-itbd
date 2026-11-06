@@ -52,7 +52,8 @@ export type BuilderTask = {
 export type BuilderLab = {
   id: number;
   title: string;
-  details: string | null;
+  description: string;
+  scenario: string | null;
   isActive: boolean;
   tasks: BuilderTask[];
 };
@@ -77,11 +78,71 @@ const API = {
         : `/api/lab-practice/tasks/${parentId}/steps`,
 };
 
-const TEXT_FIELD: Record<Level, { key: string; label: string }> = {
-  lab: { key: "details", label: "Details" },
-  task: { key: "description", label: "Description" },
-  step: { key: "instructions", label: "Instructions" },
+type TextField = { key: string; label: string; required?: boolean; placeholder?: string };
+
+/** Long-text fields per level (labs: required description + optional scenario). */
+const TEXT_FIELDS: Record<Level, TextField[]> = {
+  lab: [
+    { key: "description", label: "Description", required: true, placeholder: "What this lab covers" },
+    {
+      key: "scenario",
+      label: "Scenario (optional)",
+      placeholder: "Real-world situation the trainee works through",
+    },
+  ],
+  task: [{ key: "description", label: "Description (optional)" }],
+  step: [{ key: "instructions", label: "Instructions (optional)" }],
 };
+
+type Texts = Record<string, string | null>;
+
+function missingRequired(level: Level, texts: Record<string, string>) {
+  return TEXT_FIELDS[level].some((f) => f.required && !texts[f.key]?.trim());
+}
+
+function TextFieldInputs({
+  level,
+  idPrefix,
+  values,
+  onChange,
+  rows = 4,
+}: {
+  level: Level;
+  idPrefix: string;
+  values: Record<string, string>;
+  onChange: (key: string, value: string) => void;
+  rows?: number;
+}) {
+  return (
+    <>
+      {TEXT_FIELDS[level].map((f) => (
+        <div key={f.key} className="space-y-2">
+          <Label htmlFor={`${idPrefix}-${f.key}`}>
+            {f.label}
+            {f.required && <span className="text-itbd-blue"> *</span>}
+          </Label>
+          <Textarea
+            id={`${idPrefix}-${f.key}`}
+            value={values[f.key] ?? ""}
+            onChange={(e) => onChange(f.key, e.target.value)}
+            placeholder={f.placeholder}
+            rows={rows}
+          />
+        </div>
+      ))}
+    </>
+  );
+}
+
+/** Text values → API payload ("" → null for optional fields). */
+function textPayload(level: Level, values: Record<string, string>) {
+  return Object.fromEntries(
+    TEXT_FIELDS[level].map((f) => {
+      const v = values[f.key]?.trim() ?? "";
+      return [f.key, f.required ? v : v || null];
+    }),
+  );
+}
 
 // ─────────────────────────────────────────────
 // Module settings
@@ -156,20 +217,22 @@ function EditItemDialog({
 }: {
   level: Level;
   id: number;
-  initial: { title: string; text: string | null; requiresPhoto?: boolean };
+  initial: { title: string; texts: Texts; requiresPhoto?: boolean };
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
   const router = useRouter();
   const [title, setTitle] = useState(initial.title);
-  const [text, setText] = useState(initial.text ?? "");
+  const [texts, setTexts] = useState<Record<string, string>>(() =>
+    Object.fromEntries(TEXT_FIELDS[level].map((f) => [f.key, initial.texts[f.key] ?? ""])),
+  );
   const [requiresPhoto, setRequiresPhoto] = useState(Boolean(initial.requiresPhoto));
   const [saving, setSaving] = useState(false);
-  const field = TEXT_FIELD[level];
+  const invalid = !title.trim() || missingRequired(level, texts);
 
   async function save() {
     setSaving(true);
-    const json: Record<string, unknown> = { title, [field.key]: text || null };
+    const json: Record<string, unknown> = { title, ...textPayload(level, texts) };
     if (level === "step") json.requiresPhoto = requiresPhoto;
     const ok = await lpRequest(API.item(level, id), { method: "PATCH", json });
     setSaving(false);
@@ -195,15 +258,12 @@ function EditItemDialog({
               maxLength={200}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor={`edit-${level}-text`}>{field.label}</Label>
-            <Textarea
-              id={`edit-${level}-text`}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              rows={5}
-            />
-          </div>
+          <TextFieldInputs
+            level={level}
+            idPrefix={`edit-${level}`}
+            values={texts}
+            onChange={(k, v) => setTexts((prev) => ({ ...prev, [k]: v }))}
+          />
           {level === "step" && (
             <label className="flex items-center gap-2 text-sm">
               <Checkbox checked={requiresPhoto} onCheckedChange={(v) => setRequiresPhoto(v === true)} />
@@ -212,7 +272,7 @@ function EditItemDialog({
           )}
         </div>
         <DialogFooter>
-          <DefaultButton size="sm" onClick={save} loading={saving}>
+          <DefaultButton size="sm" onClick={save} loading={saving} disabled={invalid}>
             Save
           </DefaultButton>
         </DialogFooter>
@@ -245,7 +305,7 @@ function ItemRow({
   index,
   count,
   title,
-  text,
+  texts,
   isActive,
   requiresPhoto,
   onMove,
@@ -257,7 +317,7 @@ function ItemRow({
   index: number;
   count: number;
   title: string;
-  text: string | null;
+  texts: Texts;
   isActive: boolean;
   requiresPhoto?: boolean;
   onMove: (index: number, dir: -1 | 1) => void;
@@ -319,7 +379,7 @@ function ItemRow({
         <EditItemDialog
           level={level}
           id={id}
-          initial={{ title, text, requiresPhoto }}
+          initial={{ title, texts, requiresPhoto }}
           open={editing}
           onOpenChange={setEditing}
         />
@@ -340,18 +400,25 @@ function ItemRow({
 function AddInline({ level, parentId }: { level: Level; parentId: number }) {
   const router = useRouter();
   const [title, setTitle] = useState("");
+  const [texts, setTexts] = useState<Record<string, string>>({});
   const [requiresPhoto, setRequiresPhoto] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Labs need a description up front, so their add form shows the text
+  // fields; tasks/steps stay one-line (text is optional, edit later).
+  const withTexts = level === "lab";
+  const invalid = !title.trim() || (withTexts && missingRequired(level, texts));
 
   async function add() {
-    if (!title.trim()) return;
+    if (invalid) return;
     setBusy(true);
     const json: Record<string, unknown> = { title: title.trim() };
+    if (withTexts) Object.assign(json, textPayload(level, texts));
     if (level === "step") json.requiresPhoto = requiresPhoto;
     const ok = await lpRequest(API.children(level, parentId), { method: "POST", json });
     setBusy(false);
     if (ok) {
       setTitle("");
+      setTexts({});
       setRequiresPhoto(false);
       router.refresh();
     }
@@ -359,7 +426,10 @@ function AddInline({ level, parentId }: { level: Level; parentId: number }) {
 
   return (
     <form
-      className="flex flex-wrap items-center gap-2 py-2"
+      className={cn(
+        "py-2",
+        withTexts ? "grid gap-3 rounded-lg border border-dashed border-white/15 p-3" : "flex flex-wrap items-center gap-2",
+      )}
       onSubmit={(e) => {
         e.preventDefault();
         add();
@@ -370,16 +440,25 @@ function AddInline({ level, parentId }: { level: Level; parentId: number }) {
         onChange={(e) => setTitle(e.target.value)}
         placeholder={`New ${level} title`}
         maxLength={200}
-        className="h-8 min-w-48 flex-1"
+        className={cn("h-8", !withTexts && "min-w-48 flex-1")}
         aria-label={`New ${level} title`}
       />
+      {withTexts && (
+        <TextFieldInputs
+          level={level}
+          idPrefix={`new-${level}-${parentId}`}
+          values={texts}
+          onChange={(k, v) => setTexts((prev) => ({ ...prev, [k]: v }))}
+          rows={2}
+        />
+      )}
       {level === "step" && (
         <label className="flex items-center gap-1.5 text-xs text-white/60">
           <Checkbox checked={requiresPhoto} onCheckedChange={(v) => setRequiresPhoto(v === true)} />
           Photo required
         </label>
       )}
-      <DefaultButton type="submit" size="sm" loading={busy} disabled={!title.trim()}>
+      <DefaultButton type="submit" size="sm" loading={busy} disabled={invalid} className={cn(withTexts && "justify-self-start")}>
         <Plus className="size-4" /> Add {level}
       </DefaultButton>
     </form>
@@ -401,7 +480,7 @@ function StepList({ task }: { task: BuilderTask }) {
           index={i}
           count={task.steps.length}
           title={s.title}
-          text={s.instructions}
+          texts={{ instructions: s.instructions }}
           isActive={s.isActive}
           requiresPhoto={s.requiresPhoto}
           onMove={move}
@@ -424,7 +503,7 @@ function TaskList({ lab }: { lab: BuilderLab }) {
           index={i}
           count={lab.tasks.length}
           title={t.title}
-          text={t.description}
+          texts={{ description: t.description }}
           isActive={t.isActive}
           onMove={move}
           meta={<p className="text-xs text-white/40">{t.steps.length} steps</p>}
@@ -456,7 +535,7 @@ export function ModuleTreeCard({ mod }: { mod: BuilderModule }) {
           index={i}
           count={mod.labs.length}
           title={l.title}
-          text={l.details}
+          texts={{ description: l.description, scenario: l.scenario }}
           isActive={l.isActive}
           onMove={move}
           meta={<p className="text-xs text-white/40">{l.tasks.length} tasks</p>}

@@ -25,7 +25,14 @@ export type StepDTO = {
   rejections: { reason: string; rejectedAt: string }[];
 };
 export type TaskDTO = { id: number; title: string; description: string | null; rollup: Rollup; steps: StepDTO[] };
-export type LabDTO = { id: number; title: string; details: string | null; rollup: Rollup; tasks: TaskDTO[] };
+export type LabDTO = {
+  id: number;
+  title: string;
+  description: string;
+  scenario: string | null;
+  rollup: Rollup;
+  tasks: TaskDTO[];
+};
 export type SessionDTO = {
   id: number;
   practiceDate: string;
@@ -78,7 +85,8 @@ export function serializeEnrollment(
       return {
         id: lab.id,
         title: fullLab.title,
-        details: fullLab.details,
+        description: fullLab.description,
+        scenario: fullLab.scenario,
         rollup: progress.labRollup.get(lab.id) ?? EMPTY,
         tasks: lab.tasks.map((task) => {
           const fullTask = fullLab.tasks.find((t) => t.id === task.id)!;

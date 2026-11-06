@@ -28,7 +28,11 @@ export const moduleUpdateSchema = moduleSchema.partial().extend({
   isActive: z.boolean().optional(),
 });
 
-export const labSchema = z.object({ title, details: longText });
+export const labSchema = z.object({
+  title,
+  description: z.string().trim().min(1, "Lab description is required").max(20_000),
+  scenario: longText,
+});
 export const labUpdateSchema = labSchema.partial().extend({ isActive: z.boolean().optional() });
 
 export const taskSchema = z.object({ title, description: longText });

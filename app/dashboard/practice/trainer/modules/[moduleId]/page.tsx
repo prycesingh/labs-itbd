@@ -36,7 +36,8 @@ export default async function TrainerModulePage({
     labs: tree.labs.map((l) => ({
       id: l.id,
       title: l.title,
-      details: l.details,
+      description: l.description,
+      scenario: l.scenario,
       isActive: l.isActive,
       tasks: l.tasks.map((t) => ({
         id: t.id,

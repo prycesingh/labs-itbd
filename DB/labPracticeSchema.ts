@@ -121,7 +121,12 @@ export const labPracticeLabs = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     moduleId: int("module_id").notNull(),
     title: varchar("title", { length: 200 }).notNull(),
-    details: text("details"),
+    // What the lab covers — required. The DB column keeps its original name
+    // `details` (migration 0017 is already applied); only the TS key changed.
+    description: text("details").notNull(),
+    // Optional real-world framing the trainee works through (e.g. "A client
+    // reports their VPN drops every hour…").
+    scenario: text("scenario"),
     sequenceNo: int("sequence_no").notNull(),
     isActive: boolean("is_active").notNull().default(true),
     createdBy: int("created_by").notNull(),

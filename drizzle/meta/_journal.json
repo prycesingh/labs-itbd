@@ -127,6 +127,13 @@
       "when": 1793902292262,
       "tag": "0017_lab_practice",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1793969550825,
+      "tag": "0018_lab_practice_lab_scenario",
+      "breakpoints": true
     }
   ]
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { AdminMotionCard } from "@/components/labs/admin/admin-motion-card";
 import { MODE_LABELS, PageTitle, ProgressBar } from "@/components/labPractice/shared";
+import { BulkImportCard } from "@/components/labPractice/trainer/bulk-import";
 import { CreateModuleForm } from "@/components/labPractice/trainer/trainer-widgets";
 import { Badge } from "@/components/ui/badge";
 import { db } from "@/DB/drizzle";
@@ -29,12 +30,20 @@ export default async function TrainerHomePage() {
       />
 
       <div className="grid items-start gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-        <AdminMotionCard className="p-6">
-          <div className="relative z-10 space-y-3">
-            <h2 className="text-lg font-bold text-white">New module</h2>
-            <CreateModuleForm />
-          </div>
-        </AdminMotionCard>
+        <div className="flex flex-col gap-6">
+          <AdminMotionCard className="p-6">
+            <div className="relative z-10 space-y-3">
+              <h2 className="text-lg font-bold text-white">New module</h2>
+              <CreateModuleForm />
+            </div>
+          </AdminMotionCard>
+          <AdminMotionCard className="p-6" delay={0.03}>
+            <div className="relative z-10 space-y-3">
+              <h2 className="text-lg font-bold text-white">Bulk import from Excel</h2>
+              <BulkImportCard />
+            </div>
+          </AdminMotionCard>
+        </div>
 
         <AdminMotionCard className="p-6" delay={0.05}>
           <div className="relative z-10 space-y-3">
