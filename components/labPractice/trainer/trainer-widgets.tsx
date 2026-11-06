@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import DefaultButton from "@/components/app_componentes/customButtons";
 import {
   EmployeeSearch,
+  EnrollmentTimes,
   lpRequest,
   MODE_HELP,
   MODE_LABELS,
@@ -96,6 +97,9 @@ export type EnrollmentListItem = {
   percent: number;
   done: number;
   total: number;
+  enrolledAt: string;
+  lastActivityAt: string | null;
+  completedAt: string | null;
 };
 
 /** Enroll trainees in a module + list this trainer's enrollments for it. */
@@ -199,6 +203,11 @@ export function EnrollmentPanel({
                 <p className="text-xs text-white/50">
                   {e.done}/{e.total} steps · {e.percent}%
                 </p>
+                <EnrollmentTimes
+                  enrolledAt={e.enrolledAt}
+                  lastActivityAt={e.lastActivityAt}
+                  completedAt={e.completedAt}
+                />
               </Link>
               <Switch
                 checked={e.isActive}

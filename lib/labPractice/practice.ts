@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, getTableColumns, inArray, sql, type AnyColumn } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, inArray } from "drizzle-orm";
 import path from "path";
 
 import { db } from "@/DB/drizzle";
@@ -10,6 +10,7 @@ import {
 } from "@/DB/labPracticeSchema";
 import { loadModuleTree, type ModuleTree } from "@/lib/labPractice/curriculum";
 import { isValidPracticeDate } from "@/lib/labPractice/dates";
+import { epochOf, fromEpoch, toTimestamp } from "@/lib/labPractice/sqlTime";
 import type { Enrollment, Trainer } from "@/lib/labPractice/identity";
 import {
   canUnmark,
@@ -44,17 +45,7 @@ export type CompletionFileRow = typeof labPracticeStepCompletionFiles.$inferSele
 export type RejectionRow = typeof labPracticeStepRejections.$inferSelect;
 export type SessionRow = typeof labPracticeSessions.$inferSelect;
 
-/*
- * Timestamp reads are timezone-proof on purpose. The pool has no `timezone`
- * option, so mysql2 parses TIMESTAMP strings in the NODE process's local zone
- * — and the dev machines (ET) and the production server (likely UTC) share
- * one database, so the same row would read hours apart. UNIX_TIMESTAMP() on a
- * TIMESTAMP column returns its true UTC instant whatever the session zone,
- * and writes use the DB clock (defaultNow) or FROM_UNIXTIME, so instants
- * stay exact end-to-end. Display converts to ET (lib/labPractice/dates.ts).
- */
-const epochOf = (col: AnyColumn) => sql<number>`UNIX_TIMESTAMP(${col})`;
-const fromEpoch = (seconds: number) => new Date(Number(seconds) * 1000);
+// Timestamps are read/written timezone-proof — see lib/labPractice/sqlTime.ts.
 
 async function completionsFor(enrollmentId: number): Promise<CompletionRow[]> {
   const rows = await db
@@ -64,7 +55,7 @@ async function completionsFor(enrollmentId: number): Promise<CompletionRow[]> {
     })
     .from(labPracticeStepCompletions)
     .where(eq(labPracticeStepCompletions.enrollmentId, enrollmentId));
-  return rows.map(({ completedAtEpoch, ...r }) => ({ ...r, completedAt: fromEpoch(completedAtEpoch) }));
+  return rows.map(({ completedAtEpoch, ...r }) => ({ ...r, completedAt: fromEpoch(completedAtEpoch ?? 0) }));
 }
 
 async function treeAndProgress(enrollment: Enrollment) {
@@ -110,8 +101,8 @@ export async function getEnrollmentView(enrollment: Enrollment): Promise<Enrollm
       .then((rows) =>
         rows.map(({ rejectedAtEpoch, originalEpoch, ...r }) => ({
           ...r,
-          rejectedAt: fromEpoch(rejectedAtEpoch),
-          originalCompletedAt: fromEpoch(originalEpoch),
+          rejectedAt: fromEpoch(rejectedAtEpoch ?? 0),
+          originalCompletedAt: fromEpoch(originalEpoch ?? 0),
         })),
       ),
     db
@@ -365,8 +356,7 @@ export async function rejectStep(
           c.stepId === stepId
             ? reason
             : `Reset because an earlier step ("${titleOf.get(stepId) ?? "step"}") was rejected: ${reason}`,
-        // FROM_UNIXTIME keeps the exact instant (see epochOf note above).
-        originalCompletedAt: sql`FROM_UNIXTIME(${Math.floor(c.completedAt.getTime() / 1000)})` as unknown as Date,
+        originalCompletedAt: toTimestamp(c.completedAt),
       })),
     );
     return deleteCompletions(

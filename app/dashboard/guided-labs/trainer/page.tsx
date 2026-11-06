@@ -3,7 +3,7 @@ import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 import { AdminMotionCard } from "@/components/labs/admin/admin-motion-card";
-import { MODE_LABELS, PageTitle, ProgressBar } from "@/components/labPractice/shared";
+import { EnrollmentTimes, MODE_LABELS, PageTitle, ProgressBar } from "@/components/labPractice/shared";
 import { BulkImportCard } from "@/components/labPractice/trainer/bulk-import";
 import { CreateModuleForm } from "@/components/labPractice/trainer/trainer-widgets";
 import { Badge } from "@/components/ui/badge";
@@ -108,6 +108,11 @@ export default async function TrainerHomePage() {
                   <p className="text-xs text-white/50">
                     {t.done}/{t.total} steps · {t.percent}%
                   </p>
+                  <EnrollmentTimes
+                    enrolledAt={t.enrolledAt}
+                    lastActivityAt={t.lastActivityAt}
+                    completedAt={t.completedAt}
+                  />
                 </Link>
               ))}
             </div>

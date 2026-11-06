@@ -2,7 +2,7 @@ import { ArrowRight, GraduationCap, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 
 import { AdminMotionCard } from "@/components/labs/admin/admin-motion-card";
-import { PageTitle, ProgressBar } from "@/components/labPractice/shared";
+import { EnrollmentTimes, PageTitle, ProgressBar } from "@/components/labPractice/shared";
 import { Badge } from "@/components/ui/badge";
 import { requirePageActor } from "@/lib/labPractice/identity";
 import { listTraineeEnrollments } from "@/lib/labPractice/queries";
@@ -74,6 +74,12 @@ export default async function PracticeHomePage() {
                     </span>
                     <ArrowRight className="size-4 text-itbd-blue" />
                   </div>
+                  <EnrollmentTimes
+                    enrolledAt={e.enrolledAt}
+                    lastActivityAt={e.lastActivityAt}
+                    completedAt={e.completedAt}
+                    className="pt-1"
+                  />
                 </div>
               </Link>
             </AdminMotionCard>

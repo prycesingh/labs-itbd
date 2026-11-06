@@ -5,7 +5,39 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
+import { formatEt } from "@/lib/labPractice/dates";
 import { cn } from "@/lib/utils";
+
+/** Enrolled / last activity / completed times for an enrollment (all ET). */
+export function EnrollmentTimes({
+  enrolledAt,
+  lastActivityAt,
+  completedAt,
+  className,
+}: {
+  enrolledAt: string;
+  lastActivityAt: string | null;
+  completedAt: string | null;
+  className?: string;
+}) {
+  return (
+    <dl className={cn("grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs", className)}>
+      {completedAt ? (
+        <>
+          <dt className="text-itbd-blue">Completed</dt>
+          <dd className="text-itbd-blue">{formatEt(completedAt)}</dd>
+        </>
+      ) : (
+        <>
+          <dt className="text-white/40">Last activity</dt>
+          <dd className="text-white/60">{lastActivityAt ? formatEt(lastActivityAt) : "None yet"}</dd>
+        </>
+      )}
+      <dt className="text-white/40">Enrolled</dt>
+      <dd className="text-white/60">{formatEt(enrolledAt)}</dd>
+    </dl>
+  );
+}
 
 /**
  * Small shared building blocks for the Lab Practice UI.
