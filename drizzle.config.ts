@@ -12,6 +12,7 @@ export default defineConfig({
     "./DB/interviewSchema.ts",
     "./DB/emailAssessmentSchema.ts",
     "./DB/labsSchema.ts",
+    "./DB/labPracticeSchema.ts",
   ],
   out: "./drizzle",
   dbCredentials: {

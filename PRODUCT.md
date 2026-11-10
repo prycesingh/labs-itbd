@@ -30,7 +30,7 @@ The differentiator is breadth and integration, not any single mechanism: one das
 
 - Auth is exclusively Microsoft Entra ID (Azure AD) SSO against the org's own tenant, plus a credentials-based "break-glass" admin bypass for accounts with a provisioned bcrypt hash.
 - Roles (`devAdmin`, `executive`, `adminTeam`, `sales`, `taTeam`, `qateam`, `hrTeam`, `serviceDelivery`, `user`) are resolved via hardcoded/env-extendable email whitelists, not domain-wide rules; only `devAdmin` and `executive` are admin roles, `devAdmin` alone is superadmin.
-- Forced dark theme (`forcedTheme="dark"`) is the current fixed visual state despite `next-themes` being present.
+- Dark theme is fixed: `class="dark"` is rendered statically on `<html>` in `app/layout.tsx` (no theme provider; the `next-themes` package remains only because the shadcn `sonner` wrapper imports `useTheme`).
 - App is explicitly non-public (`robots: noindex, nofollow`) — internal tool, not marketed externally.
 - Background AI evaluation work runs through a MySQL-authoritative job queue (no Redis).
 - **Labs ITBD is live in production** with real users — treat any redesign/refinement work as changes to a shipped surface, not a pre-launch build; preserve working flows and avoid disruptive changes without cause.

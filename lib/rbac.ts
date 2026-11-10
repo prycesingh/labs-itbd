@@ -104,6 +104,16 @@ export const ROUTE_RULES: readonly RouteRule[] = [
     note: "Labs content administration (glossary, seed/import)",
   },
 
+  // Guided Labs admin (trainer registry + HRIS sync). The trainer workspace
+  // (/dashboard/guided-labs/trainer) is deliberately NOT listed: trainer status
+  // lives in the lab_practice_trainers table, not a role, so it is enforced
+  // by requirePageTrainer()/requireApiTrainer() in lib/labPractice/identity.ts.
+  {
+    prefix: "/dashboard/guided-labs/admin",
+    allow: ADMIN_ROLES,
+    note: "Guided Labs trainer registry",
+  },
+
   // Interview admin
   {
     prefix: "/dashboard/interview/Module",

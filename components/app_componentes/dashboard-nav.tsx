@@ -52,8 +52,11 @@ import { usePathname } from "next/navigation";
  */
 export function DashboardNav({
   user,
+  isTrainer = false,
 }: {
   user: { name?: string | null; email?: string | null; role?: string };
+  /** Guided Labs trainer (DB registry, not an app role) — shows trainerOnly links. */
+  isTrainer?: boolean;
 }) {
   const pathname = usePathname();
   const isAdmin = isAdminRole((user.role ?? null) as Role | null);
@@ -101,6 +104,7 @@ export function DashboardNav({
                   section={section}
                   pathname={pathname}
                   isAdmin={isAdmin}
+                  isTrainer={isTrainer}
                   active={section.key === activeSectionKey}
                 />
               ))}
@@ -150,11 +154,13 @@ function NavSectionMenuItem({
   section,
   pathname,
   isAdmin,
+  isTrainer,
   active,
 }: {
   section: NavSection;
   pathname: string;
   isAdmin: boolean;
+  isTrainer: boolean;
   active: boolean;
 }) {
   const { isMobile } = useSidebar();
@@ -162,7 +168,9 @@ function NavSectionMenuItem({
   const subgroups = section.subgroups
     .map((sg) => ({
       ...sg,
-      links: sg.links.filter((l) => (l.adminOnly ? isAdmin : true)),
+      links: sg.links.filter(
+        (l) => (l.adminOnly ? isAdmin : true) && (l.trainerOnly ? isTrainer : true),
+      ),
     }))
     .filter((sg) => sg.links.length > 0);
 

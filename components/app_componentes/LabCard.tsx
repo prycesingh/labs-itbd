@@ -30,6 +30,24 @@ export type LabCardListItem = {
 };
 
 /**
+ * A titled sub-section inside a card (e.g. Technical Lab → Simulators /
+ * Guided Labs). The header row carries the section name, an optional count
+ * and an optional "View all" link; the body is a grid or list as below.
+ */
+export type LabCardSection = {
+  key: string;
+  title: string;
+  icon: LucideIcon;
+  /** Short muted context next to the title, e.g. "15 consoles". */
+  meta?: string;
+  /** Header link (right side). */
+  link?: { href: string; label: string };
+  variant: "grid" | "list";
+  gridItems?: LabCardGridItem[];
+  listItems?: LabCardListItem[];
+};
+
+/**
  * Feature card for the landing page and dashboard "Lab Catalog" — Technical
  * Lab / Communication Lab.
  *
@@ -48,6 +66,9 @@ export type LabCardListItem = {
  * - `list` — stacked module rows (Communication Lab), each with an icon,
  *   title, description, uppercase meta tags, and its own "Start Module" CTA,
  *   followed by a centered "View all" CTA.
+ * - `sections` — titled sub-sections, each a grid or list with its own header
+ *   link (dashboard Technical Lab: Simulators + Guided Labs). Overrides the
+ *   single-variant props above.
  *
  * `prefers-reduced-motion`: no entrance travel, no hover lift, no spotlight —
  * the card renders static and fully readable.
@@ -64,6 +85,7 @@ export function LabCard({
   listItems,
   ctaLabel = "Explore",
   ctaHref,
+  sections,
 }: {
   icon: LabCardIcon;
   title: string;
@@ -78,6 +100,8 @@ export function LabCard({
   ctaLabel?: string;
   /** Overrides the CTA button's destination; falls back to `href`. */
   ctaHref?: string;
+  /** Titled sub-sections; when given, replaces `variant`/`gridItems`/`listItems`. */
+  sections?: LabCardSection[];
 }) {
   const Icon = ICONS[icon];
   const reduce = useReducedMotion();
@@ -135,16 +159,16 @@ export function LabCard({
         />
       )}
 
-      <div className="relative z-10 flex flex-col">
+      <div className="relative z-10 flex flex-1 flex-col">
         {/* Icon + title */}
         <div className="flex gap-3">
           <span className={cn("flex shrink-0 items-center justify-center", accentText)}>
-            <Icon className="h-10 w-10 sm:h-12 sm:w-12 md:h-14 md:w-14 lg:h-16 lg:w-16" />
+            <Icon className="h-9 w-9 md:h-10 md:w-10 2xl:h-12 2xl:w-12" />
           </span>
           <div className="flex min-w-0 flex-col">
             <h3
               className={cn(
-                "text-lg font-bold tracking-wide uppercase sm:text-lg md:text-xl lg:text-2xl",
+                "text-lg font-bold tracking-wide uppercase 2xl:text-xl",
                 accentText,
               )}
             >
@@ -156,80 +180,50 @@ export function LabCard({
           </div>
         </div>
 
-        {variant === "grid" && gridItems && gridItems.length > 0 ? (
-          <ul className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
-            {gridItems.map((item) => (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className="flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-lg border-t border-b bg-white/5 p-1 text-center transition-colors hover:bg-white/10"
-                  style={{
-                    borderImage:
-                      "linear-gradient(to right, transparent, var(--itbd-blue), transparent) 1",
-                  }}
-                >
-                  <Image
-                    src={item.iconSrc}
-                    alt=""
-                    aria-hidden
-                    width={60}
-                    height={60}
-                    className="h-15 w-15 object-contain"
-                  />
-                  <span className="line-clamp-2 text-[12px] leading-tight text-white/75">
-                    {item.label}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-
-        {variant === "list" && listItems && listItems.length > 0 ? (
-          <ul className="mt-5 space-y-3">
-            {listItems.map((item) => (
-              <li
-                key={item.href}
-                className="flex items-center gap-3 rounded-xl border-t border-b bg-white/5 p-3"
-                style={{
-                  borderImage:
-                    "linear-gradient(to right, transparent, var(--itbd-blue), transparent) 1",
-                }}
+        {sections ? (
+          <div className="mt-5 flex flex-col">
+            {sections.map((section, i) => (
+              <section
+                key={section.key}
+                aria-labelledby={`labcard-${section.key}`}
+                className={cn(i > 0 && "mt-5 border-t border-white/10 pt-5")}
               >
-                <span
-                  className={cn(
-                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5",
-                    accentText,
-                  )}
-                >
-                  <item.icon className="h-4 w-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-white">
-                    {item.label}
-                  </p>
-                  <p className="mt-0.5 text-xs leading-relaxed text-white/60">
-                    {item.description}
-                  </p>
-                  <p className="mt-1.5 flex flex-wrap gap-x-1.5 text-[10px] font-medium tracking-wide text-white/40 uppercase">
-                    {item.tags.map((tag, i) => (
-                      <span key={tag}>
-                        {tag}
-                        {i < item.tags.length - 1 ? " · " : ""}
-                      </span>
-                    ))}
-                  </p>
+                <div className="mb-3 flex items-center gap-2">
+                  <section.icon className={cn("h-4 w-4 shrink-0", accentText)} aria-hidden />
+                  <h4 id={`labcard-${section.key}`} className="text-sm font-semibold text-white">
+                    {section.title}
+                  </h4>
+                  {section.meta ? <span className="text-xs text-white/45">{section.meta}</span> : null}
+                  {section.link ? (
+                    <Link
+                      href={section.link.href}
+                      className={cn(
+                        "group/sec ml-auto inline-flex items-center gap-1 rounded-sm text-xs font-medium underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-itbd-blue focus-visible:outline-none",
+                        accentText,
+                      )}
+                    >
+                      {section.link.label}
+                      <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover/sec:translate-x-0.5" />
+                    </Link>
+                  ) : null}
                 </div>
-                <DefaultButton size="xs" className="shrink-0 gap-1" asChild>
-                  <Link href={item.href}>
-                    Start
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
-                </DefaultButton>
-              </li>
+                {section.variant === "grid" && section.gridItems?.length ? (
+                  <GridItems items={section.gridItems} className="mt-0" compact />
+                ) : null}
+                {section.variant === "list" && section.listItems?.length ? (
+                  <ListItems items={section.listItems} accentText={accentText} className="mt-0" />
+                ) : null}
+              </section>
             ))}
-          </ul>
-        ) : null}
+          </div>
+        ) : (
+          <>
+            {variant === "grid" && gridItems && gridItems.length > 0 ? <GridItems items={gridItems} /> : null}
+            {variant === "list" && listItems && listItems.length > 0 ? (
+              <ListItems items={listItems} accentText={accentText} fill />
+            ) : null}
+          </>
+        )}
 
         {/* CTA pinned to the bottom. Blue per brand. Only rendered when a
             destination exists — no dead `#` placeholder link. */}
@@ -251,5 +245,94 @@ export function LabCard({
         ) : null}
       </div>
     </motion.div>
+  );
+}
+
+const HAIRLINE = "linear-gradient(to right, transparent, var(--itbd-blue), transparent) 1";
+
+/** Tight grid of icon tiles (simulator consoles). */
+function GridItems({
+  items,
+  className,
+  compact,
+}: {
+  items: LabCardGridItem[];
+  className?: string;
+  /** Fixed-height tiles instead of squares — keeps a wide card from growing tall. */
+  compact?: boolean;
+}) {
+  return (
+    <ul className={cn("mt-5 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5", className)}>
+      {items.map((item) => (
+        <li key={item.href}>
+          <Link
+            href={item.href}
+            className={cn(
+              "flex w-full flex-col items-center justify-center gap-1 rounded-lg border-t border-b bg-white/5 p-1 text-center transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-itbd-blue focus-visible:outline-none",
+              compact ? "h-20 2xl:h-24" : "aspect-square",
+            )}
+            style={{ borderImage: HAIRLINE }}
+          >
+            <Image
+              src={item.iconSrc}
+              alt=""
+              aria-hidden
+              width={60}
+              height={60}
+              className={cn("object-contain", compact ? "h-8 w-8 2xl:h-10 2xl:w-10" : "h-12 w-12 sm:h-15 sm:w-15")}
+            />
+            <span className="line-clamp-2 text-[12px] leading-tight text-white/75">{item.label}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Stacked module rows: icon, title, description, meta tags, Start CTA. */
+function ListItems({
+  items,
+  accentText,
+  className,
+  fill,
+}: {
+  items: LabCardListItem[];
+  accentText: string;
+  className?: string;
+  /** Stretch rows to equal heights filling the card (when it sits beside a taller one). */
+  fill?: boolean;
+}) {
+  return (
+    <ul className={cn("mt-5", fill ? "grid flex-1 auto-rows-fr gap-3" : "space-y-3", className)}>
+      {items.map((item) => (
+        <li
+          key={item.label}
+          className="flex items-center gap-3 rounded-xl border-t border-b bg-white/5 p-3 transition-colors hover:bg-white/[0.07]"
+          style={{ borderImage: HAIRLINE }}
+        >
+          <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/5", accentText)}>
+            <item.icon className="h-4.5 w-4.5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-white">{item.label}</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-white/60">{item.description}</p>
+            <p className="mt-1.5 flex flex-wrap gap-x-1.5 text-[10px] font-medium tracking-wide text-white/40 uppercase">
+              {item.tags.map((tag, i) => (
+                <span key={tag}>
+                  {tag}
+                  {i < item.tags.length - 1 ? " · " : ""}
+                </span>
+              ))}
+            </p>
+          </div>
+          <DefaultButton size="xs" className="shrink-0 gap-1" asChild>
+            <Link href={item.href} aria-label={`Start ${item.label}`}>
+              Start
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </DefaultButton>
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -1,9 +1,9 @@
 "use client";
 
 import { HowItWorks } from "@/components/app_componentes/HowItWorks";
-import { LabCard } from "@/components/app_componentes/LabCard";
+import { LabCard, type LabCardSection } from "@/components/app_componentes/LabCard";
 import CountUp from "@/components/CountUp";
-import { GraduationCap, Mail } from "lucide-react";
+import { Headset, Mail, Mic, MonitorPlay, Route } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import Image from "next/image";
 
@@ -63,14 +63,24 @@ const FEATURED_SIMULATORS = [
   },
 ];
 
+// Interview modules are picked inside Practical Learning (no per-module URL),
+// so both voice modules link there.
 const COMMUNICATION_MODULES = [
   {
     href: "/dashboard/interview/PracticalLearning",
     label: "Customer Centricity",
-    icon: GraduationCap,
+    icon: Headset,
     description:
       "Handle irate customers and respond with empathy, clarity, and professionalism.",
     tags: ["Voice Recording", "AI Feedback", "Graded"],
+  },
+  {
+    href: "/dashboard/interview/PracticalLearning",
+    label: "Interview Coach",
+    icon: Mic,
+    description:
+      "Answer interview questions out loud and get feedback on what you said and how you said it.",
+    tags: ["Voice Recording", "AI Feedback", "Delivery Scoring"],
   },
   {
     href: "/dashboard/emailAssessments/take",
@@ -81,6 +91,37 @@ const COMMUNICATION_MODULES = [
     tags: ["Real Scenarios", "Best Practices", "Graded"],
   },
 ];
+
+function technicalSections(totalSimulators: number): LabCardSection[] {
+  return [
+    {
+      key: "simulators",
+      title: "Simulators",
+      icon: MonitorPlay,
+      meta: `${totalSimulators} consoles`,
+      link: { href: "/dashboard/labs/simulators", label: "View all" },
+      variant: "grid",
+      gridItems: FEATURED_SIMULATORS,
+    },
+    {
+      key: "guided-labs",
+      title: "Guided Labs",
+      icon: Route,
+      link: { href: "/dashboard/guided-labs", label: "My labs" },
+      variant: "list",
+      listItems: [
+        {
+          href: "/dashboard/guided-labs",
+          label: "Trainer-led practice",
+          icon: Route,
+          description:
+            "Work through labs, tasks and steps your trainer assigns, with progress tracked step by step.",
+          tags: ["Trainer Assigned", "Step by Step", "Photo Proof"],
+        },
+      ],
+    },
+  ];
+}
 
 /** Splits a duration in seconds into a countable number + compact unit ("H"/"M"). */
 function splitDuration(totalSeconds: number): { value: number; unit: string } {
@@ -236,16 +277,16 @@ export function DashboardHomeClient({
         </div>
       </motion.div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      {/* Asymmetric split: Technical Lab carries two sub-sections (Simulators
+          + Guided Labs), Communication Lab one list — so Technical gets the
+          wider track and the two cards end up about the same height. */}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <LabCard
           icon="technical"
           title="Technical Lab"
-          description="Hands-on practice environments modeled on real admin consoles."
+          description="Real admin consoles to explore, and guided labs to work through with your trainer."
           accent="blue"
-          variant="grid"
-          gridItems={FEATURED_SIMULATORS}
-          ctaLabel={`View all ${totalSimulators} simulators`}
-          ctaHref="/dashboard/labs/simulators"
+          sections={technicalSections(totalSimulators)}
         />
         <LabCard
           icon="communication"

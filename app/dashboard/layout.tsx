@@ -7,6 +7,7 @@ import { SiteSessionTracker } from "@/components/labs/SiteSessionTracker";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { db } from "@/DB/drizzle";
 import { users } from "@/DB/schema";
+import { isActiveTrainerEmail } from "@/lib/labPractice/identity";
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 
@@ -32,13 +33,18 @@ export default async function DashboardLayout({
     redirect("/admin/password");
   }
 
+  // Guided Labs (lab-practice) trainer status lives in a DB registry, not the app role.
+  // Swallow errors so a missing table (migration not yet pushed) can never
+  // take down the whole dashboard.
+  const isTrainer = await isActiveTrainerEmail(session.user.email).catch(() => false);
+
   return (
     <SidebarProvider className="flex h-screen min-h-0 flex-col overflow-hidden">
       <SiteSessionTracker />
       <PageVisitTracker />
       <DashboardHeader user={session.user} />
       <div className="flex min-h-0 flex-1">
-        <DashboardNav user={session.user} />
+        <DashboardNav user={session.user} isTrainer={isTrainer} />
         <SidebarInset className="overflow-y-auto">
           <div className="px-6 py-2">
             <DashboardBreadcrumb />

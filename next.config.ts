@@ -15,7 +15,10 @@ const nextConfig: NextConfig = {
   // swallowed by that file's try/catch, degrading every Interview Coach
   // answer to pace-only delivery metrics with no visible error. Marking it
   // external keeps its own module resolution (and __dirname) intact.
-  serverExternalPackages: ["ffmpeg-static"],
+  // exceljs (Lab Practice bulk curriculum import) is a large CommonJS
+  // package with optional Node deps — load it from node_modules at runtime
+  // instead of bundling it into the route chunk.
+  serverExternalPackages: ["ffmpeg-static", "exceljs"],
   experimental: {
     // Hostinger's build container reports the host's 64 CPUs, so Next spawns
     // 63 build workers — each loading the native SWC binding with its own

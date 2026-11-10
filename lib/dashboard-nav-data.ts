@@ -19,9 +19,11 @@ import {
   MessagesSquare,
   MonitorPlay,
   ShieldAlert,
+  ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   TerminalSquare,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -30,6 +32,9 @@ export type NavLink = {
   label: string;
   icon: LucideIcon;
   adminOnly?: boolean;
+  /** Guided Labs trainers only (resolved from the trainer registry in the
+   *  dashboard layout, not from an app role). */
+  trainerOnly?: boolean;
 };
 export type NavSubgroup = { label: string; links: NavLink[] };
 export type NavSection = {
@@ -142,7 +147,7 @@ export const SECTIONS: NavSection[] = [
     icon: LayoutDashboard,
     subgroups: [
       {
-        label: "Technical Lab",
+        label: "Simulators & Resources",
         links: [
           {
             href: "/dashboard/labs",
@@ -214,6 +219,28 @@ export const SECTIONS: NavSection[] = [
             href: "/dashboard/labs/admin/seed",
             label: "Content Import",
             icon: DatabaseZap,
+            adminOnly: true,
+          },
+        ],
+      },
+      {
+        label: "Guided Labs",
+        links: [
+          {
+            href: "/dashboard/guided-labs",
+            label: "My Labs",
+            icon: ClipboardCheck,
+          },
+          {
+            href: "/dashboard/guided-labs/trainer",
+            label: "Trainer Workspace",
+            icon: Users,
+            trainerOnly: true,
+          },
+          {
+            href: "/dashboard/guided-labs/admin/trainers",
+            label: "Trainers",
+            icon: ShieldCheck,
             adminOnly: true,
           },
         ],
