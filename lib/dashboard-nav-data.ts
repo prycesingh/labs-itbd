@@ -147,13 +147,51 @@ export const SECTIONS: NavSection[] = [
     icon: LayoutDashboard,
     subgroups: [
       {
-        label: "Simulators & Resources",
+        // Unlabelled: Labs Home sits above the titled sections with no heading.
+        label: "",
         links: [
           {
             href: "/dashboard/labs",
             label: "Labs Home",
             icon: LayoutDashboard,
           },
+        ],
+      },
+      {
+        label: "Simulators",
+        links: [
+          {
+            href: "/dashboard/labs/simulators",
+            label: "Simulators",
+            icon: MonitorPlay,
+          },
+        ],
+      },
+      {
+        label: "Guided Labs",
+        links: [
+          {
+            href: "/dashboard/guided-labs",
+            label: "My Labs",
+            icon: ClipboardCheck,
+          },
+          {
+            href: "/dashboard/guided-labs/trainer",
+            label: "Trainer Workspace",
+            icon: Users,
+            trainerOnly: true,
+          },
+          {
+            href: "/dashboard/guided-labs/admin/trainers",
+            label: "Trainers",
+            icon: ShieldCheck,
+            adminOnly: true,
+          },
+        ],
+      },
+      {
+        label: "Resources",
+        links: [
           {
             href: "/dashboard/labs/glossary",
             label: "Glossary",
@@ -163,11 +201,6 @@ export const SECTIONS: NavSection[] = [
             href: "/dashboard/labs/quizzes",
             label: "Practice Quizzes",
             icon: ListChecks,
-          },
-          {
-            href: "/dashboard/labs/simulators",
-            label: "Simulators",
-            icon: MonitorPlay,
           },
           {
             href: "/dashboard/labs/services-catalog",
@@ -219,28 +252,6 @@ export const SECTIONS: NavSection[] = [
             href: "/dashboard/labs/admin/seed",
             label: "Content Import",
             icon: DatabaseZap,
-            adminOnly: true,
-          },
-        ],
-      },
-      {
-        label: "Guided Labs",
-        links: [
-          {
-            href: "/dashboard/guided-labs",
-            label: "My Labs",
-            icon: ClipboardCheck,
-          },
-          {
-            href: "/dashboard/guided-labs/trainer",
-            label: "Trainer Workspace",
-            icon: Users,
-            trainerOnly: true,
-          },
-          {
-            href: "/dashboard/guided-labs/admin/trainers",
-            label: "Trainers",
-            icon: ShieldCheck,
             adminOnly: true,
           },
         ],

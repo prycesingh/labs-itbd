@@ -2,6 +2,7 @@
 
 import {
   BookOpen,
+  ClipboardCheck,
   Cloud,
   FileText,
   GitCompareArrows,
@@ -32,6 +33,7 @@ const ICONS: Record<string, LucideIcon> = {
   flow: Workflow,
   article: FileText,
   cloud: Cloud,
+  guided: ClipboardCheck,
 };
 
 type Section = {

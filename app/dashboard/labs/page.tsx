@@ -20,6 +20,12 @@ const SECTIONS = [
     icon: "terminal" as const,
   },
   {
+    href: "/dashboard/guided-labs",
+    title: "Guided Labs",
+    description: "Step-by-step labs assigned by your trainer — work through tasks and get each step signed off.",
+    icon: "guided" as const,
+  },
+  {
     href: "/dashboard/labs/services-catalog",
     title: "Services Catalog",
     description: "Azure and Microsoft 365 services with when-to-use guidance, alternatives, and pricing tier.",

@@ -33,7 +33,8 @@ export function DashboardBreadcrumb() {
   if (!trail || !trail.section) return null;
 
   const { section, subgroup, link } = trail;
-  const showSubgroup = section.subgroups.length > 1;
+  // Unlabelled subgroups (e.g. Technical Lab's "Labs Home") get no crumb.
+  const showSubgroup = section.subgroups.length > 1 && subgroup.label !== "";
 
   return (
     <Breadcrumb>

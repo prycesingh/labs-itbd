@@ -206,20 +206,23 @@ function NavSectionMenuItem({
           side={isMobile ? "bottom" : "right"}
           align={isMobile ? "end" : "start"}
           sideOffset={12}
-          className="itbd-glow-border relative min-w-60 overflow-hidden rounded-xl border-white/10 bg-black/90 p-1.5 backdrop-blur-xl"
+          collisionPadding={12}
+          // Scrolls within the viewport (Radix available-height) instead of
+          // clipping long sections like Technical Lab off the bottom of the screen.
+          className="itbd-glow-border relative max-h-(--radix-dropdown-menu-content-available-height) min-w-60 overflow-x-hidden overflow-y-auto overscroll-contain rounded-xl border-white/10 bg-black/90 p-1.5 backdrop-blur-xl"
         >
           <span
             aria-hidden
-            className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
+            className="sticky top-0 z-10 -mx-1.5 -mt-1.5 mb-1.5 block h-px bg-linear-to-r from-transparent via-itbd-blue to-transparent"
           />
           <DropdownMenuLabel className="flex items-center gap-2 px-2 pt-1 pb-2 text-xs font-semibold tracking-widest text-white/40 uppercase">
             <section.icon className="h-3.5 w-3.5 text-itbd-blue" />
             {section.label}
           </DropdownMenuLabel>
           {subgroups.map((sg, i) => (
-            <DropdownMenuGroup key={sg.label}>
+            <DropdownMenuGroup key={sg.label || `group-${i}`}>
               {i > 0 ? <DropdownMenuSeparator className="my-1.5 bg-white/10" /> : null}
-              {showSubgroupLabels ? (
+              {showSubgroupLabels && sg.label ? (
                 <DropdownMenuLabel className="px-2 pt-1 text-[10px] font-semibold tracking-widest text-white/35 uppercase">
                   {sg.label}
                 </DropdownMenuLabel>
