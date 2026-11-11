@@ -110,7 +110,7 @@ async function findOrCreateInterviewCoachModule(): Promise<string> {
     name: MODULE_NAME,
     description:
       "MSP / service-desk mock interview practice with source-grounded grading, adaptive follow-ups, and acoustic delivery scoring.",
-    interviewType: "technical-qa",
+    interviewType: "technical-QnA",
     questionDisplayCount: 5,
     isActive: true,
   });

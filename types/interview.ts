@@ -18,10 +18,8 @@ export enum InterviewStatus {
 }
 
 export enum InterviewType {
-  HRIS_QA = "hris-qa",
-  PRODUCT_QA = "product-qa",
   CUSTOMER_SERVICE = "customer-service",
-  TECHNICAL_QA = "technical-qa",
+  TECHNICAL_QNA = "technical-QnA",
 }
 
 export type JsonValue =

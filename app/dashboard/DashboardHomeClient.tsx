@@ -63,11 +63,12 @@ const FEATURED_SIMULATORS = [
   },
 ];
 
-// Interview modules are picked inside Practical Learning (no per-module URL),
-// so both voice modules link there.
+// Voice modules deep-link into Practical Learning with `?type=<interviewType>`
+// so the page starts that module directly instead of showing the picker.
+// Keyed by interview_type (not module UUID) since that's stable across DBs.
 const COMMUNICATION_MODULES = [
   {
-    href: "/dashboard/interview/PracticalLearning",
+    href: "/dashboard/interview/PracticalLearning?type=customer-service",
     label: "Customer Centricity",
     icon: Headset,
     description:
@@ -75,7 +76,7 @@ const COMMUNICATION_MODULES = [
     tags: ["Voice Recording", "AI Feedback", "Graded"],
   },
   {
-    href: "/dashboard/interview/PracticalLearning",
+    href: "/dashboard/interview/PracticalLearning?type=technical-QnA",
     label: "Interview Coach",
     icon: Mic,
     description:

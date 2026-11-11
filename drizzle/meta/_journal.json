@@ -134,6 +134,13 @@
       "when": 1793969550825,
       "tag": "0018_lab_practice_lab_scenario",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1793969551825,
+      "tag": "0019_interview_type_enum",
+      "breakpoints": true
     }
   ]
 }

@@ -77,10 +77,8 @@ export const interviewModules = mysqlTable(
     questionDisplayCount: int("question_display_count").notNull().default(5),
     description: text("description"),
     interviewType: mysqlEnum("interview_type", [
-      "hris-qa",
-      "product-qa",
       "customer-service",
-      "technical-qa",
+      "technical-QnA",
     ]).notNull(),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { mode: "string" })
@@ -256,10 +254,8 @@ export const candidateInterviewSessions = mysqlTable(
     candidateId: varchar("candidate_id", { length: 255 }).notNull(),
     moduleId: varchar("module_id", { length: 255 }).notNull(),
     interviewType: mysqlEnum("interview_type", [
-      "hris-qa",
-      "product-qa",
       "customer-service",
-      "technical-qa",
+      "technical-QnA",
     ]).notNull(),
     status: mysqlEnum("status", [
       "draft",

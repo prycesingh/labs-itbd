@@ -15,6 +15,13 @@ interface Module {
   questionDisplayCount: number;
 }
 
+const INTERVIEW_TYPE_LABELS: Record<string, string> = {
+  "customer-service": "Customer Service",
+  "technical-QnA": "Technical QnA",
+  // Legacy value — rows not yet migrated by 0019_interview_type_enum.sql.
+  "technical-qa": "Technical QnA",
+};
+
 interface ModuleSelectorProps {
   onModuleSelected: (moduleId: string, totalQuestions: number) => void;
 }
@@ -74,7 +81,8 @@ export function ModuleSelector({ onModuleSelected }: ModuleSelectorProps) {
                 variant="secondary"
                 className="border border-border/70 bg-background/70 capitalize"
               >
-                {module.interviewType.replace(/([A-Z])/g, " $1").trim()}
+                {INTERVIEW_TYPE_LABELS[module.interviewType] ??
+                  module.interviewType.replace(/-/g, " ")}
               </Badge>
               <Badge className="bg-primary/15 text-primary hover:bg-primary/20">
                 {module.questionDisplayCount} questions
