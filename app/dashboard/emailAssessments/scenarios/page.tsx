@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { requireRole } from "@/lib/emailAssessment/auth";
 
 export default async function EmailAssessmentsScenariosPage() {
-  await requireRole(["admin"]);
+  await requireRole(["contentViewer"]);
   const records = await db
     .select()
     .from(scenarios)

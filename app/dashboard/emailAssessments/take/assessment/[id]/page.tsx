@@ -23,7 +23,7 @@ export default async function EmailAssessmentTakeAssessmentPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ sessionId?: string }>;
 }) {
-  const user = await requireRole(["candidate", "admin"]);
+  const user = await requireRole(["candidate"]);
   const { id } = await params;
   const { sessionId } = await searchParams;
 

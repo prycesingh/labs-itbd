@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Camera, ChevronRight, Pencil, Plus } from "lucide-react";
+import { ArrowDown, ArrowUp, Camera, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -14,6 +14,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -145,6 +146,67 @@ function textPayload(level: Level, values: Record<string, string>) {
 }
 
 // ─────────────────────────────────────────────
+// Delete confirmation (shared by module / lab / task / step)
+// ─────────────────────────────────────────────
+const CHILD_NOTE: Record<"module" | Level, string> = {
+  module: " along with all of its labs, tasks and steps",
+  lab: " along with all of its tasks and steps",
+  task: " along with all of its steps",
+  step: "",
+};
+
+function DeleteItemDialog({
+  level,
+  title,
+  url,
+  open,
+  onOpenChange,
+  onDeleted,
+}: {
+  level: "module" | Level;
+  title: string;
+  url: string;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onDeleted: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  async function confirm() {
+    setBusy(true);
+    const ok = await lpRequest(url, { method: "DELETE" });
+    setBusy(false);
+    if (ok) {
+      toast.success(`Deleted "${title}".`);
+      onOpenChange(false);
+      onDeleted();
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="capitalize">Delete {level}</DialogTitle>
+          <DialogDescription>
+            Delete &ldquo;{title}&rdquo;{CHILD_NOTE[level]}? This can&rsquo;t be undone. Items
+            trainees already have progress on can only be deactivated.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
+            Cancel
+          </Button>
+          <Button type="button" variant="destructive" onClick={confirm} disabled={busy}>
+            {busy ? "Deleting..." : "Delete"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─────────────────────────────────────────────
 // Module settings
 // ─────────────────────────────────────────────
 function ModuleSettings({ mod }: { mod: BuilderModule }) {
@@ -154,6 +216,7 @@ function ModuleSettings({ mod }: { mod: BuilderModule }) {
   const [mode, setMode] = useState<ProgressionMode>(mod.progressionMode);
   const [isActive, setIsActive] = useState(mod.isActive);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function save() {
     setSaving(true);
@@ -201,6 +264,26 @@ function ModuleSettings({ mod }: { mod: BuilderModule }) {
       <DefaultButton size="sm" onClick={save} loading={saving}>
         Save module
       </DefaultButton>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="text-destructive hover:text-destructive"
+        onClick={() => setDeleting(true)}
+      >
+        <Trash2 /> Delete module
+      </Button>
+      <DeleteItemDialog
+        level="module"
+        title={mod.title}
+        url={`/api/lab-practice/modules/${mod.id}`}
+        open={deleting}
+        onOpenChange={setDeleting}
+        onDeleted={() => {
+          router.replace("/dashboard/guided-labs/trainer");
+          router.refresh();
+        }}
+      />
     </div>
   );
 }
@@ -326,6 +409,7 @@ function ItemRow({
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [open, setOpen] = useState(level === "lab");
 
   async function toggleActive(v: boolean) {
@@ -373,8 +457,27 @@ function ItemRow({
         <Button variant="ghost" size="icon-sm" onClick={() => setEditing(true)} aria-label={`Edit ${title}`}>
           <Pencil />
         </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-white/50 hover:text-destructive"
+          onClick={() => setDeleting(true)}
+          aria-label={`Delete ${title}`}
+        >
+          <Trash2 />
+        </Button>
         <Switch checked={isActive} onCheckedChange={toggleActive} aria-label={`${title} active`} />
       </div>
+      {deleting && (
+        <DeleteItemDialog
+          level={level}
+          title={title}
+          url={API.item(level, id)}
+          open={deleting}
+          onOpenChange={setDeleting}
+          onDeleted={() => router.refresh()}
+        />
+      )}
       {editing && (
         <EditItemDialog
           level={level}

@@ -1,6 +1,6 @@
 import { db } from "@/DB/drizzle";
 import { interviewModuleCapabilities, interviewModules } from "@/DB/interviewSchema";
-import { requireAdmin } from "@/lib/admin/guard";
+import { requirePermission } from "@/lib/admin/guard";
 import { setModuleCapability } from "@/lib/interview/moduleCapabilities";
 import { updateModuleCapabilitySchema } from "@/lib/validation/interview";
 import { eq } from "drizzle-orm";
@@ -17,7 +17,7 @@ import { NextRequest, NextResponse } from "next/server";
  * renders correctly without a separate "seed defaults" step.
  */
 export async function GET(request: NextRequest) {
-  const guard = await requireAdmin();
+  const guard = await requirePermission("content.view");
   if (!guard.ok) return guard.response;
 
   const moduleIdFilter = request.nextUrl.searchParams.get("moduleId");
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
  * here takes effect on the very next session/job run with no deploy.
  */
 export async function PATCH(request: NextRequest) {
-  const guard = await requireAdmin();
+  const guard = await requirePermission("content.edit");
   if (!guard.ok) return guard.response;
 
   const body = await request.json().catch(() => null);

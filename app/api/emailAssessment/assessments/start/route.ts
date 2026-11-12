@@ -37,7 +37,7 @@ async function pickRandomScenarios(
 
 export async function POST(request: Request) {
   try {
-    const { user, response } = await requireApiUser(["candidate", "admin"]);
+    const { user, response } = await requireApiUser(["candidate"]);
 
     if (response) return response;
 

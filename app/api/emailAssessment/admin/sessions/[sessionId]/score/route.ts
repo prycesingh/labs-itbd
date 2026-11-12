@@ -11,7 +11,7 @@ const scoreSchema = z.object({
 });
 
 export async function POST(request: Request, { params }: { params: Promise<{ sessionId: string }> }) {
-  const { user, response } = await requireApiUser(["admin", "assessor"]);
+  const { user, response } = await requireApiUser(["assessor"]);
   if (response) return response;
 
   const { sessionId } = await params;

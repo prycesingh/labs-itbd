@@ -1,6 +1,7 @@
 import { db } from "@/DB/drizzle";
 import { accounts, sessions, users, verificationTokens } from "@/DB/schema";
-import { isAdminRole } from "@/lib/rbac";
+import { can } from "@/lib/rbac";
+import { normalizeEmail, whitelistRoleFor } from "@/lib/roleWhitelist";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { compare } from "bcryptjs";
 import { eq } from "drizzle-orm";
@@ -59,61 +60,6 @@ const authAdapterRetryMaxDelayMs = parseNonNegativeInt(
   process.env.AUTH_ADAPTER_RETRY_MAX_DELAY_MS,
   1500,
 );
-
-const DEFAULT_DEVADMIN_WHITELIST_EMAILS = [
-  "kkaila@itbd.net",
-  "sunny.kaila@itbd.net",
-  "rkaila@itbd.net",
-  "rhayre@itbd.net",
-  "pryce.singh@itbd.net",
-  "preston.choudhary@itbd.net",
-  "gagan.sandhu@itbd.net",
-  "ssaini@itbd.net",
-  "jkhan@itbd.net",
-];
-
-const DEFAULT_EXECUTIVE_WHITELIST_EMAILS = [
-  "Lee.Cavellier@itbd.net",
-  "Amit.Dubey@itbd.net",
-  "GKaur@itbd.net",
-  "anamika.rathore@itbd.net",
-  "Andrea.Canlas@itbd.net",
-  "Banmeet.Kour@itbd.net",
-  "PritamK@itbd.net",
-  "Suhrid.Rana@itbd.net",
-  "kpatel@itbd.net",
-  "vikram.kanitkar@itbd.net",
-  "ankur.kumar@itbd.net",
-  "manu.sharma@itbd.net",
-  "suhrid.rana@itbd.net",
-  "Natalie.McKenzie@itbd.net",
-  "Akshay.Julka@itbd.net",
-];
-
-const normalizeEmail = (value: string | null | undefined) =>
-  value?.trim().toLowerCase() ?? "";
-
-const parseEmailList = (value: string | undefined) =>
-  (value ?? "")
-    .split(",")
-    .map((email) => normalizeEmail(email))
-    .filter((email) => email.length > 0);
-
-const devAdminWhitelistEmails = new Set([
-  ...DEFAULT_DEVADMIN_WHITELIST_EMAILS.map((email) => normalizeEmail(email)),
-  ...parseEmailList(process.env.DEVADMIN_WHITELIST_EMAILS),
-]);
-
-const isWhitelistedDevAdminEmail = (email: string | null | undefined) =>
-  devAdminWhitelistEmails.has(normalizeEmail(email));
-
-const executiveWhitelistEmails = new Set([
-  ...DEFAULT_EXECUTIVE_WHITELIST_EMAILS.map((email) => normalizeEmail(email)),
-  ...parseEmailList(process.env.EXECUTIVE_WHITELIST_EMAILS),
-]);
-
-const isWhitelistedExecutiveEmail = (email: string | null | undefined) =>
-  executiveWhitelistEmails.has(normalizeEmail(email));
 
 type EntraProfileLike = {
   sub?: string;
@@ -442,11 +388,10 @@ export const authConfig = {
       return !!auth;
     },
     async signIn({ user }) {
-      const assignedRole = isWhitelistedDevAdminEmail(user.email)
-        ? "devAdmin"
-        : isWhitelistedExecutiveEmail(user.email)
-          ? "executive"
-          : null;
+      // Whitelists (lib/roleWhitelist.ts): devAdmin is a floor re-applied on
+      // every sign-in; executive only seeds a plain "user". Any other stored
+      // role was set in the admin panel and is kept.
+      const assignedRole = whitelistRoleFor(user.email, user.role);
 
       if (!assignedRole) {
         return true;
@@ -484,11 +429,11 @@ export const authConfig = {
       if (user) {
         t.id =
           user.id ?? (typeof t.sub === "string" ? t.sub : (t.id as string));
-        t.role = isWhitelistedDevAdminEmail(user.email)
-          ? "devAdmin"
-          : isWhitelistedExecutiveEmail(user.email)
-            ? "executive"
-            : (user.role ?? (t.role as string) ?? "user");
+        t.role =
+          whitelistRoleFor(user.email, user.role) ??
+          user.role ??
+          (t.role as string) ??
+          "user";
         // Seed the session version + refresh marker so subsequent requests can
         // detect role changes / forced logouts without a DB hit every time.
         t.sessionVersion =
@@ -657,7 +602,7 @@ export const authConfig = {
     // admin bootstrap script). SSO-only users have `password = NULL` and can
     // never be logged into through this path, so it can't be used to
     // impersonate arbitrary accounts. Roles are still resolved by the jwt
-    // callback below (whitelist-driven), so this grants no extra privilege
+    // callback below (DB role + whitelist floor), so this grants no extra privilege
     // beyond what the same email gets over SSO.
     const credentialsProvider = CredentialsProvider({
       id: "credentials",
@@ -700,11 +645,10 @@ export const authConfig = {
             return null;
           }
 
-          // ADMIN-ONLY: credential login is a break-glass path reserved for
-          // admins. Non-admins must use SSO — reject them even if a password
-          // hash somehow exists on their row. `ADMIN_ROLES` in lib/rbac.ts is
-          // the single source of truth for who counts as an admin.
-          if (!isAdminRole(account.role)) {
+          // Credential login is a break-glass path reserved for roles with
+          // the "credentials.login" permission (lib/rbac.ts). Everyone else
+          // must use SSO — reject them even if a password hash exists.
+          if (!can(account.role, "credentials.login")) {
             return null;
           }
 

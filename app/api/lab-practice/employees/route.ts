@@ -5,12 +5,12 @@ import { db } from "@/DB/drizzle";
 import { labPracticeEmployees } from "@/DB/labPracticeSchema";
 import { jsonError, requireApiActor } from "@/lib/labPractice/identity";
 
-/** GET ?q= — search active employees (trainers enrolling trainees, admins
- *  registering trainers). Returns at most 20 matches. */
+/** GET ?q= — search active employees (trainers enrolling trainees).
+ *  Returns at most 20 matches. */
 export async function GET(request: Request) {
   const { actor, response } = await requireApiActor();
   if (response) return response;
-  if (!actor.trainer && !actor.isAdmin) return jsonError("Not allowed.", 403);
+  if (!actor.trainer) return jsonError("Not allowed.", 403);
 
   const q = new URL(request.url).searchParams.get("q")?.trim() ?? "";
   if (q.length < 2) return NextResponse.json({ employees: [] });

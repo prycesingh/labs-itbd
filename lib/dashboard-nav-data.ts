@@ -19,7 +19,6 @@ import {
   MessagesSquare,
   MonitorPlay,
   ShieldAlert,
-  ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   TerminalSquare,
@@ -27,14 +26,15 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import type { Permission } from "@/lib/rbac";
+
 export type NavLink = {
   href: string;
   label: string;
   icon: LucideIcon;
-  adminOnly?: boolean;
-  /** Guided Labs trainers only (resolved from the trainer registry in the
-   *  dashboard layout, not from an app role). */
-  trainerOnly?: boolean;
+  /** Hidden unless the user's role holds this permission (lib/rbac.ts).
+   *  Keep in sync with ROUTE_RULES there. */
+  permission?: Permission;
 };
 export type NavSubgroup = { label: string; links: NavLink[] };
 export type NavSection = {
@@ -51,7 +51,7 @@ export const LAB_CATALOG: NavLink = {
   icon: Home,
 };
 
-// `adminOnly` links are hidden from non-admin users. Also used to build the
+// Links with a `permission` are hidden from roles lacking it. Also used to build the
 // dashboard breadcrumb trail — each route's section/subgroup/label is looked
 // up from here rather than duplicated.
 export const SECTIONS: NavSection[] = [
@@ -78,13 +78,13 @@ export const SECTIONS: NavSection[] = [
             href: "/dashboard/interview/Module",
             label: "Modules",
             icon: LayoutGrid,
-            adminOnly: true,
+            permission: "content.view",
           },
           {
             href: "/dashboard/interview/results",
             label: "Results",
             icon: BarChart3,
-            adminOnly: true,
+            permission: "results.view",
           },
         ],
       },
@@ -105,19 +105,19 @@ export const SECTIONS: NavSection[] = [
             href: "/dashboard/emailAssessments",
             label: "Sessions",
             icon: CalendarClock,
-            adminOnly: true,
+            permission: "results.view",
           },
           {
             href: "/dashboard/emailAssessments/scenarios",
             label: "Scenarios",
             icon: MessagesSquare,
-            adminOnly: true,
+            permission: "content.view",
           },
           {
             href: "/dashboard/emailAssessments/prompts",
             label: "Prompts",
             icon: Sparkles,
-            adminOnly: true,
+            permission: "content.view",
           },
         ],
       },
@@ -128,13 +128,13 @@ export const SECTIONS: NavSection[] = [
             href: "/dashboard/AttemptOverrides",
             label: "Attempt Overrides",
             icon: ShieldAlert,
-            adminOnly: true,
+            permission: "content.view",
           },
           {
             href: "/dashboard/ModuleCapabilities",
             label: "Module Capabilities",
             icon: SlidersHorizontal,
-            adminOnly: true,
+            permission: "content.view",
           },
         ],
       },
@@ -179,13 +179,7 @@ export const SECTIONS: NavSection[] = [
             href: "/dashboard/guided-labs/trainer",
             label: "Trainer Workspace",
             icon: Users,
-            trainerOnly: true,
-          },
-          {
-            href: "/dashboard/guided-labs/admin/trainers",
-            label: "Trainers",
-            icon: ShieldCheck,
-            adminOnly: true,
+            permission: "guidedLabs.train",
           },
         ],
       },
@@ -246,13 +240,13 @@ export const SECTIONS: NavSection[] = [
             href: "/dashboard/labs/admin/glossary",
             label: "Glossary Admin",
             icon: BookMarked,
-            adminOnly: true,
+            permission: "content.view",
           },
           {
             href: "/dashboard/labs/admin/seed",
             label: "Content Import",
             icon: DatabaseZap,
-            adminOnly: true,
+            permission: "content.view",
           },
         ],
       },

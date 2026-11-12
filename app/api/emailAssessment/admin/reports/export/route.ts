@@ -13,7 +13,7 @@ import { jsonError, requestIp, requireApiUser } from "@/lib/emailAssessment/auth
 import { createSimplePdf } from "@/lib/emailAssessment/pdf";
 
 export async function GET(request: Request) {
-  const { user, response } = await requireApiUser(["admin", "assessor"]);
+  const { user, response } = await requireApiUser(["resultsViewer"]);
 
   if (response) return response;
 

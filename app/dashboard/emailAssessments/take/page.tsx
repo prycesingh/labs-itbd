@@ -7,7 +7,7 @@ import { requireRole } from "@/lib/emailAssessment/auth";
 import { getSessionSummaries } from "@/lib/emailAssessment/session-results";
 
 export default async function EmailAssessmentTakePage() {
-  const user = await requireRole(["candidate", "admin"]);
+  const user = await requireRole(["candidate"]);
   const sessions = await getSessionSummaries({ candidateId: user.id });
   const completedSessions = sessions.filter(
     (session) => session.aiWeightedTotal != null,

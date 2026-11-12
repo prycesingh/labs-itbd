@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/DB/drizzle";
 import { pageVisits } from "@/DB/schema";
-import { requireAdmin } from "@/lib/admin/guard";
+import { requirePermission } from "@/lib/admin/guard";
 import { resolveBreadcrumbTrail, LAB_CATALOG } from "@/lib/dashboard-nav-data";
 
 /**
@@ -19,7 +19,7 @@ import { resolveBreadcrumbTrail, LAB_CATALOG } from "@/lib/dashboard-nav-data";
  * simplest correct option.
  */
 export async function GET(request: NextRequest) {
-  const guard = await requireAdmin();
+  const guard = await requirePermission("logs.view");
   if (!guard.ok) return guard.response;
 
   const days = Number(request.nextUrl.searchParams.get("days") ?? "30");

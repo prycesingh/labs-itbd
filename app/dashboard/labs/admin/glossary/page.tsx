@@ -9,7 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { requireRole } from "@/lib/labs/auth";
 
 export default async function LabsAdminGlossaryPage() {
-  await requireRole(["contentAdmin"]);
+  await requireRole(["contentViewer"]);
 
   const terms = await db.select().from(glossaryTerms).orderBy(asc(glossaryTerms.term));
 

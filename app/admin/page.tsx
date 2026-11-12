@@ -1,11 +1,10 @@
 import { auth } from "@/auth";
-import { isSuperAdmin, type Role } from "@/lib/rbac";
+import { can } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 
 // The panel has no dedicated dashboard yet — send admins to the most relevant
-// landing page (user management for superadmins, else their password page).
+// landing page: the user list for roles that may see it, else their password page.
 export default async function AdminIndexPage() {
   const session = await auth();
-  const role = (session?.user?.role ?? null) as Role | null;
-  redirect(isSuperAdmin(role) ? "/admin/users" : "/admin/password");
+  redirect(can(session?.user?.role, "adminPanel.view") ? "/admin/users" : "/admin/password");
 }

@@ -11,7 +11,7 @@ const TAKE_BASE = "/dashboard/emailAssessments/take";
 // `evaluatorNotes` (the admin-only override score) and `copyPenalty` — those
 // stay admin/assessor-only per the module's score-visibility rules.
 export default async function MyEvaluationsPage() {
-  const user = await requireRole(["candidate", "admin"]);
+  const user = await requireRole(["candidate"]);
   const sessions = await getSessionSummaries({ candidateId: user.id });
 
   return (

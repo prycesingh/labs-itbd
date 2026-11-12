@@ -5,7 +5,7 @@ import {
   interviewModules,
   interviewQuestionBank,
 } from "@/DB/interviewSchema";
-import { isAdminRole, type Role } from "@/lib/rbac";
+import { can, type Role } from "@/lib/rbac";
 import { assignQuestionSchema } from "@/lib/validation/interview";
 import { and, count, desc, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -32,7 +32,7 @@ export async function GET(
 ) {
   try {
     const session = await auth();
-    if (!isAdminRole(session?.user?.role as Role | undefined)) {
+    if (!can(session?.user?.role as Role | undefined, "content.view")) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -129,7 +129,7 @@ export async function POST(
 ) {
   try {
     const session = await auth();
-    if (!isAdminRole(session?.user?.role as Role | undefined)) {
+    if (!can(session?.user?.role as Role | undefined, "content.edit")) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 

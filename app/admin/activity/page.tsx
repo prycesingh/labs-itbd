@@ -3,10 +3,10 @@ import { asc } from "drizzle-orm";
 import { db } from "@/DB/drizzle";
 import { users } from "@/DB/schema";
 import { ActivityLogPage } from "@/components/admin/ActivityLogPage";
-import { requireAdminPage } from "@/lib/admin/guard";
+import { requirePermissionPage } from "@/lib/admin/guard";
 
 export default async function AdminActivityPage() {
-  await requireAdminPage();
+  await requirePermissionPage("logs.view");
 
   const rows = await db
     .select({ id: users.id, name: users.name, email: users.email })

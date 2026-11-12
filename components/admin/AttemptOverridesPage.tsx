@@ -38,7 +38,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserCombobox } from "@/components/admin/UserCombobox";
 import { cn } from "@/lib/utils";
-import { isAdminRole, type Role } from "@/lib/rbac";
+import { can } from "@/lib/rbac";
 import { AnimatePresence, motion, useReducedMotion, type Variants } from "motion/react";
 import { Mail, Mic, ShieldCheck } from "lucide-react";
 import { useSession } from "next-auth/react";
@@ -942,9 +942,9 @@ export default function AttemptOverridesPage() {
   useEffect(() => {
     if (status !== "authenticated") return;
     const role = session?.user?.role;
-    if (role && !isAdminRole(role as Role)) {
+    if (role && !can(role, "content.view")) {
       router.push("/dashboard");
-      toast.error("Access denied. Administrator role required.");
+      toast.error("Access denied. You do not have access to this page.");
     }
   }, [session, status, router]);
 

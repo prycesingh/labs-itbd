@@ -2,44 +2,35 @@ import { NextResponse } from "next/server";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
-import { isAdminRole, type Role } from "@/lib/rbac";
+import { can } from "@/lib/rbac";
 
 /**
- * Email-assessment roles (the standalone app's role vocabulary). The shared
- * user model is the source of truth; we translate app roles into these:
- *   - any admin role (see ADMIN_ROLES in lib/rbac: devAdmin, executive, …)
- *                               -> "admin" AND "assessor"
- *   - everyone else             -> "candidate"
- *
- * All ported routes/pages were written against this vocabulary, so this mapping
- * lets them run unchanged. Using isAdminRole() keeps this in lockstep with the
- * proxy/RBAC policy so navigation and page guards never disagree.
+ * Email-assessment roles, derived from app permissions (lib/rbac.ts). A user
+ * holds EVERY role their permissions allow:
+ *   - "candidate"     — everyone signed in (takes assessments, sees own results)
+ *   - "contentViewer" — content.view    (sees scenarios / prompts)
+ *   - "admin"         — content.edit    (creates / edits scenarios / prompts)
+ *   - "resultsViewer" — results.view    (sees everyone's sessions / submissions)
+ *   - "assessor"      — scores.override (sets manual scores over the AI score)
  */
-export const roleNames = ["candidate", "admin", "assessor"] as const;
+export const roleNames = ["candidate", "contentViewer", "admin", "resultsViewer", "assessor"] as const;
 export type EmailAssessmentRole = (typeof roleNames)[number];
 
 export type EmailAssessmentUser = {
   id: string;
   name: string;
   email: string;
-  /** WMS role mapped to the primary email-assessment role. */
-  role: EmailAssessmentRole;
+  /** Every email-assessment role this user holds. */
+  roles: EmailAssessmentRole[];
 };
 
-function mapWmsRoleToEmailAssessmentRole(wmsRole: string | undefined | null): EmailAssessmentRole {
-  return isAdminRole((wmsRole ?? null) as Role | null) ? "admin" : "candidate";
-}
-
-/**
- * The set of email-assessment roles an app user effectively holds. Any admin
- * role (devAdmin, executive, …) acts as BOTH admin and assessor; everyone else
- * is a candidate.
- */
-function effectiveRoles(wmsRole: string | undefined | null): EmailAssessmentRole[] {
-  if (isAdminRole((wmsRole ?? null) as Role | null)) {
-    return ["admin", "assessor"];
-  }
-  return ["candidate"];
+function effectiveRoles(appRole: string | undefined | null): EmailAssessmentRole[] {
+  const held: EmailAssessmentRole[] = ["candidate"];
+  if (can(appRole, "content.view")) held.push("contentViewer");
+  if (can(appRole, "content.edit")) held.push("admin");
+  if (can(appRole, "results.view")) held.push("resultsViewer");
+  if (can(appRole, "scores.override")) held.push("assessor");
+  return held;
 }
 
 function toEmailAssessmentUser(sessionUser: {
@@ -52,7 +43,7 @@ function toEmailAssessmentUser(sessionUser: {
     id: sessionUser.id ?? "",
     name: sessionUser.name ?? sessionUser.email ?? "",
     email: sessionUser.email ?? "",
-    role: mapWmsRoleToEmailAssessmentRole(sessionUser.role),
+    roles: effectiveRoles(sessionUser.role),
   };
 }
 

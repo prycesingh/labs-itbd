@@ -4,7 +4,7 @@ import {
   interviewModuleQuestionAssignments,
   interviewModules,
 } from "@/DB/interviewSchema";
-import { isAdminRole, type Role } from "@/lib/rbac";
+import { can, type Role } from "@/lib/rbac";
 import { count, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -24,7 +24,7 @@ export async function DELETE(
 ) {
   try {
     const session = await auth();
-    if (!isAdminRole(session?.user?.role as Role | undefined)) {
+    if (!can(session?.user?.role as Role | undefined, "content.edit")) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 

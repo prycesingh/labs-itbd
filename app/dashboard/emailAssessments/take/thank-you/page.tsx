@@ -13,7 +13,7 @@ export default async function EmailAssessmentThankYouPage({
 }: {
   searchParams: Promise<{ reason?: string }>;
 }) {
-  await requireRole(["candidate", "admin"]);
+  await requireRole(["candidate"]);
   const { reason } = await searchParams;
   const isTabSwitch = reason === "tab-switch";
 

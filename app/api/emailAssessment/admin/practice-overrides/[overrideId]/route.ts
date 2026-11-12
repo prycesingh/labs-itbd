@@ -1,6 +1,6 @@
 import { db } from "@/DB/drizzle";
 import { emailAssessmentAttemptOverrides } from "@/DB/emailAssessmentSchema";
-import { requireAdmin } from "@/lib/admin/guard";
+import { requirePermission } from "@/lib/admin/guard";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -15,7 +15,7 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ overrideId: string }> },
 ) {
-  const guard = await requireAdmin();
+  const guard = await requirePermission("content.edit");
   if (!guard.ok) return guard.response;
 
   const parsed = paramsSchema.safeParse(await params);

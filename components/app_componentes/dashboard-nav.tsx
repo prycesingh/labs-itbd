@@ -28,7 +28,7 @@ import {
   SECTIONS,
   type NavSection,
 } from "@/lib/dashboard-nav-data";
-import { isAdminRole, type Role } from "@/lib/rbac";
+import { can } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 import {
   ChevronRight,
@@ -47,19 +47,16 @@ import { usePathname } from "next/navigation";
  * of their sub-links on click (shadcn sidebar-06 pattern) instead of a nested
  * always-expanded menu, keeping the rail short. Built on the shadcn Sidebar
  * primitive (click-toggle collapse/expand, mobile Sheet, cookie-persisted
- * state). Role-gated: admin-only sub-links and the Admin Panel are hidden
- * from non-admins.
+ * state). Permission-gated (lib/rbac.ts): sub-links carrying a `permission`
+ * and the Admin Panel are hidden from roles that lack it.
  */
 export function DashboardNav({
   user,
-  isTrainer = false,
 }: {
   user: { name?: string | null; email?: string | null; role?: string };
-  /** Guided Labs trainer (DB registry, not an app role) — shows trainerOnly links. */
-  isTrainer?: boolean;
 }) {
   const pathname = usePathname();
-  const isAdmin = isAdminRole((user.role ?? null) as Role | null);
+  const role = user.role ?? null;
   const activeSectionKey =
     resolveBreadcrumbTrail(pathname)?.section?.key ?? null;
 
@@ -103,8 +100,7 @@ export function DashboardNav({
                   key={section.key}
                   section={section}
                   pathname={pathname}
-                  isAdmin={isAdmin}
-                  isTrainer={isTrainer}
+                  role={role}
                   active={section.key === activeSectionKey}
                 />
               ))}
@@ -114,7 +110,7 @@ export function DashboardNav({
       </SidebarContent>
 
       <SidebarFooter>
-        {isAdmin ? (
+        {can(role, "adminPanel.view") ? (
           <SidebarMenu>
             <SidebarMenuItem>
               <NavLinkButton
@@ -148,19 +144,17 @@ export function DashboardNav({
 
 /** A top-level section item (Communication Lab / Technical Lab) — clicking it
  *  opens a dropdown flyout listing its sub-links, grouped by subgroup when a
- *  section has more than one (e.g. Interview / Email Assessments). Admin-only
- *  links are filtered out for non-admins. */
+ *  section has more than one (e.g. Interview / Email Assessments). Links
+ *  whose `permission` the role lacks are filtered out. */
 function NavSectionMenuItem({
   section,
   pathname,
-  isAdmin,
-  isTrainer,
+  role,
   active,
 }: {
   section: NavSection;
   pathname: string;
-  isAdmin: boolean;
-  isTrainer: boolean;
+  role: string | null;
   active: boolean;
 }) {
   const { isMobile } = useSidebar();
@@ -169,7 +163,7 @@ function NavSectionMenuItem({
     .map((sg) => ({
       ...sg,
       links: sg.links.filter(
-        (l) => (l.adminOnly ? isAdmin : true) && (l.trainerOnly ? isTrainer : true),
+        (l) => !l.permission || can(role, l.permission),
       ),
     }))
     .filter((sg) => sg.links.length > 0);

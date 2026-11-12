@@ -17,8 +17,9 @@ export async function GET(_req: Request, context: { params: Promise<{ moduleId: 
   return NextResponse.json({ module: tree });
 }
 
-/** PATCH — edit title/info/progression mode, or (de)activate. */
-export const { PATCH } = itemRoutes({
+/** PATCH — edit title/info/progression mode, or (de)activate.
+ *  DELETE — remove a module that has no enrollments (with its labs/tasks/steps). */
+export const { PATCH, DELETE } = itemRoutes({
   param: "moduleId",
   table: labPracticeModules,
   updateSchema: moduleUpdateSchema,

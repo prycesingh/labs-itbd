@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { db } from "@/DB/drizzle";
 import { users } from "@/DB/schema";
-import { isAdminRole, type Role } from "@/lib/rbac";
+import { can, type Role } from "@/lib/rbac";
 import { changePasswordSchema } from "@/lib/validation/admin";
 import { compare, hash } from "bcryptjs";
 import { eq } from "drizzle-orm";
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!isAdminRole(role ?? null)) {
+  if (!can(role, "credentials.login")) {
     return NextResponse.json(
       { error: "Credential passwords are restricted to administrators." },
       { status: 403 },
@@ -129,7 +129,7 @@ export async function GET() {
       { status: 401 },
     );
   }
-  if (!isAdminRole(role ?? null)) {
+  if (!can(role, "credentials.login")) {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   }
 

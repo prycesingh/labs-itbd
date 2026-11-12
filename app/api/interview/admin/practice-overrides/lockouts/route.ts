@@ -1,7 +1,7 @@
 import { db } from "@/DB/drizzle";
 import { candidateInterviewSessions, interviewModules } from "@/DB/interviewSchema";
 import { users } from "@/DB/schema";
-import { requireAdmin } from "@/lib/admin/guard";
+import { requirePermission } from "@/lib/admin/guard";
 import { getAttemptCadence } from "@/lib/interview/moduleCapabilities";
 import { startOfThisWeek, startOfToday } from "@/lib/labs/date";
 import { and, eq, gte, sql } from "drizzle-orm";
@@ -20,7 +20,7 @@ const FAILURE_LOCKOUT_THRESHOLD = 3;
  * starts.
  */
 export async function GET() {
-  const guard = await requireAdmin();
+  const guard = await requirePermission("content.view");
   if (!guard.ok) return guard.response;
 
   const modules = await db

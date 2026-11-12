@@ -5,14 +5,15 @@ import { db } from "@/DB/drizzle";
 import { labPracticeEmployees } from "@/DB/labPracticeSchema";
 import { handleError } from "@/lib/labPractice/api";
 import { lastSyncedAt, syncEmployees } from "@/lib/labPractice/hris";
-import { requireApiAdmin } from "@/lib/labPractice/identity";
+import { requirePermission } from "@/lib/admin/guard";
 
 export const runtime = "nodejs";
 
-/** GET — cache status. */
+/** GET — cache status. Trainers (and above) may check / refresh the HRIS
+ *  cache when a new joiner is missing from the enrollment search. */
 export async function GET() {
-  const { response } = await requireApiAdmin();
-  if (response) return response;
+  const guard = await requirePermission("guidedLabs.train");
+  if (!guard.ok) return guard.response;
 
   const [counts] = await db
     .select({
@@ -31,8 +32,8 @@ export async function GET() {
 
 /** POST — sync now. */
 export async function POST() {
-  const { response } = await requireApiAdmin();
-  if (response) return response;
+  const guard = await requirePermission("guidedLabs.train");
+  if (!guard.ok) return guard.response;
 
   try {
     return NextResponse.json(await syncEmployees());

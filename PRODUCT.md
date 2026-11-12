@@ -29,7 +29,7 @@ The differentiator is breadth and integration, not any single mechanism: one das
 ## Operating Context
 
 - Auth is exclusively Microsoft Entra ID (Azure AD) SSO against the org's own tenant, plus a credentials-based "break-glass" admin bypass for accounts with a provisioned bcrypt hash.
-- Roles (`devAdmin`, `executive`, `adminTeam`, `sales`, `taTeam`, `qateam`, `hrTeam`, `serviceDelivery`, `user`) are resolved via hardcoded/env-extendable email whitelists, not domain-wide rules; only `devAdmin` and `executive` are admin roles, `devAdmin` alone is superadmin.
+- Roles are `devAdmin` (super admin, manages roles), `admin` (read-only admin panel + logs, edits lab content), `executive` (sees everything, changes nothing), `trainer` (edits Technical/Communication lab content, runs Guided Labs), `auditor` (reviews audio, overrides AI scores) and `user`. Each maps to permissions in `lib/rbac.ts`; roles are assigned in the admin panel. A devAdmin email whitelist is a permanent floor; the executive whitelist only seeds new users.
 - Dark theme is fixed: `class="dark"` is rendered statically on `<html>` in `app/layout.tsx` (no theme provider; the `next-themes` package remains only because the shadcn `sonner` wrapper imports `useTheme`).
 - App is explicitly non-public (`robots: noindex, nofollow`) — internal tool, not marketed externally.
 - Background AI evaluation work runs through a MySQL-authoritative job queue (no Redis).

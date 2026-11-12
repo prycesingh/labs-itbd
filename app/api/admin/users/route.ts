@@ -1,18 +1,19 @@
 import { db } from "@/DB/drizzle";
 import { users } from "@/DB/schema";
-import { requireSuperAdmin } from "@/lib/admin/guard";
-import { isAdminRole, isSuperAdmin, type Role } from "@/lib/rbac";
+import { requirePermission } from "@/lib/admin/guard";
+import { can, type Role } from "@/lib/rbac";
+import { isWhitelistedDevAdminEmail } from "@/lib/roleWhitelist";
 import { setUserRoleSchema } from "@/lib/validation/admin";
 import { asc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 /**
  * GET /api/admin/users — list all users for the management table.
- * Superadmin only. Never returns the password hash; exposes only whether a
- * credential password exists.
+ * Any admin-panel role (read-only unless users.manage). Never returns the
+ * password hash; exposes only whether a credential password exists.
  */
 export async function GET() {
-  const guard = await requireSuperAdmin();
+  const guard = await requirePermission("adminPanel.view");
   if (!guard.ok) return guard.response;
 
   const rows = await db
@@ -32,8 +33,8 @@ export async function GET() {
     name: u.name,
     email: u.email,
     role: u.role,
-    isAdmin: isAdminRole(u.role),
-    isSuperAdmin: isSuperAdmin(u.role),
+    canUseCredentials: can(u.role, "credentials.login"),
+    isProtected: isWhitelistedDevAdminEmail(u.email),
     hasCredentials: Boolean(u.password),
     mustChangePassword: Boolean(u.mustChangePassword),
   }));
@@ -42,16 +43,17 @@ export async function GET() {
 }
 
 /**
- * PATCH /api/admin/users — grant or revoke a role on a target user.
- * Superadmin only. Guardrails:
+ * PATCH /api/admin/users — set a user's role (any role, devAdmin included).
+ * Requires users.manage (devAdmin). Guardrails (ABAC):
  *  - cannot change your own role (prevents self-lockout / self-demotion)
- *  - cannot assign a superadmin role from the panel (deliberate code/whitelist
- *    action only)
- *  - if a demotion drops the user out of admin roles, their credential password
- *    is cleared (creds imply admin — a non-admin must not retain a password).
+ *  - cannot change a whitelisted devAdmin (lib/roleWhitelist.ts) — they are
+ *    the break-glass floor and would be re-promoted at their next sign-in
+ *  - if the new role lacks credentials.login, their credential password is
+ *    cleared (a non-admin must not retain a password).
+ * The change reaches the user's session within the JWT role-refresh interval.
  */
 export async function PATCH(request: Request) {
-  const guard = await requireSuperAdmin();
+  const guard = await requirePermission("users.manage");
   if (!guard.ok) return guard.response;
 
   let body: unknown;
@@ -78,18 +80,8 @@ export async function PATCH(request: Request) {
     );
   }
 
-  if (isSuperAdmin(role as Role)) {
-    return NextResponse.json(
-      {
-        error:
-          "Superadmin roles cannot be granted from the panel. Use the email whitelist.",
-      },
-      { status: 400 },
-    );
-  }
-
   const existing = await db
-    .select({ id: users.id, role: users.role })
+    .select({ id: users.id, email: users.email, role: users.role })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
@@ -98,16 +90,18 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "User not found." }, { status: 404 });
   }
 
-  if (isSuperAdmin(existing[0].role)) {
+  if (isWhitelistedDevAdminEmail(existing[0].email)) {
     return NextResponse.json(
-      { error: "Cannot modify a superadmin's role from the panel." },
+      {
+        error:
+          "This devAdmin is on the protected whitelist; remove them from DEVADMIN_WHITELIST_EMAILS / lib/roleWhitelist.ts first.",
+      },
       { status: 400 },
     );
   }
 
-  // If the new role is not an admin role, strip any credential password — a
-  // non-admin must never retain credential login.
-  const losesAdmin = !isAdminRole(role as Role);
+  // If the new role can't use credential login, strip any password.
+  const losesAdmin = !can(role, "credentials.login");
 
   await db
     .update(users)

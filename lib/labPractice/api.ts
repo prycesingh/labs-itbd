@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { z } from "zod";
 
-import { isDuplicateKeyError, ReorderError } from "@/lib/labPractice/curriculum";
+import { CurriculumDeleteError, isDuplicateKeyError, ReorderError } from "@/lib/labPractice/curriculum";
 import { HrisError } from "@/lib/labPractice/hris";
 import {
   enrollmentAccessFor,
@@ -36,6 +36,7 @@ export async function parseBody<T extends z.ZodTypeAny>(
 export function handleError(err: unknown, duplicateMessage = "That title is already used here.") {
   if (err instanceof PracticeError) return jsonError(err.message, err.status);
   if (err instanceof ReorderError) return jsonError(err.message, 400);
+  if (err instanceof CurriculumDeleteError) return jsonError(err.message, 409);
   if (err instanceof HrisError) return jsonError(err.message, 502);
   if (isDuplicateKeyError(err)) return jsonError(duplicateMessage, 409);
   console.error("[lab-practice] unexpected error", err);
