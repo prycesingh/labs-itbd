@@ -34,3 +34,4 @@ next-env.d.ts
 
 # uploads (managed storage lives one level up)
 /uploads-storage
+/modules-excels
