@@ -4,6 +4,7 @@ import { AudioPlayer } from "@/components/app_componentes/AudioPlayer";
 import DefaultButton, {
   GreenButton,
 } from "@/components/app_componentes/customButtons";
+import { stopSpeaking } from "@/lib/interview/textToSpeech";
 import { cn } from "@/lib/utils";
 import { Mic, Square, Trash2, Upload } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
@@ -23,7 +24,7 @@ interface AudioRecorderProps {
   questionIndex: number;
   isLocked?: boolean;
   maxAttempts?: number;
-  onUploadSuccess?: (blob: Blob, duration: number) => void;
+  onUploadSuccess?: (blob: Blob, duration: number, answerId?: string) => void;
   className?: string;
   // Follow-up flow only (Interview Coach): when set, the answer is posted
   // against this adaptively-generated follow-up id instead of a bank
@@ -101,6 +102,8 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
 
   const startRecording = async () => {
     if (isLocked) return;
+    // Never record the question being read aloud back into the answer.
+    stopSpeaking();
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -248,9 +251,12 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
         throw new Error(message);
       }
 
+      const uploaded = (await response.json().catch(() => null)) as {
+        answerId?: string;
+      } | null;
       toast.success("Answer recorded successfully");
       if (onUploadSuccess) {
-        onUploadSuccess(recordedBlob, uploadDuration);
+        onUploadSuccess(recordedBlob, uploadDuration, uploaded?.answerId);
       }
       setRecordedBlob(null);
       setDuration(0);

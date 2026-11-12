@@ -1,8 +1,12 @@
 
-import { and, eq, max, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, max, notInArray, or, sql } from "drizzle-orm";
 
 import { db } from "@/DB/drizzle";
-import { labPracticeEmployees } from "@/DB/labPracticeSchema";
+import {
+  labPracticeEmployees,
+  labPracticeEnrollments,
+  labPracticeTrainers,
+} from "@/DB/labPracticeSchema";
 
 /**
  * HRIS (ITBD Workforce) client + employee cache sync.
@@ -15,7 +19,8 @@ import { labPracticeEmployees } from "@/DB/labPracticeSchema";
  * so a shape change surfaces as a clear admin error instead of a silent wipe.
  *
  * Safety: employees missing from the HRIS are DEACTIVATED (never deleted —
- * enrollments reference them), and a response that would deactivate more
+ * enrollments reference them; their active enrollments are unassigned, see
+ * syncEmployees), and a response that would deactivate more
  * than half of the currently-active cache is rejected as a probable partial
  * or broken response.
  */
@@ -160,7 +165,13 @@ export async function fetchHrisEmployees(): Promise<HrisEmployee[]> {
   return normalizeHrisPayload(payload);
 }
 
-export type SyncResult = { fetched: number; upserted: number; deactivated: number };
+export type SyncResult = {
+  fetched: number;
+  upserted: number;
+  deactivated: number;
+  /** Active enrollments whose trainee or trainer has left — now unassigned. */
+  enrollmentsUnassigned: number;
+};
 
 export async function syncEmployees(): Promise<SyncResult> {
   const employees = await fetchHrisEmployees();
@@ -204,10 +215,41 @@ export async function syncEmployees(): Promise<SyncResult> {
       ),
     );
 
+  // Leavers' enrollments are unassigned (is_active=false, never deleted — all
+  // progress/rejections stay): as TRAINEE they can't practise any more, and
+  // as TRAINER their trainees would otherwise stay locked to them (another
+  // trainer's enroll is refused as a conflict while it is active). Unassigning
+  // lets another trainer re-enroll and continue from the same history. Runs
+  // over ALL inactive employees, not just this sync's, so it is idempotent and
+  // also catches leavers deactivated before this rule existed. Re-hiring does
+  // NOT re-activate anything — a trainer re-enrolls deliberately.
+  const inactiveEmployeeIds = db
+    .select({ id: labPracticeEmployees.id })
+    .from(labPracticeEmployees)
+    .where(eq(labPracticeEmployees.isActive, false));
+  const inactiveTrainerIds = db
+    .select({ id: labPracticeTrainers.id })
+    .from(labPracticeTrainers)
+    .innerJoin(labPracticeEmployees, eq(labPracticeEmployees.id, labPracticeTrainers.employeeId))
+    .where(eq(labPracticeEmployees.isActive, false));
+  const unassigned = await db
+    .update(labPracticeEnrollments)
+    .set({ isActive: false })
+    .where(
+      and(
+        eq(labPracticeEnrollments.isActive, true),
+        or(
+          inArray(labPracticeEnrollments.traineeId, inactiveEmployeeIds),
+          inArray(labPracticeEnrollments.trainerId, inactiveTrainerIds),
+        ),
+      ),
+    );
+
   return {
     fetched: employees.length,
     upserted: employees.length,
     deactivated: deactivated[0].affectedRows ?? 0,
+    enrollmentsUnassigned: unassigned[0].affectedRows ?? 0,
   };
 }
 

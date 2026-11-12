@@ -525,7 +525,17 @@ ${
     ? `
 
 ─── ADAPTIVE FOLLOW-UP ───
-Also decide whether a follow-up question is warranted. If the answer is shallow, vague, or misses key points from the answer key (when provided), set "follow_up_recommended" to true and write one natural follow-up question in "follow_up_question" that probes the biggest gap. Otherwise set "follow_up_recommended" to false and leave "follow_up_question" as an empty string.`
+Also decide whether ONE follow-up question is warranted. Recommend one only when the candidate made a genuine attempt but left a specific, important gap that a single question could draw out.
+
+Rules for the follow-up question:
+- It MUST stay inside the same scenario/question above. Restate its concrete specifics (the reported issue, product, error, or situation) so the follow-up makes sense on its own — the candidate will hear it later, without the original question in front of them.
+- Build on what the candidate actually said: reference their approach and ask about the specific step, cause, or detail they skipped or got wrong.
+- NEVER ask about "another", "a different", or an unspecified/hypothetical issue, and never ask a generic question that could apply to any scenario.
+- One question, one sentence, conversational.
+
+Set "follow_up_recommended" to false and "follow_up_question" to an empty string when:
+- the answer already covers the key points reasonably well, or
+- the candidate made no real attempt (e.g. "I don't know", silence, test/filler speech, or off-topic) — there is nothing to build on, and the feedback already addresses it.`
     : "";
 
   const isTechnical = dimensionSet === "technical-interview";

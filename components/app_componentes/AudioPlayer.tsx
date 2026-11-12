@@ -14,14 +14,22 @@ export function AudioPlayer({
   src,
   className,
   onDurationChange,
+  onError,
 }: {
   src: string;
   className?: string;
   /** Fires once the real decoded duration (seconds) of `src` is known. */
   onDurationChange?: (seconds: number) => void;
+  /**
+   * Fires when `src` can't be loaded or played (404, unsupported format).
+   * Without this the player sat at 0:00 with a dead Play button and an
+   * unhandled play() rejection — see QuestionPlayer's TTS fallback.
+   */
+  onError?: () => void;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const discoveringDuration = useRef(false);
@@ -37,9 +45,26 @@ export function AudioPlayer({
     setPlaying(false);
     setCurrentTime(0);
     setDuration(0);
+    setFailed(false);
     discoveringDuration.current = false;
     playPending.current = false;
   }, [src]);
+
+  const handleFailure = () => {
+    setPlaying(false);
+    setFailed(true);
+    onError?.();
+  };
+
+  // play() returns a promise that rejects when the source is missing or
+  // unsupported — always handle it rather than letting it go unhandled.
+  const safePlay = (el: HTMLAudioElement) => {
+    el.play().catch((error: unknown) => {
+      // AbortError = a pause()/new src interrupted play(); not a failure.
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      handleFailure();
+    });
+  };
 
   const togglePlay = () => {
     const el = audioRef.current;
@@ -56,7 +81,7 @@ export function AudioPlayer({
         playPending.current = true;
         return;
       }
-      void el.play();
+      safePlay(el);
     } else {
       el.pause();
     }
@@ -116,13 +141,14 @@ export function AudioPlayer({
           el.currentTime = 0;
           if (playPending.current) {
             playPending.current = false;
-            void el.play();
+            safePlay(el);
           }
         }}
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         onEnded={() => setPlaying(false)}
+        onError={handleFailure}
         className="hidden"
       >
         Your browser does not support the audio element.
@@ -131,10 +157,12 @@ export function AudioPlayer({
       <button
         type="button"
         onClick={togglePlay}
+        disabled={failed}
         aria-label={playing ? "Pause" : "Play"}
         className={cn(
           "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-itbd-blue text-black transition",
           "hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-itbd-blue",
+          "disabled:cursor-not-allowed disabled:opacity-40",
         )}
       >
         {playing ? (
@@ -161,7 +189,9 @@ export function AudioPlayer({
       />
 
       <span className="w-20 shrink-0 text-right text-xs text-white/50 tabular-nums">
-        {formatTime(currentTime)} / {formatTime(duration)}
+        {failed
+          ? "Unavailable"
+          : `${formatTime(currentTime)} / ${formatTime(duration)}`}
       </span>
     </div>
   );

@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { db } from "@/DB/drizzle";
 import { candidateInterviewAnswers } from "@/DB/interviewSchema";
+import { canAccessInterviewSession } from "@/lib/interview/answerAccess";
 import { getAudioStorageProvider } from "@/lib/interview/audioStorage";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
@@ -34,7 +35,15 @@ export async function GET(
       .where(eq(candidateInterviewAnswers.id, parsedAnswerId.data))
       .limit(1);
 
-    if (!answer) {
+    // Same 404 for "doesn't exist" and "not yours" so answer IDs can't be
+    // probed — see lib/interview/answerAccess.ts.
+    if (
+      !answer ||
+      !(await canAccessInterviewSession(
+        { id: session.user.id, role: session.user.role },
+        answer.sessionId,
+      ))
+    ) {
       return NextResponse.json({ error: "Answer not found" }, { status: 404 });
     }
 

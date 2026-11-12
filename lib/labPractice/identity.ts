@@ -23,7 +23,8 @@ import { can } from "@/lib/rbac";
  * rejections): it is created/reactivated on demand the first time a role-holder
  * acts here, and is never consulted for authority — revoking the role revokes
  * trainer access immediately, while their history stays intact.
- * "guidedLabs.viewAll" grants read access to every enrollment (oversight).
+ * "guidedLabs.viewAll" grants read access to every enrollment (oversight);
+ * "guidedLabs.manageAll" lets the holder unassign / re-assign any enrollment.
  */
 
 export type Employee = typeof labPracticeEmployees.$inferSelect;
@@ -35,6 +36,8 @@ export type PracticeActor = {
   email: string;
   /** guidedLabs.viewAll — may read every enrollment. */
   canViewAll: boolean;
+  /** guidedLabs.manageAll — may unassign / re-assign every enrollment. */
+  canManageAll: boolean;
   employee: Employee | null;
   trainer: Trainer | null;
 };
@@ -106,6 +109,7 @@ export async function getPracticeActor(): Promise<PracticeActor | null> {
     userId: user.id,
     email: user.email.toLowerCase(),
     canViewAll: can(user.role, "guidedLabs.viewAll"),
+    canManageAll: can(user.role, "guidedLabs.manageAll"),
     employee,
     trainer,
   };
@@ -166,7 +170,7 @@ export async function requirePageTrainer(): Promise<TrainerActor> {
 // Enrollment access
 // ─────────────────────────────────────────────
 
-export type EnrollmentAccess = "trainee" | "trainer" | "admin";
+export type EnrollmentAccess = "trainee" | "trainer" | "admin" | "manager";
 
 export async function getEnrollment(enrollmentId: number): Promise<Enrollment | null> {
   const [row] = await db
@@ -182,6 +186,7 @@ export async function getEnrollment(enrollmentId: number): Promise<Enrollment | 
  *   trainee — it is their own enrollment
  *   trainer — they are the trainer who owns it
  *   admin   — guidedLabs.viewAll (read access to everything)
+ *   manager — guidedLabs.manageAll (may unassign / re-assign it)
  * These are NOT exclusive: a trainer who enrolls themselves is both trainee
  * and trainer on that enrollment and must be able to act as either (practice
  * on the trainee page, review on the trainer page).
@@ -194,5 +199,6 @@ export function enrollmentAccessFor(
   if (actor.employee && enrollment.traineeId === actor.employee.id) access.push("trainee");
   if (actor.trainer && enrollment.trainerId === actor.trainer.id) access.push("trainer");
   if (actor.canViewAll) access.push("admin");
+  if (actor.canManageAll) access.push("manager");
   return access;
 }

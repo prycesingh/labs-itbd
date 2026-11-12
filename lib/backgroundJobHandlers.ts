@@ -42,10 +42,15 @@ import {
   generateCorrelationId,
   INTERVIEW_AUDIO_RETENTION_CLEANUP_JOB,
   INTERVIEW_EVALUATION_JOB,
+  INTERVIEW_PROMPT_AUDIO_JOB,
   INTERVIEW_SESSION_ORCHESTRATION_JOB,
   INTERVIEW_SESSION_SUMMARY_JOB,
   INTERVIEW_TRANSCRIPTION_JOB,
 } from "@/lib/interview/jobConstants";
+import {
+  getModulePromptAudioStatus,
+  regenerateQuestionPromptAudio,
+} from "@/lib/interview/promptAudio";
 import type { AIEvaluationStructured } from "@/types/interview";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -713,6 +718,23 @@ async function handleInterviewTranscription(
   }
 }
 
+const DEFAULT_MAX_FOLLOW_UPS_PER_SESSION = 2;
+
+function resolveMaxFollowUpsPerSession(config: Record<string, unknown>) {
+  const value = Number(config.maxPerSession);
+  return Number.isInteger(value) && value >= 0
+    ? value
+    : DEFAULT_MAX_FOLLOW_UPS_PER_SESSION;
+}
+
+async function countSessionFollowUps(sessionId: string) {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(interviewFollowupQuestions)
+    .where(eq(interviewFollowupQuestions.sessionId, sessionId));
+  return Number(row?.count ?? 0);
+}
+
 async function handleInterviewEvaluation(
   callbacks: {
     updateProgress: (progress: number) => void;
@@ -938,16 +960,28 @@ async function handleInterviewEvaluation(
     // a pending row lets the client poll for it (see the follow-up route)
     // and insert it into the flow before advancing — the actual UX pause
     // lives client-side (Phase 6), this is just the detection + storage.
-    if (
+    //
+    // Capped per session (follow_ups config.maxPerSession, default
+    // DEFAULT_MAX_FOLLOW_UPS_PER_SESSION): follow-ups all surface together at
+    // final submit, and an uncapped model flagged every answer — candidates
+    // faced 5 back-to-back follow-ups detached from the questions they
+    // probe. Immediate evaluations run concurrently, so two finishing at
+    // once can overshoot the cap by one; that's acceptable for a soft limit.
+    const followUpQuestion =
+      evaluationResult.evaluation.follow_up_question?.trim() ?? "";
+    const followUpAllowed =
       followUpsCapability.enabled &&
-      evaluationResult.evaluation.follow_up_recommended &&
-      evaluationResult.evaluation.follow_up_question
-    ) {
+      evaluationResult.evaluation.follow_up_recommended === true &&
+      followUpQuestion.length > 0 &&
+      (await countSessionFollowUps(resolvedSessionId)) <
+        resolveMaxFollowUpsPerSession(followUpsCapability.config);
+
+    if (followUpAllowed) {
       await db.insert(interviewFollowupQuestions).values({
         id: randomUUID(),
         sessionId: resolvedSessionId,
         parentAnswerId: resolvedAnswerId,
-        questionText: evaluationResult.evaluation.follow_up_question,
+        questionText: followUpQuestion,
         idealPoints:
           evaluationResult.evaluation.improvement_areas.length > 0
             ? evaluationResult.evaluation.improvement_areas
@@ -1159,6 +1193,55 @@ async function handleInterviewAudioRetentionCleanup(callbacks: {
   };
 }
 
+/**
+ * Regenerates TTS prompt audio for every active question in a module whose
+ * audio is missing on this server (see lib/interview/promptAudio.ts).
+ * Per-question failures are counted and reported, not thrown — one bad
+ * question must not stop the rest; re-running the job retries only what is
+ * still missing.
+ */
+async function handleInterviewPromptAudio(
+  callbacks: {
+    updateProgress: (progress: number) => void;
+    updateResult?: (result: unknown) => void;
+  },
+  jobId?: string,
+) {
+  const { payload } = await getInterviewPayload(jobId);
+  const moduleId =
+    typeof payload.moduleId === "string" ? payload.moduleId : null;
+  if (!moduleId) throw new Error("Invalid prompt-audio payload");
+
+  const { missing } = await getModulePromptAudioStatus(moduleId);
+  let generated = 0;
+  const failures: { questionId: string; error: string }[] = [];
+
+  for (const [index, question] of missing.entries()) {
+    try {
+      await regenerateQuestionPromptAudio(question);
+      generated += 1;
+    } catch (error) {
+      failures.push({
+        questionId: question.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    callbacks.updateProgress(
+      Math.round(((index + 1) / Math.max(missing.length, 1)) * 100),
+    );
+  }
+
+  const result = {
+    moduleId,
+    attempted: missing.length,
+    generated,
+    failed: failures.length,
+    failures: failures.slice(0, 20),
+  };
+  callbacks.updateResult?.(result);
+  return result;
+}
+
 export function initializeBackgroundJobs() {
   const queue = getJobQueue();
 
@@ -1181,6 +1264,7 @@ export function initializeBackgroundJobs() {
     INTERVIEW_AUDIO_RETENTION_CLEANUP_JOB,
     handleInterviewAudioRetentionCleanup,
   );
+  queue.registerHandler(INTERVIEW_PROMPT_AUDIO_JOB, handleInterviewPromptAudio);
 
   if (!handlersInitialized) {
     handlersInitialized = true;

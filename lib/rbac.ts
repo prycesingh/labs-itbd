@@ -50,6 +50,8 @@ export const PERMISSIONS = [
   "guidedLabs.train",
   /** Read every Guided Labs enrollment (oversight). */
   "guidedLabs.viewAll",
+  /** Unassign / re-assign ANY Guided Labs enrollment, not just their own. */
+  "guidedLabs.manageAll",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -66,6 +68,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "results.view",
     "guidedLabs.train",
     "guidedLabs.viewAll",
+    "guidedLabs.manageAll",
   ],
   // Read-only everywhere: every *.view permission, nothing that writes.
   // proxy.ts additionally refuses all its mutating requests (READ_ONLY_ROLES).

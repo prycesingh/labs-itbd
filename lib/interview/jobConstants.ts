@@ -11,6 +11,7 @@ export const INTERVIEW_EVALUATION_JOB = "interview-evaluation";
 export const INTERVIEW_SESSION_SUMMARY_JOB = "interview-session-summary";
 export const INTERVIEW_AUDIO_RETENTION_CLEANUP_JOB =
   "interview-audio-retention-cleanup";
+export const INTERVIEW_PROMPT_AUDIO_JOB = "interview-prompt-audio";
 
 // Job execution timeouts (in milliseconds)
 export const JOB_TIMEOUTS = {

@@ -36,8 +36,13 @@ import {
   ToggleRight,
   Trash2,
   Unlink,
+  Volume2,
   X,
 } from "lucide-react";
+import {
+  QUESTION_TYPE_LABELS,
+  type QuestionType,
+} from "@/lib/interview/questionTypes";
 import { can } from "@/lib/rbac";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -73,6 +78,8 @@ interface ModuleQuestionAssignment {
     promptAudioPath: string | null;
     promptTranscript: string | null;
     isActive: boolean;
+    questionType?: QuestionType | null;
+    category?: string | null;
   };
 }
 
@@ -258,6 +265,87 @@ export default function ModuleManagementPage() {
       )
       .catch(() => setGroundedGradingEnabled(false));
   }, [fetchQuestionsForModule, selectedModuleId]);
+
+  // Prompt audio health for the selected module (see
+  // /api/interview/admin/modules/{id}/prompt-audio). Polled while a
+  // generation job runs so progress and the final count stay live.
+  const [audioStatus, setAudioStatus] = useState<{
+    total: number;
+    missingCount: number;
+    activeJob: { id: string; progress: number | null } | null;
+  } | null>(null);
+  const [startingAudioJob, setStartingAudioJob] = useState(false);
+
+  const fetchAudioStatus = useCallback(async (moduleId: string) => {
+    try {
+      const res = await fetch(
+        `/api/interview/admin/modules/${moduleId}/prompt-audio`,
+      );
+      if (!res.ok) return;
+      setAudioStatus(await res.json());
+    } catch {
+      // Non-fatal — the notice simply doesn't show.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!selectedModuleId) return;
+    // Ignore a response that arrives after the admin switched modules.
+    let cancelled = false;
+    fetch(`/api/interview/admin/modules/${selectedModuleId}/prompt-audio`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled) setAudioStatus(data);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedModuleId]);
+
+  useEffect(() => {
+    if (!selectedModuleId || !audioStatus?.activeJob) return;
+    const timer = window.setInterval(() => {
+      void fetchAudioStatus(selectedModuleId);
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [audioStatus?.activeJob, fetchAudioStatus, selectedModuleId]);
+
+  // Job just finished → refresh the question list so "Audio ready" badges
+  // and players reflect the new files.
+  const audioJobRunning = Boolean(audioStatus?.activeJob);
+  const [wasAudioJobRunning, setWasAudioJobRunning] = useState(false);
+  if (audioJobRunning !== wasAudioJobRunning) {
+    setWasAudioJobRunning(audioJobRunning);
+    if (!audioJobRunning && selectedModuleId) {
+      void fetchQuestionsForModule(selectedModuleId, questionsPage);
+    }
+  }
+
+  const startAudioGeneration = async () => {
+    if (!selectedModuleId) return;
+    setStartingAudioJob(true);
+    try {
+      const res = await fetch(
+        `/api/interview/admin/modules/${selectedModuleId}/prompt-audio`,
+        { method: "POST" },
+      );
+      if (!res.ok) throw new Error(await readErrorMessage(res));
+      const body = await res.json();
+      toast.success(
+        body.alreadyRunning
+          ? "Audio generation is already running"
+          : `Generating audio for ${body.queued} questions`,
+      );
+      await fetchAudioStatus(selectedModuleId);
+    } catch (error) {
+      toast.error("Couldn't start audio generation", {
+        description: error instanceof Error ? error.message : undefined,
+      });
+    } finally {
+      setStartingAudioJob(false);
+    }
+  };
 
   const readErrorMessage = async (res: Response) => {
     try {
@@ -800,6 +888,45 @@ export default function ModuleManagementPage() {
               />
             </div>
 
+            {audioStatus &&
+              (audioStatus.missingCount > 0 || audioStatus.activeJob) && (
+                <div
+                  role="status"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-itbd-blue/30 bg-itbd-blue/5 p-4"
+                >
+                  <div className="flex min-w-0 items-start gap-3">
+                    <Volume2 className="mt-0.5 h-4 w-4 shrink-0 text-itbd-blue" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">
+                        {audioStatus.activeJob
+                          ? `Generating question audio… ${audioStatus.activeJob.progress ?? 0}%`
+                          : `${audioStatus.missingCount} of ${audioStatus.total} questions have no playable audio`}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {audioStatus.activeJob
+                          ? "You can leave this page — it keeps running on the server."
+                          : "Candidates hear these through their browser's voice instead. Generate natural-sounding audio from each question's text."}
+                      </p>
+                    </div>
+                  </div>
+                  {!audioStatus.activeJob && can(session?.user?.role, "content.edit") && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => void startAudioGeneration()}
+                      disabled={startingAudioJob}
+                    >
+                      {startingAudioJob ? (
+                        <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Volume2 className="mr-1 h-3.5 w-3.5" />
+                      )}
+                      Generate audio
+                    </Button>
+                  )}
+                </div>
+              )}
+
             {loadingQuestions ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -846,6 +973,21 @@ export default function ModuleManagementPage() {
                           </span>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
+                          {question.question.questionType && (
+                            <Badge
+                              variant="outline"
+                              className="border-itbd-blue/40 text-xs text-itbd-blue"
+                            >
+                              {QUESTION_TYPE_LABELS[question.question.questionType]}
+                              {question.question.category &&
+                              question.question.category !==
+                                QUESTION_TYPE_LABELS[
+                                  question.question.questionType
+                                ]
+                                ? ` · ${question.question.category}`
+                                : ""}
+                            </Badge>
+                          )}
                           {question.question.promptAudioPath ? (
                             <Badge variant="outline" className="text-xs">
                               Audio ready

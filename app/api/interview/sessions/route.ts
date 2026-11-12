@@ -28,14 +28,16 @@ import { average1To5ToPercentage } from "@/lib/interview/deliveryMetrics";
 import {
   CAPABILITY_KEYS,
   getAttemptCadence,
+  getInterviewBlueprint,
   getModuleCapability,
 } from "@/lib/interview/moduleCapabilities";
+import { selectQuestionsByBlueprint } from "@/lib/interview/questionTypes";
 import { startOfThisWeek, startOfToday } from "@/lib/labs/date";
 import {
   createSessionSchema,
   updateSessionStatusSchema,
 } from "@/lib/validation/interview";
-import { and, asc, eq, gte, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -109,6 +111,36 @@ function hasCompleteDimensionScores(
 }
 
 const sessionIdSchema = z.string().uuid();
+
+// How many of the candidate's past sessions count as "recent" for question
+// rotation. 20 sessions × 7 questions comfortably exceeds every per-type pool
+// (largest non-technical pool is 22), so each type fully rotates before
+// repeating.
+const ROTATION_HISTORY_SESSIONS = 20;
+
+/** Question ids from this candidate's past sessions, most recent first. */
+async function getRecentlySeenQuestionIds(
+  candidateId: string,
+  moduleId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({
+      assignedQuestionIds: candidateInterviewSessions.assignedQuestionIds,
+    })
+    .from(candidateInterviewSessions)
+    .where(
+      and(
+        eq(candidateInterviewSessions.candidateId, candidateId),
+        eq(candidateInterviewSessions.moduleId, moduleId),
+      ),
+    )
+    .orderBy(desc(candidateInterviewSessions.createdAt))
+    .limit(ROTATION_HISTORY_SESSIONS);
+
+  // assigned_question_ids is a JSON column — on MariaDB it can arrive as a
+  // string rather than a parsed array (see the jsonText helper).
+  return rows.flatMap((row) => normalizeStringList(row.assignedQuestionIds));
+}
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -268,6 +300,7 @@ export async function POST(request: NextRequest) {
       .select({
         id: interviewQuestionBank.id,
         text: interviewQuestionBank.promptText,
+        questionType: interviewQuestionBank.questionType,
         order: interviewModuleQuestionAssignments.questionOrder,
       })
       .from(interviewModuleQuestionAssignments)
@@ -326,22 +359,42 @@ export async function POST(request: NextRequest) {
     }
 
     const sessionId = randomUUID();
-    const totalQuestions = Math.min(
-      module.questionDisplayCount,
-      questionRows.length,
-    );
 
-    // Shuffle once, at creation, so repeated attempts see varied subsets of
-    // the assigned bank — but a single session's set is fixed from here on.
-    const shuffledQuestions = [...questionRows];
-    for (let i = shuffledQuestions.length - 1; i > 0; i -= 1) {
-      const randomIndex = Math.floor(Math.random() * (i + 1));
-      [shuffledQuestions[i], shuffledQuestions[randomIndex]] = [
-        shuffledQuestions[randomIndex],
-        shuffledQuestions[i],
-      ];
+    // Chosen once, at creation; a single session's set is fixed from here on.
+    // Blueprint modules (Interview Coach) get an interview-ordered set that
+    // rotates through the pool per candidate; every other module keeps the
+    // original uniform shuffle.
+    const blueprint = await getInterviewBlueprint(moduleId);
+    let selectedQuestions: typeof questionRows;
+    if (blueprint) {
+      const recentlySeenIds = await getRecentlySeenQuestionIds(
+        candidateId,
+        moduleId,
+      );
+      selectedQuestions = selectQuestionsByBlueprint(
+        questionRows.map((question) => ({
+          ...question,
+          id: String(question.id),
+        })),
+        blueprint,
+        { recentlySeenIds },
+      );
+    } else {
+      const totalWanted = Math.min(
+        module.questionDisplayCount,
+        questionRows.length,
+      );
+      const shuffledQuestions = [...questionRows];
+      for (let i = shuffledQuestions.length - 1; i > 0; i -= 1) {
+        const randomIndex = Math.floor(Math.random() * (i + 1));
+        [shuffledQuestions[i], shuffledQuestions[randomIndex]] = [
+          shuffledQuestions[randomIndex],
+          shuffledQuestions[i],
+        ];
+      }
+      selectedQuestions = shuffledQuestions.slice(0, totalWanted);
     }
-    const selectedQuestions = shuffledQuestions.slice(0, totalQuestions);
+    const totalQuestions = selectedQuestions.length;
     const assignedQuestionIds = selectedQuestions.map((question) =>
       String(question.id),
     );
@@ -598,6 +651,8 @@ export async function GET(request: NextRequest) {
               id: interviewQuestionBank.id,
               promptText: interviewQuestionBank.promptText,
               promptAudioPath: interviewQuestionBank.promptAudioPath,
+              questionType: interviewQuestionBank.questionType,
+              category: interviewQuestionBank.category,
             })
             .from(interviewQuestionBank)
             .where(inArray(interviewQuestionBank.id, questionIds))
@@ -779,6 +834,8 @@ export async function GET(request: NextRequest) {
         index,
         promptText: question.promptText,
         promptAudioPath: question.promptAudioPath,
+        questionType: question.questionType,
+        category: question.category,
       }));
 
     // Candidate-facing capability flags — booleans only, never a capability's
