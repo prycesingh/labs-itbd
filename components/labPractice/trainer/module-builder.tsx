@@ -6,7 +6,15 @@ import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import DefaultButton from "@/components/app_componentes/customButtons";
-import { lpRequest, MODE_HELP, MODE_LABELS } from "@/components/labPractice/shared";
+import {
+  lpRequest,
+  MODE_HELP,
+  MODE_LABELS,
+  TreeCommandProvider,
+  TreeExpandControls,
+  useTreeCommand,
+  useTreeOpen,
+} from "@/components/labPractice/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -410,7 +418,7 @@ function ItemRow({
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [open, setOpen] = useState(level === "lab");
+  const [open, setOpen] = useTreeOpen(level === "lab");
 
   async function toggleActive(v: boolean) {
     const ok = await lpRequest(API.item(level, id), { method: "PATCH", json: { isActive: v } });
@@ -625,10 +633,21 @@ export const ModuleSettingsCard = ModuleSettings;
 /** Lab → Task → Step curriculum tree with add / edit / reorder / activate. */
 export function ModuleTreeCard({ mod }: { mod: BuilderModule }) {
   const move = useReorder("lab", mod.id, mod.labs.map((l) => l.id));
+  const tree = useTreeCommand();
+  const taskCount = mod.labs.reduce((n, l) => n + l.tasks.length, 0);
   return (
+    <TreeCommandProvider value={tree.cmd}>
     <div className="space-y-2">
-      {mod.labs.length === 0 && (
+      {mod.labs.length === 0 ? (
         <p className="text-sm text-white/50">No labs yet — add the first one below.</p>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
+          <p className="text-xs text-white/50">
+            {mod.labs.length} {mod.labs.length === 1 ? "lab" : "labs"} · {taskCount}{" "}
+            {taskCount === 1 ? "task" : "tasks"}
+          </p>
+          <TreeExpandControls onExpand={tree.expandAll} onCollapse={tree.collapseAll} />
+        </div>
       )}
       {mod.labs.map((l, i) => (
         <ItemRow
@@ -648,5 +667,6 @@ export function ModuleTreeCard({ mod }: { mod: BuilderModule }) {
       ))}
       <AddInline level="lab" parentId={mod.id} />
     </div>
+    </TreeCommandProvider>
   );
 }

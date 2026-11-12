@@ -30,6 +30,8 @@ interface AudioRecorderProps {
   // against this adaptively-generated follow-up id instead of a bank
   // questionId — see upload-audio/route.ts's followUpId branch.
   followUpId?: string;
+  /** Fires when recording actually starts (manual or hands-free). */
+  onRecordingStart?: () => void;
 }
 
 export interface AudioRecorderHandle {
@@ -37,20 +39,23 @@ export interface AudioRecorderHandle {
   stopRecording: () => void;
 }
 
-export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(
-  function AudioRecorder(
-    {
-      sessionId,
-      questionId,
-      questionIndex,
-      isLocked = false,
-      maxAttempts = 2,
-      onUploadSuccess,
-      className,
-      followUpId,
-    },
-    ref,
-  ) {
+export const AudioRecorder = forwardRef<
+  AudioRecorderHandle,
+  AudioRecorderProps
+>(function AudioRecorder(
+  {
+    sessionId,
+    questionId,
+    questionIndex,
+    isLocked = false,
+    maxAttempts = 2,
+    onUploadSuccess,
+    className,
+    followUpId,
+    onRecordingStart,
+  },
+  ref,
+) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
@@ -102,6 +107,9 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
 
   const startRecording = async () => {
     if (isLocked) return;
+    // A second start (e.g. a hands-free countdown finishing after a manual
+    // start) would open a second recorder on the same mic.
+    if (mediaRecorderRef.current?.state === "recording") return;
     // Never record the question being read aloud back into the answer.
     stopSpeaking();
 
@@ -136,6 +144,7 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
         }
         setDuration(0);
         setIsRecording(true);
+        onRecordingStart?.();
         timerRef.current = setInterval(() => {
           setDuration((d) => d + 1);
         }, 1000);

@@ -3,23 +3,53 @@ import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 import { AdminMotionCard } from "@/components/labs/admin/admin-motion-card";
-import { EnrollmentTimes, MODE_LABELS, PageTitle, ProgressBar } from "@/components/labPractice/shared";
+import { MODE_LABELS, PageTitle } from "@/components/labPractice/shared";
 import { BulkImportCard } from "@/components/labPractice/trainer/bulk-import";
-import { CreateModuleForm } from "@/components/labPractice/trainer/trainer-widgets";
+import { TraineeRoster } from "@/components/labPractice/trainer/trainee-roster";
+import { CreateModuleForm, TrainerPicker } from "@/components/labPractice/trainer/trainer-widgets";
 import { Badge } from "@/components/ui/badge";
 import { db } from "@/DB/drizzle";
 import { labPracticeModules } from "@/DB/labPracticeSchema";
 import { requirePageTrainer } from "@/lib/labPractice/identity";
-import { listTrainerEnrollments } from "@/lib/labPractice/queries";
+import {
+  groupByTrainee,
+  listAllEnrollments,
+  listTrainerEnrollments,
+  listTrainers,
+} from "@/lib/labPractice/queries";
 
 export const dynamic = "force-dynamic";
 
-export default async function TrainerHomePage() {
+export default async function TrainerHomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ trainer?: string }>;
+}) {
   const actor = await requirePageTrainer();
-  const [modules, trainees] = await Promise.all([
+  const myId = actor.trainer.id;
+
+  // Oversight (guidedLabs.viewAll) sees every trainer's roster, defaulting to
+  // all of them; everyone else only ever sees their own trainees.
+  const requested = (await searchParams).trainer;
+  const selection: "all" | number = !actor.canViewAll
+    ? myId
+    : requested === "me"
+      ? myId
+      : Number.isInteger(Number(requested)) && Number(requested) > 0
+        ? Number(requested)
+        : "all";
+
+  const [modules, enrollments, trainers] = await Promise.all([
     db.select().from(labPracticeModules).orderBy(asc(labPracticeModules.title)),
-    listTrainerEnrollments(actor.trainer.id),
+    selection === "all" ? listAllEnrollments() : listTrainerEnrollments(selection),
+    actor.canViewAll ? listTrainers() : Promise.resolve([]),
   ]);
+  const groups = groupByTrainee(enrollments);
+  const pickerValue = selection === "all" ? "all" : selection === myId ? "me" : String(selection);
+  const selectedName =
+    selection === "all" || selection === myId ? null : trainers.find((t) => t.id === selection)?.fullName;
+  const rosterTitle =
+    selection === "all" ? "All trainees" : selection === myId ? "My trainees" : `${selectedName ?? "Trainer"}'s trainees`;
 
   return (
     <main className="flex w-full flex-col gap-6 pb-10">
@@ -79,43 +109,26 @@ export default async function TrainerHomePage() {
       </div>
 
       <AdminMotionCard className="p-6" delay={0.1}>
-        <div className="relative z-10 space-y-3">
-          <h2 className="text-lg font-bold text-white">My trainees</h2>
-          {trainees.length === 0 ? (
+        <div className="relative z-10 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="flex items-baseline gap-2 text-lg font-bold text-white">
+              {rosterTitle}
+              {groups.length > 0 && (
+                <span className="text-sm font-normal text-white/50 tabular-nums">{groups.length}</span>
+              )}
+            </h2>
+            {actor.canViewAll && <TrainerPicker value={pickerValue} trainers={trainers} myTrainerId={myId} />}
+          </div>
+          {groups.length === 0 ? (
             <p className="text-sm text-white/50">
-              Open a module to enroll trainees — they&apos;ll appear here.
+              {selection === myId
+                ? "Open a module to enroll trainees — they'll appear here."
+                : selection === "all"
+                  ? "No trainer has enrolled anyone yet."
+                  : "This trainer hasn't enrolled anyone yet."}
             </p>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {trainees.map((t) => (
-                <Link
-                  key={t.id}
-                  href={`/dashboard/guided-labs/trainer/trainees/${t.id}`}
-                  className="space-y-2 rounded-lg border border-white/10 p-3 hover:border-itbd-blue/50"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium text-white">{t.traineeName}</span>
-                      <span className="block truncate text-xs text-white/50">{t.moduleTitle}</span>
-                    </span>
-                    {!t.isActive && (
-                      <Badge variant="outline" className="shrink-0 text-white/60">
-                        Unassigned
-                      </Badge>
-                    )}
-                  </div>
-                  <ProgressBar percent={t.percent} label={`${t.traineeName} progress`} />
-                  <p className="text-xs text-white/50">
-                    {t.done}/{t.total} steps · {t.percent}%
-                  </p>
-                  <EnrollmentTimes
-                    enrolledAt={t.enrolledAt}
-                    lastActivityAt={t.lastActivityAt}
-                    completedAt={t.completedAt}
-                  />
-                </Link>
-              ))}
-            </div>
+            <TraineeRoster groups={groups} byTrainer={selection === "all"} />
           )}
         </div>
       </AdminMotionCard>

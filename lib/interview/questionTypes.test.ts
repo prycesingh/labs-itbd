@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifySourceId,
   DEFAULT_COACH_BLUEPRINT,
+  isQuestionSetStale,
   parseBlueprint,
   selectQuestionsByBlueprint,
   type QuestionType,
@@ -55,6 +56,20 @@ describe("parseBlueprint", () => {
       expect(parseBlueprint(config)).toBeNull();
     },
   );
+});
+
+describe("isQuestionSetStale", () => {
+  it("is fresh when size matches and every question is active", () => {
+    expect(isQuestionSetStale(["a", "b"], ["a", "b", "c"], 2)).toBe(false);
+  });
+
+  it("is stale when the expected size changed (e.g. 5 → 7 blueprint)", () => {
+    expect(isQuestionSetStale(["a", "b"], ["a", "b", "c"], 3)).toBe(true);
+  });
+
+  it("is stale when a question was retired", () => {
+    expect(isQuestionSetStale(["a", "x"], ["a", "b"], 2)).toBe(true);
+  });
 });
 
 describe("selectQuestionsByBlueprint", () => {

@@ -5,17 +5,13 @@ import DefaultButton, {
 } from "@/components/app_componentes/customButtons";
 import { Switch } from "@/components/ui/switch";
 import { useCountdown } from "@/hooks/useCountdown";
-import {
-  speak,
-  speakRepeated,
-  stopSpeaking,
-} from "@/lib/interview/textToSpeech";
+import { stopSpeaking } from "@/lib/interview/textToSpeech";
 import { Ear, Headphones, Loader2, Mic } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type QuestionType } from "@/lib/interview/questionTypes";
 import { AudioRecorder, type AudioRecorderHandle } from "./AudioRecorder";
-import { QuestionPlayer } from "./QuestionPlayer";
+import { QuestionPlayer, type QuestionPlayerHandle } from "./QuestionPlayer";
 
 interface Question {
   id: string;
@@ -93,6 +89,10 @@ export function InterviewSession({
   const [isReadingQuestion, setIsReadingQuestion] = useState(false);
   const countdown = useCountdown();
   const recorderRef = useRef<AudioRecorderHandle>(null);
+  const questionPlayerRef = useRef<QuestionPlayerHandle>(null);
+  // Hands-free reading was interrupted by the candidate — show a hint
+  // instead of silently waiting.
+  const [handsFreePaused, setHandsFreePaused] = useState(false);
   const lastAutoStartedQuestionId = useRef<string | null>(null);
 
   // Follow-up "checking..." pause (Interview Coach only).
@@ -212,52 +212,80 @@ export function InterviewSession({
 
   // Hands-free: on each new question or follow-up, read it aloud twice,
   // then count down, then auto-start recording — mirrors
-  // interview-coach-main's hands-free UX. Guarded by
-  // lastAutoStartedQuestionId so this never re-fires for the same prompt.
-  // stopSpeaking() in cleanup no longer triggers the countdown (see
-  // textToSpeech.ts's generation guard), so navigating away mid-read can't
-  // auto-start a recording.
+  // interview-coach-main's hands-free UX. Reading goes through the
+  // QuestionPlayer's single voice (recorded audio, browser voice as
+  // fallback), so the candidate hears one voice and the on-screen player
+  // shows the reading. If the candidate interrupts it (pause, replay, or
+  // starting to record), hands-free hands control back instead of waiting
+  // forever. Guarded by lastAutoStartedQuestionId so it never re-fires for
+  // the same prompt; the cleanup's `cancelled` flag stops a superseded run
+  // from touching state for the next question.
   useEffect(() => {
     if (!handsFree || showSetup || checkingFollowUp || !activePrompt) return;
     if (lastAutoStartedQuestionId.current === activePrompt.id) return;
 
     lastAutoStartedQuestionId.current = activePrompt.id;
+    let cancelled = false;
+    let finished = false;
+    // The player reading THIS prompt — the one cleanup must stop.
+    const player = questionPlayerRef.current;
     setIsReadingQuestion(true);
+    setHandsFreePaused(false);
 
     const startCountdown = () => {
-      setIsReadingQuestion(false);
       countdown.start(HANDS_FREE_COUNTDOWN_SECONDS, () => {
         void recorderRef.current?.startRecording();
       });
     };
 
-    speakRepeated(
-      activePrompt.text,
-      HANDS_FREE_READ_COUNT,
-      startCountdown,
-      (reason) => {
-        handleSpeechError(reason);
+    void (async () => {
+      const result =
+        (await player?.playQuestion(HANDS_FREE_READ_COUNT)) ?? "failed";
+      if (cancelled) return;
+      finished = true;
+      setIsReadingQuestion(false);
+      if (result === "ended") {
         startCountdown();
-      },
-    );
+      } else if (result === "failed") {
+        handleSpeechError("playback failed");
+        startCountdown();
+      } else {
+        setHandsFreePaused(true);
+      }
+    })();
 
     return () => {
-      stopSpeaking();
+      cancelled = true;
+      player?.stopAudio();
+      // A run torn down before finishing (React dev mode's mount →
+      // unmount → mount, or a mode toggle) may run again for this prompt.
+      if (!finished) lastAutoStartedQuestionId.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- countdown is a stable hook-returned object; activePrompt is derived and keyed by id
   }, [handsFree, showSetup, checkingFollowUp, activePrompt?.id]);
 
-  // Audio-only without hands-free: read each new prompt once automatically.
-  // Previously nothing played until the candidate found "Replay Question",
-  // so audio-only looked like listening simply didn't work.
+  // Audio-only without hands-free: play each new prompt once automatically,
+  // through the same single question voice.
   const lastAutoReadId = useRef<string | null>(null);
   useEffect(() => {
     if (!audioOnly || handsFree || showSetup || checkingFollowUp) return;
     if (!activePrompt || lastAutoReadId.current === activePrompt.id) return;
     lastAutoReadId.current = activePrompt.id;
-    speak(activePrompt.text, { onError: handleSpeechError });
+    void questionPlayerRef.current?.playQuestion(1).then((result) => {
+      if (result === "failed") handleSpeechError("playback failed");
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by prompt id
   }, [audioOnly, handsFree, showSetup, checkingFollowUp, activePrompt?.id]);
+
+  // Any recording start — manual or hands-free — silences the question and
+  // cancels a pending countdown, so the mic never captures the question
+  // and a manual start can't be followed by a second, automatic one.
+  const handleRecordingStart = () => {
+    questionPlayerRef.current?.stopAudio();
+    countdown.reset();
+    setIsReadingQuestion(false);
+    setHandsFreePaused(false);
+  };
 
   useEffect(() => stopSpeaking, []);
 
@@ -360,7 +388,7 @@ export function InterviewSession({
   const [skippingFollowUp, setSkippingFollowUp] = useState(false);
   const handleSkipFollowUp = async () => {
     if (!pendingFollowUp) return;
-    stopSpeaking();
+    questionPlayerRef.current?.stopAudio();
     countdown.reset();
     setSkippingFollowUp(true);
     try {
@@ -480,8 +508,8 @@ export function InterviewSession({
             Session Setup
           </h2>
           <p className="mt-1 text-sm text-white/60">
-            Optional: let the app read questions aloud and start recording
-            for you.
+            Optional: let the app read questions aloud and start recording for
+            you.
           </p>
         </div>
 
@@ -505,8 +533,8 @@ export function InterviewSession({
             <div>
               <p className="text-sm font-medium text-white">Audio-only mode</p>
               <p className="text-xs text-white/50">
-                Hides question text — answer purely from listening, like a
-                phone interview.
+                Hides question text — answer purely from listening, like a phone
+                interview.
               </p>
             </div>
           </div>
@@ -545,6 +573,13 @@ export function InterviewSession({
         </div>
       )}
 
+      {handsFree && handsFreePaused && !countdown.isRunning && (
+        <div className="itbd-glow-border flex items-center gap-3 rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white/70">
+          <Mic className="h-4 w-4 text-itbd-blue" />
+          Hands-free paused — press Start Recording when you&apos;re ready.
+        </div>
+      )}
+
       {handsFree && (isReadingQuestion || countdown.isRunning) && (
         <div className="itbd-glow-border flex items-center gap-3 rounded-xl border border-itbd-blue/30 bg-itbd-blue/10 px-4 py-2 text-sm text-itbd-blue">
           <Mic className="h-4 w-4" />
@@ -557,6 +592,7 @@ export function InterviewSession({
       {pendingFollowUp ? (
         <div className="flex min-h-90 w-full flex-1 flex-col gap-4 md:h-[min(38rem,calc(100dvh-19rem))] md:flex-row">
           <QuestionPlayer
+            ref={questionPlayerRef}
             questionNumber={followUpParentIndex}
             totalQuestions={questions.length}
             questionText={pendingFollowUp.questionText}
@@ -568,6 +604,7 @@ export function InterviewSession({
           />
           <AudioRecorder
             ref={recorderRef}
+            onRecordingStart={handleRecordingStart}
             sessionId={sessionId}
             questionId={pendingFollowUp.id}
             followUpId={pendingFollowUp.id}
@@ -580,6 +617,7 @@ export function InterviewSession({
         currentQuestion && (
           <div className="flex min-h-90 w-full flex-1 flex-col gap-4 md:h-[min(38rem,calc(100dvh-19rem))] md:flex-row">
             <QuestionPlayer
+              ref={questionPlayerRef}
               questionNumber={currentQuestionIndex}
               totalQuestions={questions.length}
               questionText={currentQuestion.promptText}
@@ -611,6 +649,7 @@ export function InterviewSession({
             ) : (
               <AudioRecorder
                 ref={recorderRef}
+                onRecordingStart={handleRecordingStart}
                 sessionId={sessionId}
                 questionId={currentQuestion.id}
                 questionIndex={currentQuestionIndex}

@@ -5,7 +5,7 @@ import { AdminMotionCard } from "@/components/labs/admin/admin-motion-card";
 import { PracticeTree, SessionHistory } from "@/components/labPractice/practice/practice-view";
 import { PageTitle } from "@/components/labPractice/shared";
 import { db } from "@/DB/drizzle";
-import { labPracticeEmployees } from "@/DB/labPracticeSchema";
+import { labPracticeEmployees, labPracticeTrainers } from "@/DB/labPracticeSchema";
 import {
   enrollmentAccessFor,
   getEnrollment,
@@ -16,7 +16,8 @@ import { serializeEnrollment } from "@/lib/labPractice/serialize";
 
 export const dynamic = "force-dynamic";
 
-/** Owning trainer's review page: progress, photos, practice log, reject. */
+/** Owning trainer's review page: progress, photos, practice log, reject.
+ *  Oversight viewers (guidedLabs.viewAll) see other trainers' trainees read-only. */
 export default async function TrainerTraineePage({
   params,
 }: {
@@ -25,14 +26,25 @@ export default async function TrainerTraineePage({
   const actor = await requirePageTrainer();
   const id = Number((await params).enrollmentId);
   const enrollment = Number.isInteger(id) && id > 0 ? await getEnrollment(id) : null;
-  if (!enrollment || !enrollmentAccessFor(actor, enrollment).includes("trainer")) notFound();
+  if (!enrollment) notFound();
+  const access = enrollmentAccessFor(actor, enrollment);
+  const isOwner = access.includes("trainer");
+  if (!isOwner && !access.includes("admin")) notFound();
 
-  const [[trainee], view] = await Promise.all([
+  const [[trainee], [owner], view] = await Promise.all([
     db
       .select({ fullName: labPracticeEmployees.fullName, email: labPracticeEmployees.email })
       .from(labPracticeEmployees)
       .where(eq(labPracticeEmployees.id, enrollment.traineeId))
       .limit(1),
+    isOwner
+      ? Promise.resolve([undefined])
+      : db
+          .select({ fullName: labPracticeEmployees.fullName })
+          .from(labPracticeTrainers)
+          .innerJoin(labPracticeEmployees, eq(labPracticeEmployees.id, labPracticeTrainers.employeeId))
+          .where(eq(labPracticeTrainers.id, enrollment.trainerId))
+          .limit(1),
     getEnrollmentView(enrollment),
   ]);
   const data = serializeEnrollment(enrollment, view);
@@ -42,12 +54,16 @@ export default async function TrainerTraineePage({
       <PageTitle
         title={trainee?.fullName ?? "Trainee"}
         accent={`· ${data.module.title}`}
-        sub={trainee?.email}
+        sub={
+          isOwner
+            ? trainee?.email
+            : `${trainee?.email ?? ""} · Trainer: ${owner?.fullName ?? "another trainer"} (view only)`
+        }
       />
       <div className="grid items-start gap-6 lg:grid-cols-[1.4fr_0.6fr]">
         <AdminMotionCard className="p-6">
           <div className="relative z-10">
-            <PracticeTree data={data} role="trainer" />
+            <PracticeTree data={data} role={isOwner ? "trainer" : "admin"} />
           </div>
         </AdminMotionCard>
         <AdminMotionCard className="p-6" delay={0.05}>

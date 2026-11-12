@@ -31,7 +31,10 @@ import {
   getInterviewBlueprint,
   getModuleCapability,
 } from "@/lib/interview/moduleCapabilities";
-import { selectQuestionsByBlueprint } from "@/lib/interview/questionTypes";
+import {
+  isQuestionSetStale,
+  selectQuestionsByBlueprint,
+} from "@/lib/interview/questionTypes";
 import { startOfThisWeek, startOfToday } from "@/lib/labs/date";
 import {
   createSessionSchema,
@@ -327,15 +330,77 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Blueprint modules (Interview Coach) get an interview-ordered set that
+    // rotates through the pool per candidate; every other module keeps the
+    // original uniform shuffle.
+    const blueprint = await getInterviewBlueprint(moduleId);
+    const expectedQuestionCount = Math.min(
+      blueprint ? blueprint.slots.length : module.questionDisplayCount,
+      questionRows.length,
+    );
+
+    const pickQuestions = async (): Promise<typeof questionRows> => {
+      if (blueprint) {
+        const recentlySeenIds = await getRecentlySeenQuestionIds(
+          candidateId,
+          moduleId,
+        );
+        return selectQuestionsByBlueprint(
+          questionRows.map((question) => ({
+            ...question,
+            id: String(question.id),
+          })),
+          blueprint,
+          { recentlySeenIds },
+        );
+      }
+      const shuffledQuestions = [...questionRows];
+      for (let i = shuffledQuestions.length - 1; i > 0; i -= 1) {
+        const randomIndex = Math.floor(Math.random() * (i + 1));
+        [shuffledQuestions[i], shuffledQuestions[randomIndex]] = [
+          shuffledQuestions[randomIndex],
+          shuffledQuestions[i],
+        ];
+      }
+      return shuffledQuestions.slice(0, expectedQuestionCount);
+    };
+
     if (existingSession) {
       const questionById = new Map(
         questionRows.map((question) => [String(question.id), question]),
       );
+      let assignedIds = normalizeStringList(
+        existingSession.assignedQuestionIds,
+      );
+      let totalQuestions = existingSession.totalQuestions;
 
       // Reuse the exact question set chosen when this session was created —
       // never re-roll on resume, or a mid-attempt candidate can be handed a
       // different random subset than the one they already partially answered.
-      const orderedQuestions = existingSession.assignedQuestionIds
+      // The one exception: a session nobody has answered anything in yet,
+      // whose set no longer matches the module's current setup (created
+      // before the interview blueprint existed, or questions since retired).
+      // Without this, a candidate who once opened the module kept getting
+      // that same stale draft — same 5 questions — on every visit.
+      if (
+        existingSession.status === "draft" &&
+        existingSession.recordedCount === 0 &&
+        isQuestionSetStale(
+          assignedIds,
+          questionById.keys(),
+          expectedQuestionCount,
+        )
+      ) {
+        const refreshed = await pickQuestions();
+        assignedIds = refreshed.map((question) => String(question.id));
+        totalQuestions = refreshed.length;
+        await db
+          .update(candidateInterviewSessions)
+          .set({ assignedQuestionIds: assignedIds, totalQuestions })
+          .where(eq(candidateInterviewSessions.id, existingSession.id));
+      }
+
+      const orderedQuestions = assignedIds
         .map((id) => questionById.get(id))
         .filter((question): question is (typeof questionRows)[number] =>
           Boolean(question),
@@ -344,7 +409,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           sessionId: existingSession.id,
-          totalQuestions: existingSession.totalQuestions,
+          totalQuestions,
           recordedCount: existingSession.recordedCount,
           status: existingSession.status,
           resumed: true,
@@ -361,39 +426,7 @@ export async function POST(request: NextRequest) {
     const sessionId = randomUUID();
 
     // Chosen once, at creation; a single session's set is fixed from here on.
-    // Blueprint modules (Interview Coach) get an interview-ordered set that
-    // rotates through the pool per candidate; every other module keeps the
-    // original uniform shuffle.
-    const blueprint = await getInterviewBlueprint(moduleId);
-    let selectedQuestions: typeof questionRows;
-    if (blueprint) {
-      const recentlySeenIds = await getRecentlySeenQuestionIds(
-        candidateId,
-        moduleId,
-      );
-      selectedQuestions = selectQuestionsByBlueprint(
-        questionRows.map((question) => ({
-          ...question,
-          id: String(question.id),
-        })),
-        blueprint,
-        { recentlySeenIds },
-      );
-    } else {
-      const totalWanted = Math.min(
-        module.questionDisplayCount,
-        questionRows.length,
-      );
-      const shuffledQuestions = [...questionRows];
-      for (let i = shuffledQuestions.length - 1; i > 0; i -= 1) {
-        const randomIndex = Math.floor(Math.random() * (i + 1));
-        [shuffledQuestions[i], shuffledQuestions[randomIndex]] = [
-          shuffledQuestions[randomIndex],
-          shuffledQuestions[i],
-        ];
-      }
-      selectedQuestions = shuffledQuestions.slice(0, totalWanted);
-    }
+    const selectedQuestions = await pickQuestions();
     const totalQuestions = selectedQuestions.length;
     const assignedQuestionIds = selectedQuestions.map((question) =>
       String(question.id),

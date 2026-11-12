@@ -1,9 +1,10 @@
 "use client";
 
-import { Search } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ChevronsDownUp, ChevronsUpDown, Search } from "lucide-react";
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatEt } from "@/lib/labPractice/dates";
 import { cn } from "@/lib/utils";
@@ -185,6 +186,72 @@ export const MODE_HELP = {
   steps_in_order: "Steps inside a task are sequential; labs and tasks are free.",
   fully_sequential: "Each step, task and lab unlocks only after the previous one is done.",
 } as const;
+
+// ─────────────────────────────────────────────
+// Expand / collapse all
+// ─────────────────────────────────────────────
+/**
+ * Bulk open/close for a tree of Collapsibles. Each collapsible keeps its own
+ * open state (so single rows still toggle independently); a bulk command is a
+ * `{ open, seq }` broadcast — every row adopts `open` the first time it sees a
+ * new `seq`, then goes back to independent toggling. Rows mounted after a
+ * command (e.g. a newly added lab) start from the latest command.
+ */
+type TreeCommand = { open: boolean; seq: number };
+
+const TreeCommandContext = createContext<TreeCommand>({ open: false, seq: 0 });
+
+export function useTreeOpen(defaultOpen: boolean) {
+  const cmd = useContext(TreeCommandContext);
+  const [open, setOpen] = useState(cmd.seq > 0 ? cmd.open : defaultOpen);
+  const [seenSeq, setSeenSeq] = useState(cmd.seq);
+  // Adopt a new bulk command during render (no effect → no flash of the old state).
+  if (seenSeq !== cmd.seq) {
+    setSeenSeq(cmd.seq);
+    setOpen(cmd.open);
+  }
+  return [open, setOpen] as const;
+}
+
+export function useTreeCommand() {
+  const [cmd, setCmd] = useState<TreeCommand>({ open: false, seq: 0 });
+  return {
+    cmd,
+    expandAll: () => setCmd((c) => ({ open: true, seq: c.seq + 1 })),
+    collapseAll: () => setCmd((c) => ({ open: false, seq: c.seq + 1 })),
+  };
+}
+
+export function TreeCommandProvider({ value, children }: { value: TreeCommand; children: ReactNode }) {
+  return <TreeCommandContext.Provider value={value}>{children}</TreeCommandContext.Provider>;
+}
+
+/** Compact "Expand all · Collapse all" button pair. */
+export function TreeExpandControls({
+  onExpand,
+  onCollapse,
+  className,
+}: {
+  onExpand: () => void;
+  onCollapse: () => void;
+  className?: string;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Expand or collapse all"
+      className={cn("inline-flex shrink-0 items-center rounded-lg border border-white/10 p-0.5", className)}
+    >
+      <Button type="button" variant="ghost" size="xs" onClick={onExpand} className="text-white/70 hover:text-white">
+        <ChevronsUpDown /> Expand all
+      </Button>
+      <span aria-hidden className="h-4 w-px bg-white/10" />
+      <Button type="button" variant="ghost" size="xs" onClick={onCollapse} className="text-white/70 hover:text-white">
+        <ChevronsDownUp /> Collapse all
+      </Button>
+    </div>
+  );
+}
 
 export function PageTitle({ title, accent, sub }: { title: string; accent?: string; sub?: string }) {
   return (

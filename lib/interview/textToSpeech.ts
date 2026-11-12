@@ -39,6 +39,13 @@ export interface SpeakOptions {
    * Never fires for a run that was stopped/superseded by the app itself.
    */
   onError?: (reason: string) => void;
+  /**
+   * Fires instead of onEnd/onError when this run is stopped or superseded
+   * before finishing (stopSpeaking(), or another speak() call). Without
+   * it, a caller waiting on the run — hands-free mode — waited forever,
+   * stuck on "Reading question aloud…".
+   */
+  onInterrupted?: () => void;
 }
 
 const CANCEL_SETTLE_MS = 60;
@@ -50,6 +57,14 @@ const MAX_CHUNK_CHARS = 180;
 // longer matches has been superseded and must not fire any callback.
 let generation = 0;
 let keepAliveTimer: ReturnType<typeof setInterval> | null = null;
+// onInterrupted of the run currently speaking; cleared when it finishes.
+let interruptActiveRun: (() => void) | null = null;
+
+function interruptPreviousRun() {
+  const interrupt = interruptActiveRun;
+  interruptActiveRun = null;
+  interrupt?.();
+}
 
 function clearKeepAlive() {
   if (keepAliveTimer) {
@@ -128,8 +143,11 @@ export function speak(text: string, options: SpeakOptions = {}): void {
   }
 
   const synth = window.speechSynthesis;
+  interruptPreviousRun();
   const runId = ++generation;
   const isCurrent = () => runId === generation;
+  const myInterrupt = options.onInterrupted ?? null;
+  interruptActiveRun = myInterrupt;
 
   clearKeepAlive();
   synth.cancel();
@@ -149,6 +167,7 @@ export function speak(text: string, options: SpeakOptions = {}): void {
     const finish = (error?: string) => {
       if (!isCurrent()) return;
       clearKeepAlive();
+      if (interruptActiveRun === myInterrupt) interruptActiveRun = null;
       if (error && !spokeAnything) {
         options.onError?.(error);
       } else {
@@ -180,7 +199,7 @@ export function speak(text: string, options: SpeakOptions = {}): void {
       // can never hang on a chunk. Budget ≈ generous speaking time.
       const watchdog = setTimeout(
         () => settle(),
-        3000 + chunk.length * 120 / (options.rate ?? 1),
+        3000 + (chunk.length * 120) / (options.rate ?? 1),
       );
 
       function settle(error?: string) {
@@ -242,6 +261,7 @@ export function speakRepeated(
   times: number,
   onDone?: () => void,
   onError?: (reason: string) => void,
+  onInterrupted?: () => void,
 ): void {
   if (times <= 0 || !text.trim()) {
     onDone?.();
@@ -254,13 +274,15 @@ export function speakRepeated(
     speak(text, {
       onEnd: remaining <= 0 ? onDone : speakNext,
       onError,
+      onInterrupted,
     });
   };
   speakNext();
 }
 
-/** Stops speech. Callbacks of the stopped run never fire. */
+/** Stops speech. The stopped run gets onInterrupted, never onEnd/onError. */
 export function stopSpeaking(): void {
+  interruptPreviousRun();
   generation += 1;
   clearKeepAlive();
   if (isSupported()) window.speechSynthesis.cancel();
@@ -268,4 +290,20 @@ export function stopSpeaking(): void {
 
 export function isSpeechSynthesisSupported(): boolean {
   return isSupported();
+}
+
+/** Promise form of speakRepeated for callers that await the outcome. */
+export function speakRepeatedAsync(
+  text: string,
+  times: number,
+): Promise<"ended" | "interrupted" | "failed"> {
+  return new Promise((resolve) => {
+    speakRepeated(
+      text,
+      times,
+      () => resolve("ended"),
+      () => resolve("failed"),
+      () => resolve("interrupted"),
+    );
+  });
 }

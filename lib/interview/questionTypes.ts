@@ -155,6 +155,22 @@ export function parseBlueprint(config: unknown): InterviewBlueprint | null {
 // SELECTION
 // ─────────────────────────────────────────────
 
+/**
+ * Whether a session's fixed question set no longer fits the module: wrong
+ * size for the current setup, or it includes questions that are no longer
+ * active. Only meaningful for sessions with no answers yet — the caller
+ * must never refresh a set the candidate has started answering.
+ */
+export function isQuestionSetStale(
+  assignedIds: readonly string[],
+  activeIds: Iterable<string>,
+  expectedCount: number,
+): boolean {
+  if (assignedIds.length !== expectedCount) return true;
+  const active = new Set(activeIds);
+  return assignedIds.some((id) => !active.has(id));
+}
+
 export interface SelectableQuestion {
   id: string;
   questionType: QuestionType | null;

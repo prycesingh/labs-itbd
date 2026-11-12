@@ -2,7 +2,27 @@
 
 import { cn } from "@/lib/utils";
 import { Pause, Play } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
+
+/** How a programmatic playback run ended. */
+export type PlaybackResult = "ended" | "interrupted" | "failed";
+
+export interface AudioPlayerHandle {
+  /**
+   * Plays from the beginning and resolves when playback finishes
+   * ("ended"), is paused/stopped by the user or app ("interrupted"), or the
+   * source can't play ("failed"). Lets hands-free mode drive the SAME
+   * player the candidate sees, instead of a second, separate voice.
+   */
+  playFromStart: () => Promise<PlaybackResult>;
+  stop: () => void;
+}
 
 /**
  * ITBD-branded replacement for the native `<audio controls>` UI, which can't
@@ -10,23 +30,21 @@ import { useEffect, useRef, useState } from "react";
  * page). Wraps a hidden `<audio>` element and drives play/pause, the
  * scrubber, and elapsed/total time from its JS API instead.
  */
-export function AudioPlayer({
-  src,
-  className,
-  onDurationChange,
-  onError,
-}: {
-  src: string;
-  className?: string;
-  /** Fires once the real decoded duration (seconds) of `src` is known. */
-  onDurationChange?: (seconds: number) => void;
-  /**
-   * Fires when `src` can't be loaded or played (404, unsupported format).
-   * Without this the player sat at 0:00 with a dead Play button and an
-   * unhandled play() rejection — see QuestionPlayer's TTS fallback.
-   */
-  onError?: () => void;
-}) {
+export const AudioPlayer = forwardRef<
+  AudioPlayerHandle,
+  {
+    src: string;
+    className?: string;
+    /** Fires once the real decoded duration (seconds) of `src` is known. */
+    onDurationChange?: (seconds: number) => void;
+    /**
+     * Fires when `src` can't be loaded or played (404, unsupported format).
+     * Without this the player sat at 0:00 with a dead Play button and an
+     * unhandled play() rejection — see QuestionPlayer's TTS fallback.
+     */
+    onError?: () => void;
+  }
+>(function AudioPlayer({ src, className, onDurationChange, onError }, ref) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -37,6 +55,13 @@ export function AudioPlayer({
   // still pending, so onSeeked can start playback once currentTime is
   // actually back at 0 instead of wherever the discovery seek left it.
   const playPending = useRef(false);
+  // Resolver of the in-flight playFromStart() run, if any.
+  const pendingRun = useRef<((result: PlaybackResult) => void) | null>(null);
+  const settleRun = (result: PlaybackResult) => {
+    const resolve = pendingRun.current;
+    pendingRun.current = null;
+    resolve?.(result);
+  };
 
   // A new `src` (different question/recording) always starts paused at 0 —
   // reset local state so a stale scrubber position from the previous audio
@@ -48,11 +73,16 @@ export function AudioPlayer({
     setFailed(false);
     discoveringDuration.current = false;
     playPending.current = false;
+    settleRun("interrupted");
   }, [src]);
+
+  // Unmount (e.g. moving to the next question) interrupts any run.
+  useEffect(() => () => settleRun("interrupted"), []);
 
   const handleFailure = () => {
     setPlaying(false);
     setFailed(true);
+    settleRun("failed");
     onError?.();
   };
 
@@ -65,6 +95,29 @@ export function AudioPlayer({
       handleFailure();
     });
   };
+
+  useImperativeHandle(ref, () => ({
+    playFromStart: () => {
+      const el = audioRef.current;
+      if (!el || failed) return Promise.resolve<PlaybackResult>("failed");
+      settleRun("interrupted"); // supersede an earlier run
+      return new Promise<PlaybackResult>((resolve) => {
+        pendingRun.current = resolve;
+        if (discoveringDuration.current) {
+          playPending.current = true; // onSeeked starts it from 0
+          return;
+        }
+        el.currentTime = 0;
+        safePlay(el);
+      });
+    },
+    stop: () => {
+      const el = audioRef.current;
+      if (el && !el.paused)
+        el.pause(); // onPause settles the run
+      else settleRun("interrupted");
+    },
+  }));
 
   const togglePlay = () => {
     const el = audioRef.current;
@@ -146,8 +199,16 @@ export function AudioPlayer({
         }}
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
         onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onEnded={() => setPlaying(false)}
+        onPause={(e) => {
+          setPlaying(false);
+          // Browsers fire "pause" just before "ended" at the natural end of
+          // the track — only a pause mid-track is an interruption.
+          if (!e.currentTarget.ended) settleRun("interrupted");
+        }}
+        onEnded={() => {
+          setPlaying(false);
+          settleRun("ended");
+        }}
         onError={handleFailure}
         className="hidden"
       >
@@ -165,11 +226,7 @@ export function AudioPlayer({
           "disabled:cursor-not-allowed disabled:opacity-40",
         )}
       >
-        {playing ? (
-          <Pause className="h-4 w-4" />
-        ) : (
-          <Play className="h-4 w-4" />
-        )}
+        {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
       </button>
 
       <input
@@ -195,4 +252,4 @@ export function AudioPlayer({
       </span>
     </div>
   );
-}
+});

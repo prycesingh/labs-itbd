@@ -16,7 +16,16 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 
 import DefaultButton from "@/components/app_componentes/customButtons";
-import { lpRequest, MODE_HELP, MODE_LABELS, ProgressBar } from "@/components/labPractice/shared";
+import {
+  lpRequest,
+  MODE_HELP,
+  MODE_LABELS,
+  ProgressBar,
+  TreeCommandProvider,
+  TreeExpandControls,
+  useTreeCommand,
+  useTreeOpen,
+} from "@/components/labPractice/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -277,7 +286,7 @@ function StepRow({
   titleOf: Map<number, string>;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useTreeOpen(false);
   const [completing, setCompleting] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [undoing, setUndoing] = useState(false);
@@ -488,9 +497,99 @@ function useStepTitles(data: EnrollmentDTO) {
 // ─────────────────────────────────────────────
 // Main tree
 // ─────────────────────────────────────────────
+type LabDTO = EnrollmentDTO["labs"][number];
+
+function LabSection({
+  lab,
+  index,
+  role,
+  writable,
+  enrollmentId,
+  titleOf,
+}: {
+  lab: LabDTO;
+  index: number;
+  role: ViewerRole;
+  writable: boolean;
+  enrollmentId: number;
+  titleOf: Map<number, string>;
+}) {
+  // Finished labs start collapsed so the trainee lands on what's left.
+  const [open, setOpen] = useTreeOpen(!lab.rollup.complete);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <button type="button" className="group flex w-full items-center gap-3 rounded-lg bg-white/5 px-3 py-2.5 text-left">
+          <ChevronRight className="size-4 text-white/50 transition-transform group-data-[state=open]:rotate-90" />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-semibold text-white">
+              <span className="mr-1 text-white/40">Lab {index + 1}.</span>
+              {lab.title}
+            </span>
+            <ProgressBar percent={lab.rollup.percent} label={`${lab.title} progress`} className="mt-1.5 h-1.5" />
+            {lab.completedAt && (
+              <span className="mt-1 block text-xs text-itbd-blue">Lab completed {formatEt(lab.completedAt)}</span>
+            )}
+          </span>
+          <span className="shrink-0 text-right text-xs text-white/50 tabular-nums">
+            <span className="block font-medium text-white">{lab.rollup.percent}%</span>
+            {lab.rollup.done}/{lab.rollup.total} steps
+          </span>
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="space-y-3 pt-2 pl-4">
+        {lab.description && <p className="text-sm whitespace-pre-wrap text-white/60">{lab.description}</p>}
+        {lab.scenario && (
+          <div className="rounded-lg bg-itbd-blue/8 px-3 py-2 ring-1 ring-itbd-blue/20">
+            <p className="text-xs font-semibold tracking-wide text-itbd-blue uppercase">Scenario</p>
+            <p className="mt-1 text-sm whitespace-pre-wrap text-white/70">{lab.scenario}</p>
+          </div>
+        )}
+        {lab.tasks.map((task, ti) => (
+          <div key={task.id} className="border-l border-white/10 pl-3">
+            <div className="flex items-baseline justify-between gap-2 py-1">
+              <p className="text-sm font-medium text-white">
+                <span className="mr-1 text-white/40">Task {ti + 1}.</span>
+                {task.title}
+                {task.rollup.complete && (
+                  <CheckCircle2 className="ml-1.5 inline size-3.5 text-itbd-blue" aria-label="Task complete" />
+                )}
+              </p>
+              <span className="shrink-0 text-xs text-white/50 tabular-nums">
+                {task.rollup.done}/{task.rollup.total} · {task.rollup.percent}%
+              </span>
+            </div>
+            <ProgressBar
+              percent={task.rollup.percent}
+              label={`${task.title} progress`}
+              className="mb-1.5 h-1 bg-white/5"
+            />
+            {task.completedAt && (
+              <p className="pb-1 text-xs text-itbd-blue/90">Task completed {formatEt(task.completedAt)}</p>
+            )}
+            {task.description && <p className="pb-1 text-xs whitespace-pre-wrap text-white/50">{task.description}</p>}
+            {task.steps.map((step, si) => (
+              <StepRow
+                key={step.id}
+                step={step}
+                index={si}
+                role={role}
+                writable={writable}
+                enrollmentId={enrollmentId}
+                titleOf={titleOf}
+              />
+            ))}
+          </div>
+        ))}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 export function PracticeTree({ data, role }: { data: EnrollmentDTO; role: ViewerRole }) {
   const titleOf = useStepTitles(data);
   const writable = data.isActive && data.module.isActive;
+  const tree = useTreeCommand();
 
   return (
     <div className="space-y-4">
@@ -515,72 +614,32 @@ export function PracticeTree({ data, role }: { data: EnrollmentDTO; role: Viewer
         </p>
       </div>
 
-      {data.labs.length === 0 && <p className="text-sm text-white/50">This module has no labs yet.</p>}
+      {data.labs.length === 0 ? (
+        <p className="text-sm text-white/50">This module has no labs yet.</p>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
+          <p className="text-xs text-white/50">
+            {data.labs.length} {data.labs.length === 1 ? "lab" : "labs"}
+          </p>
+          <TreeExpandControls onExpand={tree.expandAll} onCollapse={tree.collapseAll} />
+        </div>
+      )}
 
-      {data.labs.map((lab, li) => (
-        <Collapsible key={lab.id} defaultOpen={!lab.rollup.complete}>
-          <CollapsibleTrigger asChild>
-            <button type="button" className="group flex w-full items-center gap-3 rounded-lg bg-white/5 px-3 py-2.5 text-left">
-              <ChevronRight className="size-4 text-white/50 transition-transform group-data-[state=open]:rotate-90" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-semibold text-white">
-                  <span className="mr-1 text-white/40">Lab {li + 1}.</span>
-                  {lab.title}
-                </span>
-                <ProgressBar percent={lab.rollup.percent} label={`${lab.title} progress`} className="mt-1.5 h-1.5" />
-                {lab.completedAt && (
-                  <span className="mt-1 block text-xs text-itbd-blue">Lab completed {formatEt(lab.completedAt)}</span>
-                )}
-              </span>
-              <span className="shrink-0 text-xs text-white/50">
-                {lab.rollup.done}/{lab.rollup.total}
-              </span>
-            </button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="space-y-3 pt-2 pl-4">
-            {lab.description && (
-              <p className="text-sm whitespace-pre-wrap text-white/60">{lab.description}</p>
-            )}
-            {lab.scenario && (
-              <div className="rounded-lg bg-itbd-blue/8 px-3 py-2 ring-1 ring-itbd-blue/20">
-                <p className="text-xs font-semibold tracking-wide text-itbd-blue uppercase">Scenario</p>
-                <p className="mt-1 text-sm whitespace-pre-wrap text-white/70">{lab.scenario}</p>
-              </div>
-            )}
-            {lab.tasks.map((task, ti) => (
-              <div key={task.id} className="border-l border-white/10 pl-3">
-                <div className="flex items-baseline justify-between gap-2 py-1">
-                  <p className="text-sm font-medium text-white">
-                    <span className="mr-1 text-white/40">Task {ti + 1}.</span>
-                    {task.title}
-                    {task.rollup.complete && <CheckCircle2 className="ml-1.5 inline size-3.5 text-itbd-blue" aria-label="Task complete" />}
-                  </p>
-                  <span className="text-xs text-white/50">
-                    {task.rollup.done}/{task.rollup.total}
-                  </span>
-                </div>
-                {task.completedAt && (
-                  <p className="pb-1 text-xs text-itbd-blue/90">Task completed {formatEt(task.completedAt)}</p>
-                )}
-                {task.description && (
-                  <p className="pb-1 text-xs whitespace-pre-wrap text-white/50">{task.description}</p>
-                )}
-                {task.steps.map((step, si) => (
-                  <StepRow
-                    key={step.id}
-                    step={step}
-                    index={si}
-                    role={role}
-                    writable={writable}
-                    enrollmentId={data.enrollmentId}
-                    titleOf={titleOf}
-                  />
-                ))}
-              </div>
-            ))}
-          </CollapsibleContent>
-        </Collapsible>
-      ))}
+      <TreeCommandProvider value={tree.cmd}>
+        <div className="space-y-4">
+          {data.labs.map((lab, li) => (
+            <LabSection
+              key={lab.id}
+              lab={lab}
+              index={li}
+              role={role}
+              writable={writable}
+              enrollmentId={data.enrollmentId}
+              titleOf={titleOf}
+            />
+          ))}
+        </div>
+      </TreeCommandProvider>
     </div>
   );
 }

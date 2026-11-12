@@ -1,17 +1,21 @@
 "use client";
 
-import { AudioPlayer } from "@/components/app_componentes/AudioPlayer";
+import {
+  AudioPlayer,
+  type AudioPlayerHandle,
+  type PlaybackResult,
+} from "@/components/app_componentes/AudioPlayer";
 import DefaultButton from "@/components/app_componentes/customButtons";
 import { Progress } from "@/components/ui/progress";
 import {
   QUESTION_TYPE_LABELS,
   type QuestionType,
 } from "@/lib/interview/questionTypes";
-import { speak } from "@/lib/interview/textToSpeech";
+import { speakRepeatedAsync, stopSpeaking } from "@/lib/interview/textToSpeech";
 import { cn } from "@/lib/utils";
 import { Ear, Volume2 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
-import { useState } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 
 interface StandardResponse {
   id: string;
@@ -25,9 +29,9 @@ interface QuestionPlayerProps {
   questionAudioPath?: string;
   standardResponses: StandardResponse[];
   className?: string;
-  // Interview Coach only: hides questionText and shows a replay button
-  // (browser TTS) instead, so the candidate answers purely from listening —
-  // matches interview-coach-main's "audio-only" setup toggle.
+  // Interview Coach only: hides questionText so the candidate answers
+  // purely from listening — matches interview-coach-main's "audio-only"
+  // setup toggle.
   audioOnly?: boolean;
   // Follow-up questions (Interview Coach only) — matches interview-coach-main's
   // web UI, which tags these with a visible "Follow-up" chip and a note on
@@ -42,6 +46,17 @@ interface QuestionPlayerProps {
   category?: string;
 }
 
+export interface QuestionPlayerHandle {
+  /**
+   * Plays the question `times` times through the ONE question voice: the
+   * recorded prompt audio when it exists and plays, the browser voice
+   * otherwise. Hands-free and audio-only both go through this, so the
+   * candidate never hears two voices at once.
+   */
+  playQuestion: (times: number) => Promise<PlaybackResult>;
+  stopAudio: () => void;
+}
+
 /**
  * Question display for an interview session — brought in line with the
  * ITBD-branded `itbd-glow-border` / `bg-black/40 backdrop-blur-md` surface
@@ -49,18 +64,24 @@ interface QuestionPlayerProps {
  * so the interview module reads as the same product rather than a plain
  * shadcn default.
  */
-export function QuestionPlayer({
-  questionNumber,
-  totalQuestions,
-  questionText,
-  questionAudioPath,
-  className,
-  audioOnly = false,
-  isFollowUp = false,
-  followUpOfQuestionText,
-  questionType,
-  category,
-}: QuestionPlayerProps) {
+export const QuestionPlayer = forwardRef<
+  QuestionPlayerHandle,
+  QuestionPlayerProps
+>(function QuestionPlayer(
+  {
+    questionNumber,
+    totalQuestions,
+    questionText,
+    questionAudioPath,
+    className,
+    audioOnly = false,
+    isFollowUp = false,
+    followUpOfQuestionText,
+    questionType,
+    category,
+  },
+  ref,
+) {
   const typeLabel = questionType
     ? [
         QUESTION_TYPE_LABELS[questionType],
@@ -75,6 +96,39 @@ export function QuestionPlayer({
   const reduce = useReducedMotion();
   // Keyed by path, so moving to a question whose audio works resets it.
   const [failedAudioPath, setFailedAudioPath] = useState<string | null>(null);
+  const audioPlayerRef = useRef<AudioPlayerHandle>(null);
+  const hasRecording =
+    Boolean(questionAudioPath) && failedAudioPath !== questionAudioPath;
+  const [speakingFallback, setSpeakingFallback] = useState(false);
+
+  const playWithBrowserVoice = async (times: number) => {
+    setSpeakingFallback(true);
+    try {
+      return await speakRepeatedAsync(questionText, times);
+    } finally {
+      setSpeakingFallback(false);
+    }
+  };
+
+  useImperativeHandle(ref, () => ({
+    playQuestion: async (times) => {
+      stopSpeaking();
+      if (hasRecording && audioPlayerRef.current) {
+        for (let i = 0; i < times; i += 1) {
+          const result = await audioPlayerRef.current.playFromStart();
+          // Recording broke mid-run → finish on the browser voice.
+          if (result === "failed") return playWithBrowserVoice(times - i);
+          if (result === "interrupted") return "interrupted";
+        }
+        return "ended";
+      }
+      return playWithBrowserVoice(times);
+    },
+    stopAudio: () => {
+      audioPlayerRef.current?.stop();
+      stopSpeaking();
+    },
+  }));
   const progress = ((questionNumber + 1) / totalQuestions) * 100;
 
   return (
@@ -131,9 +185,7 @@ export function QuestionPlayer({
               {followUpOfQuestionText ? (
                 <>
                   {" "}
-                  to <span className="italic">
-                    “{followUpOfQuestionText}”
-                  </span>
+                  to <span className="italic">“{followUpOfQuestionText}”</span>
                 </>
               ) : null}
               . Answer it, then you&apos;ll continue as normal.
@@ -142,19 +194,12 @@ export function QuestionPlayer({
         )}
 
         {audioOnly ? (
-          <div className="flex flex-col items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-center">
-            <Ear className="h-6 w-6 text-itbd-blue" />
+          <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
+            <Ear className="h-5 w-5 shrink-0 text-itbd-blue" />
             <p className="text-sm text-white/70">
-              Listen to the question, then record your answer. Replay it as
-              many times as you need.
+              Audio-only: listen to the question, then record your answer.
+              Replay it as many times as you need.
             </p>
-            <DefaultButton
-              onClick={() => speak(questionText)}
-              className="w-fit"
-            >
-              <Volume2 className="mr-2 h-4 w-4" />
-              Replay Question
-            </DefaultButton>
           </div>
         ) : (
           <div className="rounded-xl border border-white/10 bg-white/5 p-3">
@@ -164,37 +209,41 @@ export function QuestionPlayer({
           </div>
         )}
 
-        {questionAudioPath && (
+        {/* One question voice. The recorded audio when it plays; otherwise
+            the browser voice — never both side by side. */}
+        {hasRecording ? (
           <div className="space-y-1.5">
-            <label className="flex items-center gap-2 text-xs font-semibold tracking-[0.15em] text-itbd-blue uppercase">
+            <p className="flex items-center gap-2 text-xs font-semibold tracking-[0.15em] text-itbd-blue uppercase">
               <Volume2 className="h-3.5 w-3.5" />
               Question Audio
-            </label>
+            </p>
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              {failedAudioPath === questionAudioPath ? (
-                // Recorded prompt audio missing/unplayable — fall back to the
-                // browser voice so the candidate can still listen.
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-xs text-white/50">
-                    Recorded audio isn&apos;t available for this question.
-                  </p>
-                  <DefaultButton
-                    onClick={() => speak(questionText)}
-                    className="w-fit"
-                  >
-                    <Volume2 className="mr-2 h-4 w-4" />
-                    Read question aloud
-                  </DefaultButton>
-                </div>
-              ) : (
-                <AudioPlayer
-                  key={questionAudioPath}
-                  src={questionAudioPath}
-                  onError={() => setFailedAudioPath(questionAudioPath)}
-                />
-              )}
+              <AudioPlayer
+                ref={audioPlayerRef}
+                key={questionAudioPath}
+                src={questionAudioPath!}
+                onError={() => setFailedAudioPath(questionAudioPath ?? null)}
+              />
             </div>
           </div>
+        ) : (
+          (audioOnly || questionAudioPath) && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-xs text-white/50">
+                {questionAudioPath
+                  ? "Recorded audio isn't available — your browser will read the question."
+                  : "Your browser will read the question aloud."}
+              </p>
+              <DefaultButton
+                onClick={() => void playWithBrowserVoice(1)}
+                disabled={speakingFallback}
+                className="w-fit"
+              >
+                <Volume2 className="mr-2 h-4 w-4" />
+                {speakingFallback ? "Reading…" : "Play question"}
+              </DefaultButton>
+            </div>
+          )
         )}
 
         <p className="mt-auto text-xs text-white/50">
@@ -204,4 +253,4 @@ export function QuestionPlayer({
       </div>
     </motion.div>
   );
-}
+});

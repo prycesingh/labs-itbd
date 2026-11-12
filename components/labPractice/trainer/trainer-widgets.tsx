@@ -2,8 +2,8 @@
 
 import { Plus, X } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import DefaultButton from "@/components/app_componentes/customButtons";
@@ -29,6 +29,52 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { ProgressionMode } from "@/DB/labPracticeSchema";
+
+/**
+ * Oversight trainer picker (guidedLabs.viewAll): "all" | "me" | a trainer id,
+ * kept in the `?trainer=` search param so the server page filters the roster.
+ */
+export function TrainerPicker({
+  value,
+  trainers,
+  myTrainerId,
+}: {
+  value: string;
+  trainers: { id: number; fullName: string; traineeCount: number }[];
+  myTrainerId: number;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [pending, startTransition] = useTransition();
+  const others = trainers.filter((t) => t.id !== myTrainerId);
+  const mine = trainers.find((t) => t.id === myTrainerId);
+
+  return (
+    <Select
+      value={value}
+      onValueChange={(v) =>
+        startTransition(() => router.replace(v === "all" ? pathname : `${pathname}?trainer=${v}`, { scroll: false }))
+      }
+    >
+      <SelectTrigger
+        className={pending ? "w-full opacity-60 sm:w-64" : "w-full sm:w-64"}
+        aria-label="Show trainees of"
+        aria-busy={pending}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all">All trainers</SelectItem>
+        <SelectItem value="me">My trainees{mine ? ` (${mine.traineeCount})` : ""}</SelectItem>
+        {others.map((t) => (
+          <SelectItem key={t.id} value={String(t.id)}>
+            {t.fullName} ({t.traineeCount})
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 export function CreateModuleForm() {
   const router = useRouter();
