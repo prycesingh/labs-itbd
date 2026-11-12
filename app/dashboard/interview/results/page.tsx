@@ -1,8 +1,8 @@
 import ResultsEvaluationPage from "@/components/interview/admin/ResultsEvaluationPage";
-import { requireAdminPage } from "@/lib/admin/guard";
+import { requirePermissionPage } from "@/lib/admin/guard";
 
 export default async function Page() {
-  await requireAdminPage();
+  await requirePermissionPage("results.view");
   return (
     <main className="flex flex-col w-full">
       <ResultsEvaluationPage />

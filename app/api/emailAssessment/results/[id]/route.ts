@@ -12,7 +12,7 @@ import {
 import { jsonError, requireApiUser } from "@/lib/emailAssessment/auth";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { user, response } = await requireApiUser(["candidate", "admin", "assessor"]);
+  const { user, response } = await requireApiUser(["candidate"]);
 
   if (response) return response;
 
@@ -35,7 +35,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return jsonError("Result not found.", 404);
   }
 
-  if (user!.role === "candidate" && record.assessment.candidateId !== user!.id) {
+  // ABAC: without results.view a user may only read their own result.
+  if (!user!.roles.includes("resultsViewer") && record.assessment.candidateId !== user!.id) {
     return jsonError("Result not found.", 404);
   }
 

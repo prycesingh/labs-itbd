@@ -20,7 +20,7 @@ const promptSchema = z.object({
 });
 
 export async function GET() {
-  const { response } = await requireApiUser(["admin"]);
+  const { response } = await requireApiUser(["contentViewer"]);
   if (response) return response;
 
   const [activePrompt] = await db

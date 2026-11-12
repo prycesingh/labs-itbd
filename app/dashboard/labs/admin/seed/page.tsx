@@ -3,7 +3,7 @@ import { SeedContentButton } from "@/components/labs/admin/seed-content-button";
 import { requireRole } from "@/lib/labs/auth";
 
 export default async function LabsAdminSeedPage() {
-  await requireRole(["contentAdmin"]);
+  await requireRole(["contentViewer"]);
 
   return (
     <main className="flex h-full w-full flex-col gap-6">

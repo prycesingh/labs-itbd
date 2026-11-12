@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { db } from "@/DB/drizzle";
-import { isAdminRole, type Role } from "@/lib/rbac";
+import { can, type Role } from "@/lib/rbac";
 import {
   adminInterviewEvaluations,
   aiInterviewEvaluations,
@@ -105,7 +105,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!isAdminRole(session.user.role as Role | undefined)) {
+  if (!can(session.user.role as Role | undefined, "results.view")) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
 

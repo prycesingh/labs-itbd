@@ -1,7 +1,7 @@
 import { db } from "@/DB/drizzle";
 import { emailAssessmentAttemptOverrides } from "@/DB/emailAssessmentSchema";
 import { users } from "@/DB/schema";
-import { requireAdmin } from "@/lib/admin/guard";
+import { requirePermission } from "@/lib/admin/guard";
 import { createEmailAssessmentOverrideSchema } from "@/lib/validation/emailAssessment";
 import { desc, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
@@ -12,7 +12,7 @@ import { randomUUID } from "node:crypto";
  * List all per-user daily session-start-limit overrides, joined to user for display.
  */
 export async function GET() {
-  const guard = await requireAdmin();
+  const guard = await requirePermission("content.view");
   if (!guard.ok) return guard.response;
 
   const rows = await db
@@ -38,7 +38,7 @@ export async function GET() {
  * Create or update the daily session-start limit for a user.
  */
 export async function POST(request: NextRequest) {
-  const guard = await requireAdmin();
+  const guard = await requirePermission("content.edit");
   if (!guard.ok) return guard.response;
 
   const body = await request.json().catch(() => null);

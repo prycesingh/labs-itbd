@@ -2,26 +2,32 @@ import { NextResponse } from "next/server";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
-import { isAdminRole, type Role } from "@/lib/rbac";
+import { can } from "@/lib/rbac";
 
 /**
- * Labs module roles. The WMS user model is the source of truth; we translate
- * WMS roles into these:
- *   - WMS "devAdmin" -> "contentAdmin" (manages quiz banks, glossary, etc.)
- *   - everyone else  -> "learner"
+ * Labs module roles, derived from app permissions (lib/rbac.ts):
+ *   - "learner"       — everyone signed in
+ *   - "contentViewer" — content.view (sees the content-admin screens)
+ *   - "contentAdmin"  — content.edit (creates / edits / deletes content)
+ * A user holds every role their permissions allow, so read endpoints ask for
+ * "contentViewer" and write endpoints for "contentAdmin".
  */
-export const roleNames = ["learner", "contentAdmin"] as const;
+export const roleNames = ["learner", "contentViewer", "contentAdmin"] as const;
 export type LabsRole = (typeof roleNames)[number];
 
 export type LabsUser = {
   id: string;
   name: string;
   email: string;
+  /** Highest labs role held. */
   role: LabsRole;
 };
 
-function mapWmsRoleToLabsRole(wmsRole: string | undefined | null): LabsRole {
-  return isAdminRole((wmsRole ?? null) as Role | null) ? "contentAdmin" : "learner";
+function heldRoles(appRole: string | undefined | null): LabsRole[] {
+  const held: LabsRole[] = ["learner"];
+  if (can(appRole, "content.view")) held.push("contentViewer");
+  if (can(appRole, "content.edit")) held.push("contentAdmin");
+  return held;
 }
 
 function toLabsUser(sessionUser: {
@@ -30,11 +36,12 @@ function toLabsUser(sessionUser: {
   email?: string | null;
   role?: string;
 }): LabsUser {
+  const held = heldRoles(sessionUser.role);
   return {
     id: sessionUser.id ?? "",
     name: sessionUser.name ?? sessionUser.email ?? "",
     email: sessionUser.email ?? "",
-    role: mapWmsRoleToLabsRole(sessionUser.role),
+    role: held[held.length - 1],
   };
 }
 
@@ -53,9 +60,9 @@ export async function requireApiUser(allowedRoles?: LabsRole[]) {
     };
   }
 
-  const role = mapWmsRoleToLabsRole(session.user.role);
+  const held = heldRoles(session.user.role);
 
-  if (allowedRoles && !allowedRoles.includes(role)) {
+  if (allowedRoles && !allowedRoles.some((r) => held.includes(r))) {
     return {
       user: null as LabsUser | null,
       response: NextResponse.json({ error: "Insufficient permissions." }, { status: 403 }),
@@ -86,9 +93,9 @@ export async function requireRole(allowedRoles: LabsRole[]): Promise<LabsUser> {
     redirect("/api/auth/signin");
   }
 
-  const role = mapWmsRoleToLabsRole(session.user.role);
+  const held = heldRoles(session.user.role);
 
-  if (!allowedRoles.includes(role)) {
+  if (!allowedRoles.some((r) => held.includes(r))) {
     redirect("/dashboard");
   }
 

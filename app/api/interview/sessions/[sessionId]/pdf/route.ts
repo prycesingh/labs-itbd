@@ -25,7 +25,7 @@ import {
   type DimensionSetName,
 } from "@/lib/interview/evaluationMetrics";
 import { renderResultsPdf, type ResultsPdfAnswer } from "@/lib/interview/resultsPdf";
-import { isAdminRole, type Role } from "@/lib/rbac";
+import { can, type Role } from "@/lib/rbac";
 import { asc, eq, inArray } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -119,7 +119,7 @@ export async function GET(
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    const isAdmin = isAdminRole(session.user.role as Role | undefined);
+    const isAdmin = can(session.user.role as Role | undefined, "results.view");
     if (!isAdmin && sessionRow.candidateId !== session.user.id) {
       return NextResponse.json(
         { error: "Access denied: cannot export another user's results" },

@@ -1,8 +1,8 @@
 import ModuleManagementPage from "@/components/interview/admin/ModuleManagementPage";
-import { requireAdminPage } from "@/lib/admin/guard";
+import { requirePermissionPage } from "@/lib/admin/guard";
 
 export default async function Page() {
-  await requireAdminPage();
+  await requirePermissionPage("content.view");
   return (
     <main className="flex flex-col w-full">
       <ModuleManagementPage />

@@ -35,21 +35,22 @@ type NavLink = { href: string; label: string; icon: LucideIcon };
  */
 export function AdminNav({
   user,
-  isSuperAdmin,
+  canViewLogs,
   mustChangePassword,
 }: {
   user: { name?: string | null; email?: string | null; role?: string };
-  isSuperAdmin: boolean;
+  canViewLogs: boolean;
   mustChangePassword: boolean;
 }) {
   const pathname = usePathname();
 
   const links: NavLink[] = [
     { href: "/admin/password", label: "My Password", icon: KeyRound },
-    ...(isSuperAdmin
-      ? [{ href: "/admin/users", label: "User Management", icon: Users }]
+    // Every panel role sees the user list (read-only without users.manage).
+    { href: "/admin/users", label: "User Management", icon: Users },
+    ...(canViewLogs
+      ? [{ href: "/admin/activity", label: "Activity Log", icon: Activity }]
       : []),
-    { href: "/admin/activity", label: "Activity Log", icon: Activity },
   ];
 
   return (

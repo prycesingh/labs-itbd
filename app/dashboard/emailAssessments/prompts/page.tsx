@@ -10,7 +10,7 @@ import { PromptEditor } from "@/components/emailAssessment/prompt-editor";
 import { requireRole } from "@/lib/emailAssessment/auth";
 
 export default async function EmailAssessmentsPromptsPage() {
-  await requireRole(["admin"]);
+  await requireRole(["contentViewer"]);
 
   const [activePrompt] = await db
     .select({ promptVersion: promptVersions, rubric: rubrics })

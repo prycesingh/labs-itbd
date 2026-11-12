@@ -12,7 +12,7 @@ const endSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const { user, response } = await requireApiUser(["candidate", "admin"]);
+  const { user, response } = await requireApiUser(["candidate"]);
 
   if (response) return response;
 

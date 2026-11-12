@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/DB/drizzle";
 import { pageVisits, users } from "@/DB/schema";
-import { requireAdmin } from "@/lib/admin/guard";
+import { requirePermission } from "@/lib/admin/guard";
 
 const PAGE_SIZE = 50;
 
@@ -13,7 +13,7 @@ const PAGE_SIZE = 50;
  * Query params: userId (optional), page (1-based, default 1).
  */
 export async function GET(request: NextRequest) {
-  const guard = await requireAdmin();
+  const guard = await requirePermission("logs.view");
   if (!guard.ok) return guard.response;
 
   const userId = request.nextUrl.searchParams.get("userId") || undefined;

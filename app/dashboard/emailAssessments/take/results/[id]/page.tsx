@@ -16,7 +16,7 @@ export default async function EmailAssessmentResultPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const user = await requireRole(["candidate", "admin"]);
+  const user = await requireRole(["candidate"]);
   const { id } = await params;
   const [assessment] = await db
     .select({ assessment: assessments })

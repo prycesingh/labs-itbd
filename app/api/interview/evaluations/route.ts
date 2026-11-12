@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { db } from "@/DB/drizzle";
-import { isAdminRole, type Role } from "@/lib/rbac";
+import { can, type Role } from "@/lib/rbac";
 import {
   adminInterviewEvaluations,
   aiInterviewEvaluations,
@@ -346,7 +346,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!isAdminRole(session.user.role as Role | undefined)) {
+  if (!can(session.user.role as Role | undefined, "scores.override")) {
     return NextResponse.json(
       { error: "Access denied: admin role required" },
       { status: 403 },

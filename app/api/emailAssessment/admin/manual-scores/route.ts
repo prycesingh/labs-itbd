@@ -22,7 +22,7 @@ const manualScoreSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const { user, response } = await requireApiUser(["admin", "assessor"]);
+  const { user, response } = await requireApiUser(["assessor"]);
 
   if (response) return response;
 

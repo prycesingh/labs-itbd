@@ -31,7 +31,7 @@ import {
   CAPABILITY_KEYS,
   setModuleCapability,
 } from "../lib/interview/moduleCapabilities";
-import { ADMIN_ROLES } from "../lib/rbac";
+import { rolesWith } from "../lib/rbac";
 
 const COACH_ROOT = path.resolve(__dirname, "..", "interview-coach-main");
 const QUESTION_BANK_PATH = path.join(
@@ -363,7 +363,7 @@ async function pickMigrationActor(): Promise<string> {
   const [admin] = await db
     .select({ id: users.id })
     .from(users)
-    .where(inArray(users.role, ADMIN_ROLES))
+    .where(inArray(users.role, [...rolesWith("content.edit")]))
     .limit(1);
   if (admin) return admin.id;
 

@@ -5,14 +5,14 @@ import { AdminNav } from "@/components/admin/admin-nav";
 import { PageVisitTracker } from "@/components/admin/PageVisitTracker";
 import { DashboardHeader } from "@/components/app_componentes/dashboard-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { isAdminRole, isSuperAdmin, type Role } from "@/lib/rbac";
+import { can, type Role } from "@/lib/rbac";
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 
 /**
  * Admin panel shell + server-side guard (defense in depth alongside proxy.ts).
  *
- * - Requires an authenticated admin-role user; others are bounced.
+ * - Requires adminPanel.view (devAdmin, admin, executive); others are bounced.
  * - Enforces the forced-password-change: if the user was given a temporary
  *   password (mustChangePassword), they are redirected to /admin/password until
  *   they change it. The DB is the source of truth so this can't be bypassed by
@@ -28,7 +28,7 @@ export default async function AdminLayout({
   const role = (session?.user?.role ?? null) as Role | null;
 
   if (!userId) redirect("/");
-  if (!isAdminRole(role)) redirect("/dashboard?denied=1");
+  if (!can(role, "adminPanel.view")) redirect("/dashboard?denied=1");
 
   const rows = await db
     .select({ mustChangePassword: users.mustChangePassword })
@@ -55,7 +55,7 @@ export default async function AdminLayout({
             email: session.user.email,
             role: role ?? undefined,
           }}
-          isSuperAdmin={isSuperAdmin(role)}
+          canViewLogs={can(role, "logs.view")}
           mustChangePassword={mustChange}
         />
         <SidebarInset className="overflow-y-auto p-6">{children}</SidebarInset>

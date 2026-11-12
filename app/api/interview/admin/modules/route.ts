@@ -10,7 +10,7 @@ import {
   CAPABILITY_KEYS,
   getModuleCapability,
 } from "@/lib/interview/moduleCapabilities";
-import { isAdminRole, type Role } from "@/lib/rbac";
+import { can, type Role } from "@/lib/rbac";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
     const session = await auth();
 
     // Check admin authorization
-    if (!isAdminRole(session?.user?.role as Role | undefined)) {
+    if (!can(session?.user?.role as Role | undefined, "content.edit")) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -177,7 +177,7 @@ export async function GET() {
     const session = await auth();
 
     // Check admin authorization
-    if (!isAdminRole(session?.user?.role as Role | undefined)) {
+    if (!can(session?.user?.role as Role | undefined, "content.view")) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -231,7 +231,7 @@ export async function PATCH(request: Request) {
   try {
     const session = await auth();
 
-    if (!isAdminRole(session?.user?.role as Role | undefined)) {
+    if (!can(session?.user?.role as Role | undefined, "content.edit")) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 

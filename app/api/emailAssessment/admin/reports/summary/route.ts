@@ -12,7 +12,7 @@ import {
 import { requireApiUser } from "@/lib/emailAssessment/auth";
 
 export async function GET() {
-  const { response } = await requireApiUser(["admin", "assessor"]);
+  const { response } = await requireApiUser(["resultsViewer"]);
 
   if (response) return response;
 

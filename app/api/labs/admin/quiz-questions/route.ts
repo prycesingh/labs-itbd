@@ -9,7 +9,7 @@ import { parseJsonColumn } from "@/lib/labs/jsonColumn";
 import { upsertQuizQuestionSchema } from "@/lib/validation/labs";
 
 export async function GET(request: Request) {
-  const { response } = await requireApiUser(["contentAdmin"]);
+  const { response } = await requireApiUser(["contentViewer"]);
 
   if (response) return response;
 

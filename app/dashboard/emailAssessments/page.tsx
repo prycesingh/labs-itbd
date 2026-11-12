@@ -4,7 +4,7 @@ import { requireRole } from "@/lib/emailAssessment/auth";
 import { getSessionSummaries } from "@/lib/emailAssessment/session-results";
 
 export default async function EmailAssessmentsAdminDashboardPage() {
-  await requireRole(["admin"]);
+  await requireRole(["resultsViewer"]);
 
   const sessions = await getSessionSummaries();
   const completedSessions = sessions.filter(

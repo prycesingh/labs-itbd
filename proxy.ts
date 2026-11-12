@@ -21,7 +21,7 @@ import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-import { evaluateAccess, type Role } from "@/lib/rbac";
+import { blocksReadOnlyMutation, evaluateAccess } from "@/lib/rbac";
 
 // AUTH_SECRET / NEXTAUTH_SECRET — same secret NextAuth signs the JWT with.
 // getToken needs it to decode the cookie. (auth.config.ts supports rotation
@@ -52,9 +52,21 @@ export async function proxy(request: NextRequest) {
     secureCookie: isSecureRequest(request),
   });
 
-  const role = (typeof token?.role === "string" ? token.role : null) as
-    | Role
-    | null;
+  const role = typeof token?.role === "string" ? token.role : null;
+
+  // Read-only roles (executive) may look at everything but change nothing:
+  // refuse every mutating request — API calls AND server actions (POSTs to
+  // page routes) — before any handler runs.
+  if (blocksReadOnlyMutation(role, request.method, pathname)) {
+    return NextResponse.json(
+      { error: "Your role has read-only access." },
+      { status: 403 },
+    );
+  }
+
+  // API routes enforce their own permissions (lib/*/auth.ts guards); the
+  // page rules below only apply to page navigation.
+  if (pathname.startsWith("/api/")) return NextResponse.next();
 
   const decision = evaluateAccess(pathname, role);
 
@@ -86,12 +98,12 @@ export async function proxy(request: NextRequest) {
   }
 }
 
-// Run only on app routes that RBAC cares about, excluding static assets, image
-// optimization, favicon/metadata, and the auth + public API endpoints (auth
-// callbacks must NOT be gated or SSO login breaks). Server actions POST to the
-// route they live on, so /dashboard/* actions are still covered here.
+// Run on app routes AND /api (for the read-only mutation block), excluding
+// static assets, image optimization, favicon/metadata, and the Auth.js
+// endpoints (auth callbacks must NOT be gated or SSO login breaks). Server
+// actions POST to the route they live on, so /dashboard/* actions are covered.
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|itbd_logo_img.png|sitemap.xml|robots.txt).*)",
+    "/((?!api/auth|_next/static|_next/image|favicon.ico|itbd_logo_img.png|sitemap.xml|robots.txt).*)",
   ],
 };

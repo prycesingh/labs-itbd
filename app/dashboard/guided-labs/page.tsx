@@ -1,4 +1,4 @@
-import { ArrowRight, GraduationCap, ShieldCheck } from "lucide-react";
+import { ArrowRight, GraduationCap } from "lucide-react";
 import Link from "next/link";
 
 import { AdminMotionCard } from "@/components/labs/admin/admin-motion-card";
@@ -17,24 +17,14 @@ export default async function PracticeHomePage() {
     <main className="flex w-full flex-col gap-6 pb-10">
       <PageTitle title="Guided" accent="Labs" sub="Hands-on labs assigned to you by your trainer." />
 
-      {(actor.trainer || actor.isAdmin) && (
+      {actor.trainer && (
         <div className="flex flex-wrap gap-3">
-          {actor.trainer && (
-            <Link
-              href="/dashboard/guided-labs/trainer"
-              className="inline-flex items-center gap-2 rounded-lg border border-itbd-blue/40 px-3 py-2 text-sm text-white hover:bg-itbd-blue/10"
-            >
-              <GraduationCap className="size-4 text-itbd-blue" /> Trainer workspace
-            </Link>
-          )}
-          {actor.isAdmin && (
-            <Link
-              href="/dashboard/guided-labs/admin/trainers"
-              className="inline-flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-sm text-white hover:bg-white/5"
-            >
-              <ShieldCheck className="size-4 text-itbd-blue" /> Manage trainers
-            </Link>
-          )}
+          <Link
+            href="/dashboard/guided-labs/trainer"
+            className="inline-flex items-center gap-2 rounded-lg border border-itbd-blue/40 px-3 py-2 text-sm text-white hover:bg-itbd-blue/10"
+          >
+            <GraduationCap className="size-4 text-itbd-blue" /> Trainer workspace
+          </Link>
         </div>
       )}
 
@@ -42,7 +32,7 @@ export default async function PracticeHomePage() {
         <AdminMotionCard className="p-6">
           <p className="relative z-10 text-sm text-white/70">
             We couldn&apos;t find <span className="text-white">{actor.email}</span> in the HRIS
-            employee list, so no practice modules can be assigned to you yet. Ask an admin to run an
+            employee list, so no practice modules can be assigned to you yet. Ask your trainer to run an
             HRIS sync if you joined recently.
           </p>
         </AdminMotionCard>

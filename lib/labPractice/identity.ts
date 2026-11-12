@@ -10,16 +10,20 @@ import {
   labPracticeTrainers,
 } from "@/DB/labPracticeSchema";
 import { syncIfStale } from "@/lib/labPractice/hris";
-import { isAdminRole, type Role } from "@/lib/rbac";
+import { can } from "@/lib/rbac";
 
 /**
  * Lab Practice identity resolution.
  *
  *   SSO session (users.email) ──email──▶ lab_practice_employees ──▶ trainers
  *
- * Trainer authority comes ONLY from the active `lab_practice_trainers` row
- * (no app role). App admins (ADMIN_ROLES) can read everything and manage the
- * trainer registry, but cannot act as a trainer unless registered as one.
+ * Trainer authority comes ONLY from the app role (permission
+ * "guidedLabs.train" in lib/rbac.ts). The `lab_practice_trainers` row is just
+ * the trainer's identity for foreign keys (created_by, enrollment ownership,
+ * rejections): it is created/reactivated on demand the first time a role-holder
+ * acts here, and is never consulted for authority — revoking the role revokes
+ * trainer access immediately, while their history stays intact.
+ * "guidedLabs.viewAll" grants read access to every enrollment (oversight).
  */
 
 export type Employee = typeof labPracticeEmployees.$inferSelect;
@@ -29,7 +33,8 @@ export type Enrollment = typeof labPracticeEnrollments.$inferSelect;
 export type PracticeActor = {
   userId: string;
   email: string;
-  isAdmin: boolean;
+  /** guidedLabs.viewAll — may read every enrollment. */
+  canViewAll: boolean;
   employee: Employee | null;
   trainer: Trainer | null;
 };
@@ -57,37 +62,34 @@ export async function getEmployeeByEmail(email: string): Promise<Employee | null
   return null;
 }
 
-async function getActiveTrainer(employeeId: number): Promise<Trainer | null> {
-  const [row] = await db
-    .select()
-    .from(labPracticeTrainers)
-    .where(
-      and(
-        eq(labPracticeTrainers.employeeId, employeeId),
-        eq(labPracticeTrainers.isActive, true),
-      ),
-    )
-    .limit(1);
-  return row ?? null;
-}
+/** The trainer identity row for an employee who holds the trainer role,
+ *  created (or reactivated) on first use. The unique index on employee_id
+ *  makes concurrent first requests safe: the loser's insert is ignored. */
+async function ensureTrainerRow(employeeId: number): Promise<Trainer> {
+  const find = async () =>
+    (
+      await db
+        .select()
+        .from(labPracticeTrainers)
+        .where(eq(labPracticeTrainers.employeeId, employeeId))
+        .limit(1)
+    )[0];
 
-/** Cheap single-query trainer check for the dashboard layout/nav. Never
- *  triggers an HRIS sync (it runs on every dashboard page load). */
-export async function isActiveTrainerEmail(email: string | null | undefined): Promise<boolean> {
-  if (!email) return false;
-  const [row] = await db
-    .select({ id: labPracticeTrainers.id })
-    .from(labPracticeTrainers)
-    .innerJoin(labPracticeEmployees, eq(labPracticeEmployees.id, labPracticeTrainers.employeeId))
-    .where(
-      and(
-        eq(labPracticeEmployees.email, email.toLowerCase()),
-        eq(labPracticeEmployees.isActive, true),
-        eq(labPracticeTrainers.isActive, true),
-      ),
-    )
-    .limit(1);
-  return Boolean(row);
+  let row = await find();
+  if (!row) {
+    await db.insert(labPracticeTrainers).values({ employeeId }).onDuplicateKeyUpdate({
+      set: { isActive: true },
+    });
+    row = await find();
+  } else if (!row.isActive) {
+    await db
+      .update(labPracticeTrainers)
+      .set({ isActive: true })
+      .where(eq(labPracticeTrainers.id, row.id));
+    row = { ...row, isActive: true };
+  }
+  if (!row) throw new Error(`Could not create trainer row for employee ${employeeId}`);
+  return row;
 }
 
 /** Resolve the current user. Null when not signed in. */
@@ -97,12 +99,13 @@ export async function getPracticeActor(): Promise<PracticeActor | null> {
   if (!user?.id || !user.email) return null;
 
   const employee = await getEmployeeByEmail(user.email);
-  const trainer = employee ? await getActiveTrainer(employee.id) : null;
+  const trainer =
+    employee && can(user.role, "guidedLabs.train") ? await ensureTrainerRow(employee.id) : null;
 
   return {
     userId: user.id,
     email: user.email.toLowerCase(),
-    isAdmin: isAdminRole((user.role ?? null) as Role | null),
+    canViewAll: can(user.role, "guidedLabs.viewAll"),
     employee,
     trainer,
   };
@@ -124,20 +127,21 @@ export async function requireApiActor(): Promise<Guard<PracticeActor>> {
   return { actor, response: null };
 }
 
-export async function requireApiAdmin(): Promise<Guard<PracticeActor>> {
-  const g = await requireApiActor();
-  if (g.response) return g;
-  if (!g.actor.isAdmin) return { actor: null, response: jsonError("Insufficient permissions.", 403) };
-  return g;
-}
-
 export type TrainerActor = PracticeActor & { employee: Employee; trainer: Trainer };
 
 export async function requireApiTrainer(): Promise<Guard<TrainerActor>> {
   const g = await requireApiActor();
   if (g.response) return g;
   if (!g.actor.trainer || !g.actor.employee) {
-    return { actor: null, response: jsonError("Only registered trainers can do this.", 403) };
+    return {
+      actor: null,
+      response: jsonError(
+        g.actor.employee
+          ? "Only trainers can do this."
+          : "Your email isn't in the HRIS employee list, so you can't act as a trainer yet.",
+        403,
+      ),
+    };
   }
   return { actor: g.actor as TrainerActor, response: null };
 }
@@ -156,12 +160,6 @@ export async function requirePageTrainer(): Promise<TrainerActor> {
   const actor = await requirePageActor();
   if (!actor.trainer || !actor.employee) redirect("/dashboard/guided-labs");
   return actor as TrainerActor;
-}
-
-export async function requirePageAdmin(): Promise<PracticeActor> {
-  const actor = await requirePageActor();
-  if (!actor.isAdmin) redirect("/dashboard/guided-labs");
-  return actor;
 }
 
 // ─────────────────────────────────────────────
@@ -183,7 +181,7 @@ export async function getEnrollment(enrollmentId: number): Promise<Enrollment | 
  * Every way the actor may access an enrollment (empty = no access):
  *   trainee — it is their own enrollment
  *   trainer — they are the trainer who owns it
- *   admin   — app admin (read access to everything)
+ *   admin   — guidedLabs.viewAll (read access to everything)
  * These are NOT exclusive: a trainer who enrolls themselves is both trainee
  * and trainer on that enrollment and must be able to act as either (practice
  * on the trainee page, review on the trainer page).
@@ -195,6 +193,6 @@ export function enrollmentAccessFor(
   const access: EnrollmentAccess[] = [];
   if (actor.employee && enrollment.traineeId === actor.employee.id) access.push("trainee");
   if (actor.trainer && enrollment.trainerId === actor.trainer.id) access.push("trainer");
-  if (actor.isAdmin) access.push("admin");
+  if (actor.canViewAll) access.push("admin");
   return access;
 }

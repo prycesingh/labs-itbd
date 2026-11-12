@@ -10,14 +10,20 @@ import {
   labPracticeTasks,
 } from "@/DB/labPracticeSchema";
 import { handleError, parseBody, parseId } from "@/lib/labPractice/api";
-import { nextSequenceNo, reorderChildren } from "@/lib/labPractice/curriculum";
+import {
+  deleteCurriculumItem,
+  nextSequenceNo,
+  reorderChildren,
+  type CurriculumLevel,
+} from "@/lib/labPractice/curriculum";
 import { jsonError, requireApiTrainer } from "@/lib/labPractice/identity";
 import { reorderSchema } from "@/lib/validation/labPractice";
 
 /**
  * Route-handler factories for the Lab / Task / Step levels, which all share
  * the same shape: POST (create under parent, appended at the end), PUT
- * (reorder all siblings) and PATCH (update one item). Trainer-only.
+ * (reorder all siblings), PATCH (update one item) and DELETE (remove one
+ * history-free item with its children). Trainer-only.
  */
 
 type ParentTable = typeof labPracticeModules | typeof labPracticeLabs | typeof labPracticeTasks;
@@ -118,5 +124,29 @@ export function itemRoutes<P extends string, S extends z.ZodTypeAny>(opts: {
     }
   }
 
-  return { PATCH };
+  /** DELETE — hard-delete the item and its children; refused (409) once
+   *  trainees have history on it (see deleteCurriculumItem). */
+  async function DELETE(_request: Request, context: Ctx<P>) {
+    const { response } = await requireApiTrainer();
+    if (response) return response;
+    const id = parseId((await context.params)[opts.param]);
+    if (!id) return jsonError("Not found.", 404);
+
+    try {
+      const deleted = await deleteCurriculumItem(levelOf(opts.table), id);
+      if (!deleted) return jsonError("Not found.", 404);
+      return NextResponse.json({ ok: true });
+    } catch (err) {
+      return handleError(err);
+    }
+  }
+
+  return { PATCH, DELETE };
+}
+
+function levelOf(table: ParentTable | ChildTable): CurriculumLevel {
+  if (table === labPracticeModules) return "module";
+  if (table === labPracticeLabs) return "lab";
+  if (table === labPracticeTasks) return "task";
+  return "step";
 }

@@ -1,7 +1,7 @@
 import { db } from "@/DB/drizzle";
 import { users } from "@/DB/schema";
-import { requireSuperAdmin } from "@/lib/admin/guard";
-import { isAdminRole } from "@/lib/rbac";
+import { requirePermission } from "@/lib/admin/guard";
+import { can } from "@/lib/rbac";
 import { provisionCredentialsSchema } from "@/lib/validation/admin";
 import { hash } from "bcryptjs";
 import { eq } from "drizzle-orm";
@@ -23,15 +23,15 @@ function generateTempPassword(): string {
 
 /**
  * POST /api/admin/users/credentials — provision (or reset) a temporary
- * credential password for a target user. Superadmin only.
+ * credential password for a target user. Requires users.manage.
  *
- * "Creds imply admin": the target MUST already hold an admin role, otherwise we
- * refuse (the superadmin should grant a role first via PATCH /api/admin/users).
+ * The target's role MUST hold credentials.login (devAdmin, admin, executive),
+ * otherwise we refuse (grant such a role first via PATCH /api/admin/users).
  * Sets mustChangePassword = 1 so the user is forced to change the temp password
  * on first credential login. The plaintext temp password is returned ONCE.
  */
 export async function POST(request: Request) {
-  const guard = await requireSuperAdmin();
+  const guard = await requirePermission("users.manage");
   if (!guard.ok) return guard.response;
 
   let body: unknown;
@@ -62,11 +62,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "User not found." }, { status: 404 });
   }
 
-  if (!isAdminRole(target.role)) {
+  if (!can(target.role, "credentials.login")) {
     return NextResponse.json(
       {
         error:
-          "Credentials can only be provisioned for admins. Grant an admin role first.",
+          "Credentials are only for devAdmin, admin and executive. Grant one of those roles first.",
       },
       { status: 400 },
     );
@@ -92,10 +92,10 @@ export async function POST(request: Request) {
 
 /**
  * DELETE /api/admin/users/credentials?userId=... — revoke credential login for
- * a user (clears the hash). They can still use SSO. Superadmin only.
+ * a user (clears the hash). They can still use SSO. Requires users.manage.
  */
 export async function DELETE(request: Request) {
-  const guard = await requireSuperAdmin();
+  const guard = await requirePermission("users.manage");
   if (!guard.ok) return guard.response;
 
   const userId = new URL(request.url).searchParams.get("userId");

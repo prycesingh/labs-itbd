@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { db } from "@/DB/drizzle";
-import { isAdminRole, type Role } from "@/lib/rbac";
+import { can, type Role } from "@/lib/rbac";
 import {
   adminInterviewEvaluations,
   aiInterviewEvaluations,
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
 
     if (
       candidateId !== session.user.id &&
-      !isAdminRole(session.user.role as Role | undefined)
+      !can(session.user.role as Role | undefined, "content.edit")
     ) {
       return NextResponse.json(
         { error: "Access denied: cannot create a session for another user" },
@@ -400,7 +400,7 @@ export async function GET(request: NextRequest) {
   const userId = request.nextUrl.searchParams.get("userId");
 
   if (userId) {
-    const isAdmin = isAdminRole(session.user.role as Role | undefined);
+    const isAdmin = can(session.user.role as Role | undefined, "results.view");
 
     if (!isAdmin && userId !== session.user.id) {
       return NextResponse.json(

@@ -13,19 +13,17 @@ import {
 } from "drizzle-orm/mysql-core";
 
 /**
- * Application user roles. The interview + email-assessment modules only need to
- * distinguish "devAdmin" (full admin/assessor) from everyone else, but we keep
- * the full vocabulary so role data ported from the source app stays valid.
+ * Application user roles, highest authority first. What each role may DO is
+ * defined in lib/rbac.ts (role → permissions); never branch on a role name
+ * elsewhere. Legacy roles from the source app (adminTeam, sales, taTeam,
+ * qateam, hrTeam, serviceDelivery) were collapsed to "user" by migration 0020.
  */
 export const APP_USER_ROLES = [
   "devAdmin",
+  "admin",
   "executive",
-  "adminTeam",
-  "sales",
-  "taTeam",
-  "qateam",
-  "hrTeam",
-  "serviceDelivery",
+  "trainer",
+  "auditor",
   "user",
 ] as const;
 

@@ -141,6 +141,13 @@
       "when": 1793969551825,
       "tag": "0019_interview_type_enum",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "5",
+      "when": 1794480000000,
+      "tag": "0020_rbac_roles",
+      "breakpoints": true
     }
   ]
 }

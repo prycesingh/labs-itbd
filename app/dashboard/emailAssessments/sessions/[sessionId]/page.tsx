@@ -31,7 +31,7 @@ export default async function EmailAssessmentsSessionDetailPage({
 }: {
   params: Promise<{ sessionId: string }>;
 }) {
-  await requireRole(["admin", "assessor"]);
+  await requireRole(["resultsViewer"]);
   const { sessionId } = await params;
   const [session] = await getSessionSummaries({ sessionIdentifier: sessionId });
 

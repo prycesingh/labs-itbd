@@ -4,11 +4,12 @@ import { auth } from "@/auth";
 import { UsersStatsRow } from "@/components/admin/UsersStatsRow";
 import { UsersTable } from "@/components/admin/users-table";
 import {
+  can,
   GRANTABLE_ROLES,
-  isAdminRole,
-  isSuperAdmin,
+  ROLE_DESCRIPTIONS,
   type Role,
 } from "@/lib/rbac";
+import { isWhitelistedDevAdminEmail } from "@/lib/roleWhitelist";
 import { asc, countDistinct, eq, gte } from "drizzle-orm";
 import { redirect } from "next/navigation";
 
@@ -20,7 +21,9 @@ export default async function AdminUsersPage() {
   const currentUserId = session?.user?.id ?? "";
 
   if (!session?.user?.id) redirect("/");
-  if (!isSuperAdmin(role)) redirect("/admin/password");
+  if (!can(role, "adminPanel.view")) redirect("/admin/password");
+  // Everyone in the panel sees the list; only users.manage may change it.
+  const canManage = can(role, "users.manage");
 
   // Forced password change takes precedence over everything else in the panel.
   const self = await db
@@ -57,15 +60,17 @@ export default async function AdminUsersPage() {
     name: u.name,
     email: u.email,
     role: u.role as Role,
-    isAdmin: isAdminRole(u.role),
-    isSuperAdmin: isSuperAdmin(u.role),
+    canUseCredentials: can(u.role, "credentials.login"),
+    isProtected: isWhitelistedDevAdminEmail(u.email),
     hasCredentials: Boolean(u.password),
     mustChangePassword: Boolean(u.mustChangePassword),
   }));
 
   const totalUsers = list.length;
-  const superAdminCount = list.filter((u) => u.isSuperAdmin).length;
-  const adminCount = list.filter((u) => u.isAdmin && !u.isSuperAdmin).length;
+  const superAdminCount = list.filter((u) => can(u.role, "users.manage")).length;
+  const adminCount = list.filter(
+    (u) => can(u.role, "adminPanel.view") && !can(u.role, "users.manage"),
+  ).length;
   const credentialsCount = list.filter((u) => u.hasCredentials).length;
   const pendingPasswordChangeCount = list.filter(
     (u) => u.mustChangePassword,
@@ -88,9 +93,9 @@ export default async function AdminUsersPage() {
             User <span className="text-itbd-blue">Management</span>
           </h1>
           <p className="mt-1 text-sm text-justify text-gray-400/60 xl:max-w-md">
-            Grant or revoke roles and provision credential (password) access.
-            Credentials are admin-only - grant an admin role before provisioning
-            a password.
+            {canManage
+              ? "Assign roles and provision credential (password) access. Passwords are for devAdmin, admin and executive only."
+              : "Read-only view of users and their roles. Only a devAdmin can change roles or credentials."}
           </p>
         </div>
 
@@ -109,7 +114,11 @@ export default async function AdminUsersPage() {
       <UsersTable
         users={list}
         currentUserId={currentUserId}
-        grantableRoles={[...GRANTABLE_ROLES]}
+        grantableRoles={GRANTABLE_ROLES.map((r) => ({
+          value: r,
+          description: ROLE_DESCRIPTIONS[r],
+        }))}
+        canManage={canManage}
       />
     </main>
   );
