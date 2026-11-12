@@ -30,15 +30,16 @@ export async function GET(_req: Request, context: Ctx) {
   }
 }
 
-/** PATCH { isActive } — unassign / re-assign (owning trainer or admin).
- *  Unassigning keeps all history; the trainee just loses write access. */
+/** PATCH { isActive } — unassign / re-assign (owning trainer, or
+ *  guidedLabs.manageAll — viewAll alone is read-only). Unassigning keeps all
+ *  history; the trainee just loses write access. */
 export async function PATCH(request: Request, context: Ctx) {
   const { actor, response } = await requireApiActor();
   if (response) return response;
   const { enrollment, response: denied } = await loadEnrollmentFor(
     actor,
     (await context.params).enrollmentId,
-    ["trainer", "admin"],
+    ["trainer", "manager"],
   );
   if (denied) return denied;
   const { data, response: bad } = await parseBody(request, setActiveSchema);

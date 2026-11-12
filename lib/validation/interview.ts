@@ -430,6 +430,7 @@ export const CAPABILITY_KEY_VALUES = [
   "follow_ups",
   "evaluation_depth",
   "attempt_cadence",
+  "interview_blueprint",
 ] as const;
 
 export const updateModuleCapabilitySchema = z.object({

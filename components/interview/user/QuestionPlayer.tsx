@@ -3,10 +3,15 @@
 import { AudioPlayer } from "@/components/app_componentes/AudioPlayer";
 import DefaultButton from "@/components/app_componentes/customButtons";
 import { Progress } from "@/components/ui/progress";
+import {
+  QUESTION_TYPE_LABELS,
+  type QuestionType,
+} from "@/lib/interview/questionTypes";
 import { speak } from "@/lib/interview/textToSpeech";
 import { cn } from "@/lib/utils";
 import { Ear, Volume2 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
+import { useState } from "react";
 
 interface StandardResponse {
   id: string;
@@ -31,6 +36,10 @@ interface QuestionPlayerProps {
   // next question.
   isFollowUp?: boolean;
   followUpOfQuestionText?: string;
+  // Blueprint modules (Interview Coach): which part of the interview this
+  // question belongs to — "Behavioral", or "Technical · Kaseya RMM".
+  questionType?: QuestionType;
+  category?: string;
 }
 
 /**
@@ -49,8 +58,23 @@ export function QuestionPlayer({
   audioOnly = false,
   isFollowUp = false,
   followUpOfQuestionText,
+  questionType,
+  category,
 }: QuestionPlayerProps) {
+  const typeLabel = questionType
+    ? [
+        QUESTION_TYPE_LABELS[questionType],
+        // Non-technical categories just repeat the type ("Behavioral").
+        category && category !== QUESTION_TYPE_LABELS[questionType]
+          ? category
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
   const reduce = useReducedMotion();
+  // Keyed by path, so moving to a question whose audio works resets it.
+  const [failedAudioPath, setFailedAudioPath] = useState<string | null>(null);
   const progress = ((questionNumber + 1) / totalQuestions) * 100;
 
   return (
@@ -93,11 +117,17 @@ export function QuestionPlayer({
 
         <Progress value={progress} className="h-1.5 bg-white/10" />
 
+        {typeLabel && !isFollowUp && (
+          <p className="text-xs font-semibold tracking-[0.15em] text-itbd-blue uppercase">
+            {typeLabel}
+          </p>
+        )}
+
         {isFollowUp && (
           <div className="flex items-start gap-2 rounded-xl border border-itbd-blue/20 bg-itbd-blue/5 p-3 text-sm text-itbd-blue/90">
             <span aria-hidden>↳</span>
             <span>
-              The coach wants to probe a gap in your last answer
+              The coach wants to probe a gap in your answer
               {followUpOfQuestionText ? (
                 <>
                   {" "}
@@ -141,7 +171,28 @@ export function QuestionPlayer({
               Question Audio
             </label>
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <AudioPlayer key={questionAudioPath} src={questionAudioPath} />
+              {failedAudioPath === questionAudioPath ? (
+                // Recorded prompt audio missing/unplayable — fall back to the
+                // browser voice so the candidate can still listen.
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs text-white/50">
+                    Recorded audio isn&apos;t available for this question.
+                  </p>
+                  <DefaultButton
+                    onClick={() => speak(questionText)}
+                    className="w-fit"
+                  >
+                    <Volume2 className="mr-2 h-4 w-4" />
+                    Read question aloud
+                  </DefaultButton>
+                </div>
+              ) : (
+                <AudioPlayer
+                  key={questionAudioPath}
+                  src={questionAudioPath}
+                  onError={() => setFailedAudioPath(questionAudioPath)}
+                />
+              )}
             </div>
           </div>
         )}

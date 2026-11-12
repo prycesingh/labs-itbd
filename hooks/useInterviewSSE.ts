@@ -193,7 +193,17 @@ export function useInterviewSSE(sessionId: string | null, enabled = true) {
       sourceRef.current = null;
     };
 
-    const handleServerError = (event: MessageEvent) => {
+    const handleServerError = (event: Event) => {
+      // EventSource fires its own native "error" Event on every connection
+      // drop (proxy idle-timeout, network blip, server restart) — the same
+      // event name the server uses for a genuine processing failure. Only a
+      // MessageEvent carrying data is the server's terminal "error"; a
+      // native one is left to EventSource's auto-reconnect and the fallback
+      // poll below. Treating it as failure showed candidates "We couldn't
+      // finish evaluating your interview" while processing was still fine.
+      if (!(event instanceof MessageEvent) || typeof event.data !== "string") {
+        return;
+      }
       const payload = parseData<ErrorPayload>(event.data);
 
       setState((prev) => ({
@@ -212,7 +222,7 @@ export function useInterviewSSE(sessionId: string | null, enabled = true) {
 
     source.addEventListener("progress", handleProgress as EventListener);
     source.addEventListener("complete", handleComplete as EventListener);
-    source.addEventListener("error", handleServerError as EventListener);
+    source.addEventListener("error", handleServerError);
 
     source.onerror = () => {
       setState((prev) => ({
@@ -226,7 +236,7 @@ export function useInterviewSSE(sessionId: string | null, enabled = true) {
     return () => {
       source.removeEventListener("progress", handleProgress as EventListener);
       source.removeEventListener("complete", handleComplete as EventListener);
-      source.removeEventListener("error", handleServerError as EventListener);
+      source.removeEventListener("error", handleServerError);
       source.close();
       sourceRef.current = null;
     };

@@ -177,6 +177,23 @@ export const interviewQuestionBank = mysqlTable(
     // migration script idempotent on re-run. Null for questions not migrated
     // from that source.
     sourceId: varchar("source_id", { length: 255 }),
+    // Interview question type (see lib/interview/questionTypes.ts) — drives
+    // blueprint-ordered session selection for modules with the
+    // interview_blueprint capability. Null for hand-written questions
+    // (e.g. Customer Centricity), which keep plain random selection.
+    questionType: mysqlEnum("question_type", [
+      "screening",
+      "concept",
+      "technical",
+      "tools",
+      "behavioral",
+    ]),
+    // Display grouping, e.g. "Kaseya RMM" for technical topics.
+    category: varchar("category", { length: 100 }),
+    // The original templated wording ("Walk me through how you'd
+    // troubleshoot and resolve: …"), kept when promptText is replaced by a
+    // reviewed natural-language rewrite, so a rewrite can be rolled back.
+    templatePromptText: text("template_prompt_text"),
     createdAt: timestamp("created_at", { mode: "string" })
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),
@@ -186,6 +203,7 @@ export const interviewQuestionBank = mysqlTable(
   },
   (table) => [
     primaryKey({ columns: [table.id], name: "iqb_id" }),
+    index("iqb_question_type_idx").on(table.questionType),
     unique("iqb_id_unique").on(table.id),
     index("iqb_active_idx").on(table.isActive),
     index("iqb_created_idx").on(table.createdAt),

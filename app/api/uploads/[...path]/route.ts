@@ -1,4 +1,8 @@
 import { auth } from "@/auth";
+import {
+  canAccessInterviewSession,
+  interviewAnswerSessionIdFromUploadId,
+} from "@/lib/interview/answerAccess";
 import { resolveAbsolutePath } from "@/lib/uploads";
 import fs from "node:fs";
 import { stat } from "node:fs/promises";
@@ -49,6 +53,21 @@ export async function GET(
   }
 
   const id = segments.map((segment) => decodeURIComponent(segment)).join("/");
+
+  // Interview answer recordings are private to the candidate and to
+  // reviewers — other upload categories keep the signed-in-only rule.
+  // 404 rather than 403 so the response doesn't confirm the file exists.
+  const answerSessionId = interviewAnswerSessionIdFromUploadId(id);
+  if (
+    answerSessionId &&
+    !(await canAccessInterviewSession(
+      { id: session.user.id, role: session.user.role },
+      answerSessionId,
+    ))
+  ) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const absolutePath = resolveAbsolutePath(id);
 
   let fileStat;

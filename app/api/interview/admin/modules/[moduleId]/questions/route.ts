@@ -67,6 +67,8 @@ export async function GET(
             promptText: interviewQuestionBank.promptText,
             promptAudioPath: interviewQuestionBank.promptAudioPath,
             promptTranscript: interviewQuestionBank.promptTranscript,
+            questionType: interviewQuestionBank.questionType,
+            category: interviewQuestionBank.category,
             isActive: interviewQuestionBank.isActive,
             createdAt: interviewQuestionBank.createdAt,
             updatedAt: interviewQuestionBank.updatedAt,
@@ -236,6 +238,8 @@ export async function POST(
           promptText: interviewQuestionBank.promptText,
           promptAudioPath: interviewQuestionBank.promptAudioPath,
           promptTranscript: interviewQuestionBank.promptTranscript,
+          questionType: interviewQuestionBank.questionType,
+          category: interviewQuestionBank.category,
           isActive: interviewQuestionBank.isActive,
         },
       })

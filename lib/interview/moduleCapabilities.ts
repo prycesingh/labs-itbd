@@ -20,6 +20,7 @@ import { db } from "@/DB/drizzle";
 import { interviewModuleCapabilities } from "@/DB/interviewSchema";
 import { and, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
+import { parseBlueprint, type InterviewBlueprint } from "./questionTypes";
 
 export const CAPABILITY_KEYS = {
   DELIVERY_SCORING: "delivery_scoring",
@@ -27,6 +28,10 @@ export const CAPABILITY_KEYS = {
   FOLLOW_UPS: "follow_ups",
   EVALUATION_DEPTH: "evaluation_depth",
   ATTEMPT_CADENCE: "attempt_cadence",
+  // Session questions follow an ordered list of question TYPES
+  // (screening → concept → technical → tools → behavioral) instead of a
+  // uniform random pick — see lib/interview/questionTypes.ts.
+  INTERVIEW_BLUEPRINT: "interview_blueprint",
 } as const;
 
 export type CapabilityKey =
@@ -209,6 +214,21 @@ export async function getAttemptCadence(
   );
   const cadence = (config as Partial<AttemptCadenceConfig>).cadence;
   return cadence ?? "daily";
+}
+
+/**
+ * Convenience: the module's interview blueprint, or null when the
+ * capability is off/unconfigured — the caller then keeps plain random
+ * selection (Customer Centricity and any module not opted in).
+ */
+export async function getInterviewBlueprint(
+  moduleId: string,
+): Promise<InterviewBlueprint | null> {
+  const { enabled, config } = await getModuleCapability(
+    moduleId,
+    CAPABILITY_KEYS.INTERVIEW_BLUEPRINT,
+  );
+  return enabled ? parseBlueprint(config) : null;
 }
 
 /**

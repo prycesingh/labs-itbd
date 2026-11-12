@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 import { inArray } from "drizzle-orm";
 
 import { db } from "@/DB/drizzle";
@@ -530,6 +531,29 @@ type TaskNode = { title: string; description: Attr; steps: Map<string, StepNode>
 type LabNode = { title: string; row: number; description: Attr; scenario: Attr; tasks: Map<string, TaskNode> };
 type ModuleNode = { title: string; row: number; info: Attr; mode: Attr; labs: Map<string, LabNode> };
 
+/**
+ * ExcelJS only recognises cell-note parts under Excel's own names
+ * (xl/commentsN.xml, xl/drawings/vmlDrawingN.vml). Other writers (e.g.
+ * openpyxl: xl/comments/comment1.xml, xl/drawings/commentsDrawing1.vml) are
+ * valid OOXML, but ExcelJS skips those parts and then crashes resolving the
+ * sheet's link to them ("Cannot read properties of undefined (reading
+ * 'comments')"). The import only reads cell values, so drop the sheets'
+ * comments/vmlDrawing relationships — notes are lost, data is untouched.
+ * Entries are only read and re-zipped in memory; nothing touches disk.
+ */
+async function normalizeForExcelJs(buffer: ArrayBuffer): Promise<Buffer> {
+  const zip = await JSZip.loadAsync(buffer);
+  const rels = Object.keys(zip.files).filter((p) => /^xl\/worksheets\/_rels\/[^/]+\.rels$/.test(p));
+  for (const path of rels) {
+    const xml = await zip.file(path)!.async("string");
+    zip.file(
+      path,
+      xml.replace(/<Relationship\b[^>]*\/relationships\/(?:comments|vmlDrawing)"[^>]*\/>/g, ""),
+    );
+  }
+  return zip.generateAsync({ type: "nodebuffer" });
+}
+
 /** Parse + validate an uploaded workbook. Never throws for bad content —
  *  problems come back in `errors`. */
 export async function parseCurriculumWorkbook(buffer: ArrayBuffer): Promise<ParseResult> {
@@ -543,12 +567,19 @@ export async function parseCurriculumWorkbook(buffer: ArrayBuffer): Promise<Pars
     errors,
   };
 
-  const wb = new ExcelJS.Workbook();
+  let wb = new ExcelJS.Workbook();
   try {
     await wb.xlsx.load(buffer as never);
   } catch {
-    fail(null, "Could not read the file — upload the .xlsx template (not .xls or .csv).");
-    return empty;
+    // Workbooks written by other tools (e.g. openpyxl) may be valid OOXML that
+    // ExcelJS still can't load — retry once after normalizing them.
+    try {
+      wb = new ExcelJS.Workbook();
+      await wb.xlsx.load((await normalizeForExcelJs(buffer)) as never);
+    } catch {
+      fail(null, "Could not read the file — upload the .xlsx template (not .xls or .csv).");
+      return empty;
+    }
   }
 
   const ws =

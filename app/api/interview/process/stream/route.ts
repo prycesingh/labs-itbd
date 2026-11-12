@@ -34,6 +34,12 @@ export async function GET(request: NextRequest) {
   let interval: ReturnType<typeof setInterval> | null = null;
   let closed = false;
   let inFlight = false;
+  // A single failed status read (DB pool hiccup, read racing a write) used
+  // to emit a terminal "error" immediately, sending the candidate to the
+  // failure screen while processing was still healthy. Only give up after
+  // a sustained run of failures (~10 s at the 500 ms poll interval).
+  let consecutiveErrors = 0;
+  const MAX_CONSECUTIVE_ERRORS = 20;
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -61,6 +67,7 @@ export async function GET(request: NextRequest) {
 
         try {
           const status = await getSessionProcessingStatus(sessionId);
+          consecutiveErrors = 0;
 
           // The request can abort (client disconnects) while the await above
           // is in flight — closeStream() already ran by the time we resume,
@@ -103,6 +110,10 @@ export async function GET(request: NextRequest) {
             closeStream();
           }
         } catch (error) {
+          consecutiveErrors += 1;
+          if (consecutiveErrors < MAX_CONSECUTIVE_ERRORS) {
+            return;
+          }
           if (!closed) {
             controller.enqueue(
               sseEvent("error", {

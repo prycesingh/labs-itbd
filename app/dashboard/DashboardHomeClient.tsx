@@ -1,7 +1,10 @@
 "use client";
 
 import { HowItWorks } from "@/components/app_componentes/HowItWorks";
-import { LabCard, type LabCardSection } from "@/components/app_componentes/LabCard";
+import {
+  LabCard,
+  type LabCardSection,
+} from "@/components/app_componentes/LabCard";
 import CountUp from "@/components/CountUp";
 import { Headset, Mail, Mic, MonitorPlay, Route } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
@@ -168,7 +171,9 @@ function StatTile({
     <div className="flex flex-col items-center justify-center px-3 py-4 text-center sm:px-4 sm:py-8 xl:px-5">
       <p className="flex items-baseline text-3xl font-semibold text-white sm:text-4xl xl:text-6xl">
         <CountUp to={value} duration={1.5} />{" "}
-        {unit ? <span className="text-xl sm:text-2xl xl:text-4xl">{unit}</span> : null}
+        {unit ? (
+          <span className="text-xl sm:text-2xl xl:text-4xl">{unit}</span>
+        ) : null}
       </p>
       <p className="mt-1 text-[10px] text-itbd-blue sm:text-xs">{label}</p>
     </div>
@@ -262,8 +267,6 @@ export function DashboardHomeClient({
             borderBottom: "1px solid",
           }}
         >
-          <StatTile value={totalSimulators} label="Total Modules" />
-          <StatDivider />
           <StatTile
             value={splitDuration(weekSeconds).value}
             unit={splitDuration(weekSeconds).unit}

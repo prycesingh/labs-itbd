@@ -341,7 +341,17 @@ export async function getSessionProcessingStatus(
       );
     }
 
-    // Count transcription progress
+    // Job rows scoped to this orchestration's correlationId — used ONLY to
+    // collect error details below, never to count progress. Interview
+    // Coach's answers are transcribed/evaluated by immediate per-answer jobs
+    // (upload-audio/route.ts → spawnImmediateEvaluation), each minted with
+    // its own generateCorrelationId() before this orchestration job existed,
+    // so they never match this correlationId. Counting progress from these
+    // queries left evaluationCompleted pinned at 0 for every Interview Coach
+    // session: determineStatus() could never return "completed", the
+    // processing page sat at "Reviewing your answers…" until the SSE
+    // connection dropped, and the candidate saw "We couldn't finish
+    // evaluating your interview" even though the session had completed.
     const transcriptionJobs = await db
       .select()
       .from(backgroundJobs)
@@ -355,11 +365,13 @@ export async function getSessionProcessingStatus(
         ),
       );
 
-    const transcriptionCompleted = transcriptionJobs.filter(
-      (j) => j.status === "completed",
+    // Progress comes from the answer rows themselves — the authoritative
+    // per-answer state, written by the transcription/evaluation handlers
+    // regardless of which job (immediate or batch) processed the answer.
+    const transcriptionCompleted = answerRows.filter(
+      (row) => row.transcriptStatus === "completed",
     ).length;
 
-    // Count evaluation progress
     const evaluationJobs = await db
       .select()
       .from(backgroundJobs)
@@ -373,8 +385,8 @@ export async function getSessionProcessingStatus(
         ),
       );
 
-    const evaluationCompleted = evaluationJobs.filter(
-      (j) => j.status === "completed",
+    const evaluationCompleted = answerRows.filter(
+      (row) => row.evaluationStatus === "completed",
     ).length;
 
     // Calculate progress. Deliberately the real answer-row count, NOT
@@ -389,13 +401,18 @@ export async function getSessionProcessingStatus(
     // the correct denominator handleInterviewSessionOrchestration already
     // uses (answers.length) in backgroundJobHandlers.ts.
     const totalAnswers = answerRows.length;
-    const computedStatus = determineStatus(
-      orchestrationJob.status,
-      transcriptionCompleted,
-      evaluationCompleted,
-      totalAnswers,
-      failedAnswerRows.length > 0,
-    );
+    // The session row is flipped to "completed" by the summary job, after
+    // every answer is evaluated — treat it as authoritative too.
+    const computedStatus =
+      currentSession.status === "completed"
+        ? "completed"
+        : determineStatus(
+            orchestrationJob.status,
+            transcriptionCompleted,
+            evaluationCompleted,
+            totalAnswers,
+            failedAnswerRows.length > 0,
+          );
     const progress: ProcessingProgress = {
       transcriptedAnswers: transcriptionCompleted,
       evaluatedAnswers: evaluationCompleted,
