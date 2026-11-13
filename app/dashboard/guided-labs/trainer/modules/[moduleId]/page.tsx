@@ -8,9 +8,11 @@ import {
   type BuilderModule,
 } from "@/components/labPractice/trainer/module-builder";
 import { EnrollmentPanel } from "@/components/labPractice/trainer/trainer-widgets";
+import { BatchesPanel, type BatchRow } from "@/components/labPractice/trainer/visibility-widgets";
+import { listModuleBatches } from "@/lib/labPractice/batches";
 import { loadModuleTree } from "@/lib/labPractice/curriculum";
 import { requirePageTrainer } from "@/lib/labPractice/identity";
-import { listTrainerEnrollments } from "@/lib/labPractice/queries";
+import { listModuleEnrollments } from "@/lib/labPractice/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +26,27 @@ export default async function TrainerModulePage({
   const tree = Number.isInteger(id) && id > 0 ? await loadModuleTree(id) : null;
   if (!tree) notFound();
 
-  const enrollments = await listTrainerEnrollments(actor.trainer.id, tree.id);
+  const [moduleEnrollments, batchList] = await Promise.all([
+    listModuleEnrollments(tree.id),
+    listModuleBatches(tree.id, actor.canViewAll ? undefined : actor.trainer.id),
+  ]);
+  const enrollments = moduleEnrollments.filter((e) => e.trainerId === actor.trainer.id);
+  const activeLabIds = new Set(tree.labs.filter((l) => l.isActive).map((l) => l.id));
+  const batches: BatchRow[] = batchList.map((b) => {
+    const members = moduleEnrollments.filter((e) => e.batchId === b.id && e.isActive);
+    return {
+      id: b.id,
+      name: b.name,
+      isActive: b.isActive,
+      trainerName: b.trainerName,
+      isMine: b.trainerId === actor.trainer.id,
+      memberCount: b.memberCount,
+      visibleLabs: b.labIds.filter((id) => activeLabIds.has(id)).length,
+      avgPercent: members.length
+        ? Math.round(members.reduce((sum, m) => sum + m.percent, 0) / members.length)
+        : null,
+    };
+  });
 
   // Plain, serialisable shape for the client builder.
   const mod: BuilderModule = {
@@ -72,10 +94,21 @@ export default async function TrainerModulePage({
               <ModuleSettingsCard mod={mod} />
             </div>
           </AdminMotionCard>
+          <AdminMotionCard className="p-6" delay={0.08}>
+            <div className="relative z-10 space-y-3">
+              <h2 className="text-lg font-bold text-white">Batches</h2>
+              <BatchesPanel
+                moduleId={tree.id}
+                totalLabs={activeLabIds.size}
+                batches={batches}
+                canCreate={tree.isActive}
+              />
+            </div>
+          </AdminMotionCard>
           <AdminMotionCard className="p-6" delay={0.1}>
             <div className="relative z-10 space-y-3">
               <h2 className="text-lg font-bold text-white">My trainees</h2>
-              <EnrollmentPanel moduleId={tree.id} moduleActive={tree.isActive} enrollments={enrollments} />
+              <EnrollmentPanel moduleId={tree.id} moduleTitle={tree.title} moduleActive={tree.isActive} enrollments={enrollments} />
             </div>
           </AdminMotionCard>
         </div>

@@ -48,8 +48,17 @@ function ModuleRow({ e }: { e: TraineeGroup["enrollments"][number] }) {
                 Unassigned
               </Badge>
             )}
+            {e.batchName && (
+              <Badge variant="outline" className="shrink-0 border-itbd-blue/40 px-1.5 py-0 text-[10px] text-itbd-blue">
+                {e.batchName}
+              </Badge>
+            )}
           </span>
           <span className="block text-xs text-white/40">
+            <span className="tabular-nums">
+              {e.visibleLabs}/{e.totalLabs} labs shown
+            </span>
+            {" · "}
             {e.completedAt ? (
               <span className="text-itbd-blue">Completed {formatEt(e.completedAt)}</span>
             ) : (
@@ -79,9 +88,9 @@ function TraineeRow({ group }: { group: TraineeGroup }) {
           <button
             type="button"
             className={cn(
-              "flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5 text-left hover:bg-white/[0.03] focus-visible:bg-white/[0.03] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset",
+              "flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5 text-left hover:bg-white/3 focus-visible:bg-white/3 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset",
               COLS,
-              open && "bg-white/[0.03]",
+              open && "bg-white/3",
             )}
           >
             <span className="flex min-w-0 flex-1 items-center gap-2.5">
@@ -124,7 +133,9 @@ function matches(g: TraineeGroup, q: string) {
     g.traineeName.toLowerCase().includes(q) ||
     g.traineeEmail.toLowerCase().includes(q) ||
     g.trainerName.toLowerCase().includes(q) ||
-    g.enrollments.some((e) => e.moduleTitle.toLowerCase().includes(q))
+    g.enrollments.some(
+      (e) => e.moduleTitle.toLowerCase().includes(q) || (e.batchName?.toLowerCase().includes(q) ?? false),
+    )
   );
 }
 
@@ -155,7 +166,7 @@ export function TraineeRoster({ groups, byTrainer }: { groups: TraineeGroup[]; b
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={byTrainer ? "Search trainee, email, module or trainer…" : "Search trainee, email or module…"}
+            placeholder={byTrainer ? "Search trainee, email, module, batch or trainer…" : "Search trainee, email, module or batch…"}
             aria-label="Search trainees"
             className="pr-9 pl-9 [&::-webkit-search-cancel-button]:hidden"
           />
@@ -196,7 +207,7 @@ export function TraineeRoster({ groups, byTrainer }: { groups: TraineeGroup[]; b
             <div
               aria-hidden
               className={cn(
-                "hidden border-b border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] font-medium tracking-wide text-white/40 uppercase",
+                "hidden border-b border-white/10 bg-white/3 px-3 py-2 text-[11px] font-medium tracking-wide text-white/40 uppercase",
                 COLS,
               )}
             >

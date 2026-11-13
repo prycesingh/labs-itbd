@@ -11,6 +11,8 @@ import {
 } from "@/DB/labPracticeSchema";
 import { loadModuleTree, type ModuleTree } from "@/lib/labPractice/curriculum";
 import { computeProgress } from "@/lib/labPractice/progression";
+import { filterVisibleLabs, visibleLabIdSet } from "@/lib/labPractice/visibility";
+import { loadVisibilityInputs } from "@/lib/labPractice/visibilityData";
 import { epochOf, fromEpoch } from "@/lib/labPractice/sqlTime";
 
 /**
@@ -31,6 +33,14 @@ export type EnrollmentSummary = {
   traineeEmail: string;
   trainerId: number;
   trainerName: string;
+  batchId: number | null;
+  batchName: string | null;
+  /** Labs the trainee can see / active labs in the module. */
+  visibleLabs: number;
+  totalLabs: number;
+  /** Per visible lab (in order): progress, for batch review grids. */
+  labProgress: { labId: number; percent: number; done: number; total: number }[];
+  /** Progress over VISIBLE labs only. */
   percent: number;
   done: number;
   total: number;
@@ -59,6 +69,7 @@ async function summarize(where: SQL | undefined): Promise<EnrollmentSummary[]> {
       traineeEmail: labPracticeEmployees.email,
       trainerId: labPracticeEnrollments.trainerId,
       trainerName: trainerEmployee.fullName,
+      batchId: labPracticeEnrollments.batchId,
       enrolledAtEpoch: epochOf(labPracticeEnrollments.assignedAt),
     })
     .from(labPracticeEnrollments)
@@ -74,6 +85,8 @@ async function summarize(where: SQL | undefined): Promise<EnrollmentSummary[]> {
   const trees = new Map<number, ModuleTree | null>(
     await Promise.all(moduleIds.map(async (id) => [id, await loadModuleTree(id)] as const)),
   );
+
+  const visInputs = await loadVisibilityInputs(rows);
 
   const completions = await db
     .select({
@@ -94,8 +107,10 @@ async function summarize(where: SQL | undefined): Promise<EnrollmentSummary[]> {
   return rows.map(({ enrolledAtEpoch, ...r }) => {
     const tree = trees.get(r.moduleId);
     const done = doneBy.get(r.id) ?? [];
+    const vis = visInputs.get(r.id)!;
+    const visible = tree ? visibleLabIdSet(tree.labs, vis.batchLabIds, vis.overrides) : new Set<number>();
     const progress = tree
-      ? computeProgress(tree.labs, done.map((d) => d.stepId), tree.progressionMode)
+      ? computeProgress(filterVisibleLabs(tree.labs, visible), done.map((d) => d.stepId), tree.progressionMode)
       : null;
     const m = progress?.module ?? { percent: 0, done: 0, total: 0, complete: false };
     // Module completion = latest completion among ACTIVE steps (the ones the
@@ -103,6 +118,19 @@ async function summarize(where: SQL | undefined): Promise<EnrollmentSummary[]> {
     const activeDone = progress ? done.filter((d) => progress.stepStatus.has(d.stepId)) : [];
     return {
       ...r,
+      batchName: vis.batch?.name ?? null,
+      batchId: vis.batch?.id ?? null,
+      visibleLabs: visible.size,
+      totalLabs: tree ? tree.labs.filter((l) => l.isActive).length : 0,
+      labProgress: tree
+        ? tree.labs
+            .filter((l) => l.isActive && visible.has(l.id))
+            .sort((a, b) => a.sequenceNo - b.sequenceNo)
+            .map((l) => {
+              const ru = progress?.labRollup.get(l.id);
+              return { labId: l.id, percent: ru?.percent ?? 0, done: ru?.done ?? 0, total: ru?.total ?? 0 };
+            })
+        : [],
       percent: m.percent,
       done: m.done,
       total: m.total,
@@ -124,6 +152,16 @@ export function listTrainerEnrollments(trainerId: number, moduleId?: number) {
       moduleId ? eq(labPracticeEnrollments.moduleId, moduleId) : undefined,
     ),
   );
+}
+
+/** Every enrollment in one module (all trainers). */
+export function listModuleEnrollments(moduleId: number) {
+  return summarize(eq(labPracticeEnrollments.moduleId, moduleId));
+}
+
+/** Members of one batch. */
+export function listBatchEnrollments(batchId: number) {
+  return summarize(eq(labPracticeEnrollments.batchId, batchId));
 }
 
 /** Every enrollment across all trainers (oversight: guidedLabs.viewAll). */

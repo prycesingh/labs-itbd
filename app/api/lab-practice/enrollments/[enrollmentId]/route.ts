@@ -5,7 +5,7 @@ import { db } from "@/DB/drizzle";
 import { labPracticeEnrollments } from "@/DB/labPracticeSchema";
 import { handleError, loadEnrollmentFor, parseBody } from "@/lib/labPractice/api";
 import { requireApiActor } from "@/lib/labPractice/identity";
-import { getEnrollmentView } from "@/lib/labPractice/practice";
+import { deleteEnrollment, getEnrollmentView } from "@/lib/labPractice/practice";
 import { serializeEnrollment } from "@/lib/labPractice/serialize";
 import { setActiveSchema } from "@/lib/validation/labPractice";
 
@@ -15,7 +15,7 @@ type Ctx = { params: Promise<{ enrollmentId: string }> };
 export async function GET(_req: Request, context: Ctx) {
   const { actor, response } = await requireApiActor();
   if (response) return response;
-  const { enrollment, response: denied } = await loadEnrollmentFor(
+  const { enrollment, access, response: denied } = await loadEnrollmentFor(
     actor,
     (await context.params).enrollmentId,
     ["trainee", "trainer", "admin"],
@@ -24,7 +24,9 @@ export async function GET(_req: Request, context: Ctx) {
 
   try {
     const view = await getEnrollmentView(enrollment);
-    return NextResponse.json(serializeEnrollment(enrollment, view));
+    // Hidden labs are only ever sent to trainer / oversight callers.
+    const includeHidden = access.includes("trainer") || access.includes("admin");
+    return NextResponse.json(serializeEnrollment(enrollment, view, { includeHidden }));
   } catch (err) {
     return handleError(err);
   }
@@ -50,4 +52,24 @@ export async function PATCH(request: Request, context: Ctx) {
     .set({ isActive: data.isActive })
     .where(eq(labPracticeEnrollments.id, enrollment.id));
   return NextResponse.json({ ok: true });
+}
+
+/** DELETE — permanently remove the enrollment and all of its progress, photos
+ *  and practice log (owning trainer, or guidedLabs.manageAll). For undoing a
+ *  mistaken enrollment; use PATCH { isActive: false } to keep history. */
+export async function DELETE(_req: Request, context: Ctx) {
+  const { actor, response } = await requireApiActor();
+  if (response) return response;
+  const { enrollment, response: denied } = await loadEnrollmentFor(
+    actor,
+    (await context.params).enrollmentId,
+    ["trainer", "manager"],
+  );
+  if (denied) return denied;
+  try {
+    await deleteEnrollment(enrollment);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return handleError(err);
+  }
 }

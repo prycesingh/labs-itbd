@@ -19,8 +19,10 @@
  * MySQL's 64-char identifier limit for these long table names.
  *
  * Deletes are `restrict` almost everywhere — curriculum and enrollments are
- * retired with `is_active` instead, so history is never lost. The single
- * cascade is completion -> files (un-marking a step removes its photos).
+ * retired with `is_active` instead, so history is never lost. Cascades:
+ * completion -> files (un-marking a step removes its photos), and the lab
+ * visibility rows (batch labs / per-trainee overrides), which are settings,
+ * not history.
  */
 
 import {
@@ -223,11 +225,17 @@ export const labPracticeEnrollments = mysqlTable(
     assignedAt: timestamp("assigned_at").notNull().defaultNow(),
     // Unassign without losing history; inactive = read-only for the trainee.
     isActive: boolean("is_active").notNull().default(true),
+    // Optional pacing batch (same module). FK is SET NULL: deleting a batch
+    // just returns its trainees to individual / default lab visibility.
+    // The FK itself is declared in migration 0022 (lab_practice_batches is
+    // defined below, so it can't be referenced here without a cycle).
+    batchId: int("batch_id"),
   },
   (t) => [
     uniqueIndex("uq_trainee_once_per_module").on(t.moduleId, t.traineeId),
     index("lp_enroll_trainer_idx").on(t.trainerId),
     index("lp_enroll_trainee_idx").on(t.traineeId),
+    index("lp_enroll_batch_idx").on(t.batchId),
     foreignKey({
       name: "lp_enroll_module_fk",
       columns: [t.moduleId],
@@ -243,6 +251,93 @@ export const labPracticeEnrollments = mysqlTable(
       columns: [t.trainerId],
       foreignColumns: [labPracticeTrainers.id],
     }).onDelete("restrict"),
+  ],
+);
+
+// ─────────────────────────────────────────────
+// Lab visibility (pacing)
+// ─────────────────────────────────────────────
+//
+// Which labs of a module a trainee can see. Resolved by the pure rule in
+// lib/labPractice/visibility.ts:
+//   base      = the batch's selected labs (if the enrollment is in a batch
+//               with >= 1 selected lab), else just the FIRST active lab
+//   overrides = per-enrollment Show/Hide rows, applied on top (they win)
+// Hidden labs are excluded from the trainee's tree, progress and write
+// guards exactly like inactive curriculum — completions are kept, not deleted.
+
+/** A pacing group of trainees enrolled in ONE module, owned by a trainer. */
+export const labPracticeBatches = mysqlTable(
+  "lab_practice_batches",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    moduleId: int("module_id").notNull(),
+    trainerId: int("trainer_id").notNull(),
+    name: varchar("name", { length: 120 }).notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("lp_batch_module_name_uq").on(t.moduleId, t.name),
+    index("lp_batch_trainer_idx").on(t.trainerId),
+    foreignKey({
+      name: "lp_batch_module_fk",
+      columns: [t.moduleId],
+      foreignColumns: [labPracticeModules.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "lp_batch_trainer_fk",
+      columns: [t.trainerId],
+      foreignColumns: [labPracticeTrainers.id],
+    }).onDelete("restrict"),
+  ],
+);
+
+/** Labs a batch currently shows (one row per visible lab). */
+export const labPracticeBatchLabs = mysqlTable(
+  "lab_practice_batch_labs",
+  {
+    batchId: int("batch_id").notNull(),
+    labId: int("lab_id").notNull(),
+  },
+  (t) => [
+    uniqueIndex("lp_batch_lab_uq").on(t.batchId, t.labId),
+    index("lp_batch_lab_lab_idx").on(t.labId),
+    foreignKey({
+      name: "lp_batch_lab_batch_fk",
+      columns: [t.batchId],
+      foreignColumns: [labPracticeBatches.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "lp_batch_lab_lab_fk",
+      columns: [t.labId],
+      foreignColumns: [labPracticeLabs.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/** Per-trainee Show (visible=true) / Hide (false) override for one lab. */
+export const labPracticeEnrollmentLabOverrides = mysqlTable(
+  "lab_practice_enrollment_lab_overrides",
+  {
+    enrollmentId: int("enrollment_id").notNull(),
+    labId: int("lab_id").notNull(),
+    visible: boolean("visible").notNull(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => [
+    uniqueIndex("lp_enroll_lab_ovr_uq").on(t.enrollmentId, t.labId),
+    index("lp_enroll_lab_ovr_lab_idx").on(t.labId),
+    foreignKey({
+      name: "lp_enroll_lab_ovr_enroll_fk",
+      columns: [t.enrollmentId],
+      foreignColumns: [labPracticeEnrollments.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "lp_enroll_lab_ovr_lab_fk",
+      columns: [t.labId],
+      foreignColumns: [labPracticeLabs.id],
+    }).onDelete("cascade"),
   ],
 );
 

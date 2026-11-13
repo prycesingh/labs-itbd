@@ -72,5 +72,17 @@ export const rejectSchema = z.object({
   reason: z.string().trim().min(3, "Give the trainee a reason").max(2_000),
 });
 
+// ─────────────────────────────────────────────
+// Lab visibility (batches + per-trainee overrides)
+// ─────────────────────────────────────────────
+export const batchSchema = z.object({
+  name: z.string().trim().min(1, "Batch name is required").max(120),
+});
+export const batchUpdateSchema = batchSchema.partial().extend({ isActive: z.boolean().optional() });
+export const batchLabsSchema = z.object({ labIds: z.array(id).max(500) });
+export const batchMembersSchema = z.object({ traineeIds: z.array(id).min(1).max(200) });
+/** true = show, false = hide, null = reset to batch / default. */
+export const labOverrideSchema = z.object({ visible: z.boolean().nullable() });
+
 // Photo limits (shared by API + client dialog)
 export { PHOTO_MAX_BYTES, PHOTO_MAX_FILES, PHOTO_MIME_TYPES } from "@/lib/labPractice/constants";

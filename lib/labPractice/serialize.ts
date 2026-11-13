@@ -6,6 +6,7 @@ import {
   type Rollup,
   type StepStatus,
 } from "@/lib/labPractice/progression";
+import type { VisibilitySource } from "@/lib/labPractice/visibility";
 
 /**
  * Plain JSON shape of an enrollment's progress — safe to pass from server
@@ -37,12 +38,20 @@ export type TaskDTO = {
 };
 export type LabDTO = {
   id: number;
+  /** 1-based position among the module's active labs (stable whether or not
+   *  earlier labs are hidden, so trainer and trainee both say "Lab 3"). */
+  number: number;
   title: string;
   description: string;
   scenario: string | null;
   rollup: Rollup;
   completedAt: string | null;
   tasks: TaskDTO[];
+  /** Can the trainee see this lab? (Trainee DTOs only ever contain visible labs.) */
+  visible: boolean;
+  visibilitySource: VisibilitySource;
+  /** Visibility without the individual override (batch / default). */
+  baseVisible: boolean;
 };
 export type SessionDTO = {
   id: number;
@@ -63,6 +72,9 @@ export type EnrollmentDTO = {
     completedAt: string | null;
   };
   labs: LabDTO[];
+  /** Active labs the trainee can't see yet (count only — never their content). */
+  hiddenLabCount: number;
+  batch: { id: number; name: string } | null;
   sessions: SessionDTO[];
 };
 
@@ -77,17 +89,36 @@ export function fileUrl(fileId: number) {
   return `/api/lab-practice/files/${fileId}`;
 }
 
+/**
+ * `includeHidden` (trainer / oversight views) adds the labs hidden from the
+ * trainee, flagged `visible: false`. Hidden labs aren't in the progression
+ * engine, so their steps show "done" if completed and "locked" otherwise, and
+ * their rollups are plain completed/total counts.
+ */
 export function serializeEnrollment(
   enrollment: { id: number; isActive: boolean },
   view: EnrollmentView,
+  { includeHidden = false }: { includeHidden?: boolean } = {},
 ): EnrollmentDTO {
-  const { tree, progress, completions, files, rejections, sessions } = view;
+  const { fullTree, visibility, progress, completions, files, rejections, sessions } = view;
   const completedIds = completions.map((c) => c.stepId);
+  const completedSet = new Set(completedIds);
   const sessionDate = new Map(sessions.map((s) => [s.id, s.practiceDate]));
   const completionByStep = new Map(completions.map((c) => [c.stepId, c]));
+  const visOf = new Map(visibility.map((v) => [v.labId, v]));
+  const plainRollup = (stepIds: number[]): Rollup => {
+    const done = stepIds.filter((id) => completedSet.has(id)).length;
+    const total = stepIds.length;
+    return { done, total, percent: total ? Math.round((done / total) * 100) : 0, complete: total > 0 && done === total };
+  };
 
-  const labs: LabDTO[] = activeTree(tree.labs).map((lab) => {
-    const fullLab = tree.labs.find((l) => l.id === lab.id)!;
+  const allActive = activeTree(fullTree.labs);
+  const numberOf = new Map(allActive.map((l, i) => [l.id, i + 1]));
+  const shownLabs = allActive.filter((l) => includeHidden || visOf.get(l.id)?.visible);
+  const labs: LabDTO[] = shownLabs.map((lab) => {
+    const fullLab = fullTree.labs.find((l) => l.id === lab.id)!;
+    const vis = visOf.get(lab.id);
+    const hidden = !vis?.visible;
     const tasks: TaskDTO[] = lab.tasks.map((task) => {
       const fullTask = fullLab.tasks.find((t) => t.id === task.id)!;
       const steps: StepDTO[] = task.steps.map((s) => {
@@ -98,8 +129,8 @@ export function serializeEnrollment(
           title: step.title,
           instructions: step.instructions,
           requiresPhoto: step.requiresPhoto,
-          status: progress.stepStatus.get(step.id) ?? "locked",
-          canUnmark: c ? canUnmark(progress, step.id, completedIds) : false,
+          status: progress.stepStatus.get(step.id) ?? (c ? "done" : "locked"),
+          canUnmark: c && !hidden ? canUnmark(progress, step.id, completedIds) : false,
           completion: c
             ? {
                 id: c.id,
@@ -115,7 +146,9 @@ export function serializeEnrollment(
             .map((r) => ({ reason: r.reason, rejectedAt: r.rejectedAt.toISOString() })),
         };
       });
-      const rollup = progress.taskRollup.get(task.id) ?? EMPTY;
+      const rollup = hidden
+        ? plainRollup(task.steps.map((x) => x.id))
+        : (progress.taskRollup.get(task.id) ?? EMPTY);
       return {
         id: task.id,
         title: fullTask.title,
@@ -125,31 +158,40 @@ export function serializeEnrollment(
         steps,
       };
     });
-    const rollup = progress.labRollup.get(lab.id) ?? EMPTY;
+    const rollup = hidden
+      ? plainRollup(lab.tasks.flatMap((t) => t.steps.map((x) => x.id)))
+      : (progress.labRollup.get(lab.id) ?? EMPTY);
     return {
       id: lab.id,
+      number: numberOf.get(lab.id) ?? 0,
       title: fullLab.title,
       description: fullLab.description,
       scenario: fullLab.scenario,
       rollup,
       completedAt: rollup.complete ? latest(tasks.map((t) => t.completedAt)) : null,
       tasks,
+      visible: !hidden,
+      visibilitySource: vis?.source ?? "default",
+      baseVisible: vis?.baseVisible ?? false,
     };
   });
+  const visibleLabs = labs.filter((l) => l.visible);
 
   return {
     enrollmentId: enrollment.id,
     isActive: enrollment.isActive,
     module: {
-      id: tree.id,
-      title: tree.title,
-      info: tree.info,
-      progressionMode: tree.progressionMode,
-      isActive: tree.isActive,
+      id: fullTree.id,
+      title: fullTree.title,
+      info: fullTree.info,
+      progressionMode: fullTree.progressionMode,
+      isActive: fullTree.isActive,
       rollup: progress.module,
-      completedAt: progress.module.complete ? latest(labs.map((l) => l.completedAt)) : null,
+      completedAt: progress.module.complete ? latest(visibleLabs.map((l) => l.completedAt)) : null,
     },
     labs,
+    hiddenLabCount: visibility.filter((v) => !v.visible).length,
+    batch: view.batch,
     sessions: sessions.map((s) => ({
       id: s.id,
       practiceDate: s.practiceDate,

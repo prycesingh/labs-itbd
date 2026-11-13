@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, X } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -17,6 +17,15 @@ import {
   type EmployeeOption,
 } from "@/components/labPractice/shared";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -135,6 +144,110 @@ export function CreateModuleForm() {
   );
 }
 
+/**
+ * Permanently delete an enrollment (e.g. the wrong person was enrolled).
+ * Unlike unassigning, this also deletes their progress, photos and practice
+ * log, so the dialog spells out what will be lost.
+ */
+export function RemoveEnrollmentButton({
+  enrollmentId,
+  traineeName,
+  moduleTitle,
+  footprint,
+  redirectTo,
+  variant = "button",
+}: {
+  enrollmentId: number;
+  traineeName: string;
+  moduleTitle: string;
+  footprint?: { completedSteps: number; photos: number; practiceDays: number };
+  /** Where to go after removal (the current page no longer exists). */
+  redirectTo?: string;
+  variant?: "button" | "icon";
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const hasHistory = footprint
+    ? footprint.completedSteps + footprint.photos + footprint.practiceDays > 0
+    : true;
+
+  async function remove() {
+    setBusy(true);
+    const ok = await lpRequest(`/api/lab-practice/enrollments/${enrollmentId}`, { method: "DELETE" });
+    setBusy(false);
+    if (!ok) return;
+    toast.success(`Removed ${traineeName} from ${moduleTitle}.`);
+    setOpen(false);
+    if (redirectTo) router.replace(redirectTo);
+    router.refresh();
+  }
+
+  return (
+    <>
+      {variant === "icon" ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="text-white/40 hover:text-destructive"
+          onClick={() => setOpen(true)}
+          aria-label={`Remove ${traineeName}'s enrollment`}
+          title="Remove enrollment"
+        >
+          <Trash2 />
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-destructive hover:text-destructive"
+          onClick={() => setOpen(true)}
+        >
+          <Trash2 /> Remove enrollment
+        </Button>
+      )}
+      <Dialog open={open} onOpenChange={(v) => !busy && setOpen(v)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Remove enrollment</DialogTitle>
+            <DialogDescription>
+              Remove {traineeName} from &ldquo;{moduleTitle}&rdquo;? They&rsquo;ll lose access and disappear from your
+              trainee list. To pause them but keep their history, unassign instead.
+            </DialogDescription>
+          </DialogHeader>
+          {hasHistory && (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-white/80">
+              {footprint ? (
+                <>
+                  This permanently deletes{" "}
+                  <span className="font-medium text-white tabular-nums">
+                    {footprint.completedSteps} completed {footprint.completedSteps === 1 ? "step" : "steps"},{" "}
+                    {footprint.photos} {footprint.photos === 1 ? "photo" : "photos"} and {footprint.practiceDays}{" "}
+                    practice {footprint.practiceDays === 1 ? "day" : "days"}
+                  </span>
+                  . This can&rsquo;t be undone.
+                </>
+              ) : (
+                "This permanently deletes their completed steps, photos and practice log. This can't be undone."
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={busy}>
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" onClick={remove} disabled={busy}>
+              {busy ? "Removing..." : "Remove"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 export type EnrollmentListItem = {
   id: number;
   isActive: boolean;
@@ -146,15 +259,20 @@ export type EnrollmentListItem = {
   enrolledAt: string;
   lastActivityAt: string | null;
   completedAt: string | null;
+  batchName: string | null;
+  visibleLabs: number;
+  totalLabs: number;
 };
 
 /** Enroll trainees in a module + list this trainer's enrollments for it. */
 export function EnrollmentPanel({
   moduleId,
+  moduleTitle,
   moduleActive,
   enrollments,
 }: {
   moduleId: number;
+  moduleTitle: string;
   moduleActive: boolean;
   enrollments: EnrollmentListItem[];
 }) {
@@ -244,10 +362,15 @@ export function EnrollmentPanel({
                       Unassigned
                     </Badge>
                   )}
+                  {e.batchName && (
+                    <Badge variant="outline" className="ml-2 border-itbd-blue/40 text-itbd-blue">
+                      {e.batchName}
+                    </Badge>
+                  )}
                 </p>
                 <ProgressBar percent={e.percent} label={`${e.traineeName} progress`} />
-                <p className="text-xs text-white/50">
-                  {e.done}/{e.total} steps · {e.percent}%
+                <p className="text-xs text-white/50 tabular-nums">
+                  {e.done}/{e.total} steps · {e.percent}% · {e.visibleLabs}/{e.totalLabs} labs visible
                 </p>
                 <EnrollmentTimes
                   enrolledAt={e.enrolledAt}
@@ -260,6 +383,13 @@ export function EnrollmentPanel({
                 disabled={toggling === e.id}
                 onCheckedChange={(v) => toggle(e, v)}
                 aria-label={`${e.traineeName} assigned`}
+                title={e.isActive ? "Unassign (keeps history)" : "Re-assign"}
+              />
+              <RemoveEnrollmentButton
+                variant="icon"
+                enrollmentId={e.id}
+                traineeName={e.traineeName}
+                moduleTitle={moduleTitle}
               />
             </div>
           ))

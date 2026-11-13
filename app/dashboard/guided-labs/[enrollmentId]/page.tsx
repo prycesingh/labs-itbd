@@ -38,7 +38,10 @@ export default async function TraineeEnrollmentPage({
     redirect(`/dashboard/guided-labs/trainer/trainees/${enrollment.id}`);
   }
 
-  const data = serializeEnrollment(enrollment, await getEnrollmentView(enrollment));
+  // Trainees only ever receive the labs they can see; admins see everything.
+  const data = serializeEnrollment(enrollment, await getEnrollmentView(enrollment), {
+    includeHidden: !isTrainee,
+  });
 
   return (
     <main className="flex w-full flex-col gap-6 pb-10">

@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Circle,
+  EyeOff,
   ImagePlus,
   Lock,
   MessageSquareWarning,
@@ -514,17 +515,30 @@ function LabSection({
   enrollmentId: number;
   titleOf: Map<number, string>;
 }) {
-  // Finished labs start collapsed so the trainee lands on what's left.
-  const [open, setOpen] = useTreeOpen(!lab.rollup.complete);
+  // Finished and hidden labs start collapsed so the page opens on what's left.
+  const [open, setOpen] = useTreeOpen(lab.visible && !lab.rollup.complete);
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger asChild>
-        <button type="button" className="group flex w-full items-center gap-3 rounded-lg bg-white/5 px-3 py-2.5 text-left">
+        <button
+          type="button"
+          className={cn(
+            "group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left",
+            lab.visible ? "bg-white/5" : "border border-dashed border-white/15 opacity-70",
+          )}
+        >
           <ChevronRight className="size-4 text-white/50 transition-transform group-data-[state=open]:rotate-90" />
           <span className="min-w-0 flex-1">
-            <span className="block truncate font-semibold text-white">
-              <span className="mr-1 text-white/40">Lab {index + 1}.</span>
-              {lab.title}
+            <span className="flex items-center gap-2">
+              <span className="truncate font-semibold text-white">
+                <span className="mr-1 text-white/40">Lab {lab.number || index + 1}.</span>
+                {lab.title}
+              </span>
+              {!lab.visible && (
+                <Badge variant="outline" className="shrink-0 gap-1 px-1.5 py-0 text-[10px] text-white/60">
+                  <EyeOff className="size-3" /> Hidden from trainee
+                </Badge>
+              )}
             </span>
             <ProgressBar percent={lab.rollup.percent} label={`${lab.title} progress`} className="mt-1.5 h-1.5" />
             {lab.completedAt && (
@@ -620,6 +634,10 @@ export function PracticeTree({ data, role }: { data: EnrollmentDTO; role: Viewer
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
           <p className="text-xs text-white/50">
             {data.labs.length} {data.labs.length === 1 ? "lab" : "labs"}
+            {role === "trainee"
+              ? data.hiddenLabCount > 0 &&
+                ` · ${data.hiddenLabCount} more will be unlocked by your trainer`
+              : data.hiddenLabCount > 0 && ` · ${data.hiddenLabCount} hidden from the trainee`}
           </p>
           <TreeExpandControls onExpand={tree.expandAll} onCollapse={tree.collapseAll} />
         </div>

@@ -3,6 +3,7 @@ import path from "path";
 
 import { db } from "@/DB/drizzle";
 import {
+  labPracticeEnrollments,
   labPracticeSessions,
   labPracticeStepCompletionFiles,
   labPracticeStepCompletions,
@@ -18,6 +19,12 @@ import {
   laterCompletedInChain,
   type Progress,
 } from "@/lib/labPractice/progression";
+import {
+  filterVisibleLabs,
+  resolveVisibility,
+  type LabVisibility,
+} from "@/lib/labPractice/visibility";
+import { loadVisibilityInput, type VisibilityInputs } from "@/lib/labPractice/visibilityData";
 import { deleteManagedUpload, saveUpload } from "@/lib/uploads";
 import {
   PHOTO_MAX_BYTES,
@@ -58,18 +65,37 @@ async function completionsFor(enrollmentId: number): Promise<CompletionRow[]> {
   return rows.map(({ completedAtEpoch, ...r }) => ({ ...r, completedAt: fromEpoch(completedAtEpoch ?? 0) }));
 }
 
+/**
+ * The enrollment's module tree, its lab visibility, and progress computed on
+ * the VISIBLE labs only. Hidden labs drop out exactly like inactive curriculum:
+ * their steps can't be completed (not in the tree → 404), sequential chains
+ * run over visible labs only, and percentages count visible steps only.
+ */
 async function treeAndProgress(enrollment: Enrollment) {
-  const tree = await loadModuleTree(enrollment.moduleId);
+  const [tree, completions, inputs] = await Promise.all([
+    loadModuleTree(enrollment.moduleId),
+    completionsFor(enrollment.id),
+    loadVisibilityInput(enrollment),
+  ]);
   if (!tree) throw new PracticeError("Module not found.", 404);
-  const completions = await completionsFor(enrollment.id);
+  const visibility = resolveVisibility(tree.labs, inputs.batchLabIds, inputs.overrides);
+  const visibleIds = new Set(visibility.filter((v) => v.visible).map((v) => v.labId));
+  const fullTree = tree;
+  const visibleTree: ModuleTree = { ...tree, labs: filterVisibleLabs(tree.labs, visibleIds) };
   const completedIds = completions.map((c) => c.stepId);
-  const progress = computeProgress(tree.labs, completedIds, tree.progressionMode);
-  return { tree, completions, completedIds, progress };
+  const progress = computeProgress(visibleTree.labs, completedIds, tree.progressionMode);
+  return { tree: visibleTree, fullTree, visibility, inputs, completions, completedIds, progress };
 }
 
 /** Everything the trainee / trainer views need for one enrollment. */
 export type EnrollmentView = {
+  /** Visible labs only. */
   tree: ModuleTree;
+  /** Every lab (incl. hidden + inactive) — for trainer-side views. */
+  fullTree: ModuleTree;
+  visibility: LabVisibility[];
+  batch: VisibilityInputs["batch"];
+  /** Progress over visible labs. */
   progress: Progress;
   completions: CompletionRow[];
   files: CompletionFileRow[];
@@ -78,7 +104,7 @@ export type EnrollmentView = {
 };
 
 export async function getEnrollmentView(enrollment: Enrollment): Promise<EnrollmentView> {
-  const { tree, completions, progress } = await treeAndProgress(enrollment);
+  const { tree, fullTree, visibility, inputs, completions, progress } = await treeAndProgress(enrollment);
   const completionIds = completions.map((c) => c.id);
 
   const [files, rejections, sessions] = await Promise.all([
@@ -112,7 +138,17 @@ export async function getEnrollmentView(enrollment: Enrollment): Promise<Enrollm
       .orderBy(desc(labPracticeSessions.practiceDate)),
   ]);
 
-  return { tree, progress, completions, files, rejections, sessions };
+  return {
+    tree,
+    fullTree,
+    visibility,
+    batch: inputs.batch,
+    progress,
+    completions,
+    files,
+    rejections,
+    sessions,
+  };
 }
 
 // ─────────────────────────────────────────────
@@ -221,7 +257,8 @@ export async function completeStep(
   const date = assertDate(practiceDate);
 
   const step = tree.labs.flatMap((l) => l.tasks.flatMap((t) => t.steps)).find((s) => s.id === stepId);
-  // Belongs-to-module check: the step must be in THIS enrollment's module.
+  // Belongs-to-module check: the step must be in THIS enrollment's module AND
+  // in a lab the trainee can currently see (`tree` holds visible labs only).
   if (!step) throw new PracticeError("Step not found in this module.", 404);
 
   const status = progress.stepStatus.get(stepId);
@@ -313,6 +350,54 @@ export async function unmarkStep(enrollment: Enrollment, stepId: number) {
 }
 
 // ─────────────────────────────────────────────
+// Remove enrollment (hard delete — for enrolling the wrong person)
+// ─────────────────────────────────────────────
+
+/** What a hard delete would destroy — shown in the confirmation dialog. */
+export async function enrollmentFootprint(enrollmentId: number) {
+  const completions = await db
+    .select({ id: labPracticeStepCompletions.id })
+    .from(labPracticeStepCompletions)
+    .where(eq(labPracticeStepCompletions.enrollmentId, enrollmentId));
+  const [files, sessions] = await Promise.all([
+    completions.length
+      ? db
+          .select({ id: labPracticeStepCompletionFiles.id })
+          .from(labPracticeStepCompletionFiles)
+          .where(inArray(labPracticeStepCompletionFiles.stepCompletionId, completions.map((c) => c.id)))
+      : Promise.resolve([]),
+    db
+      .select({ id: labPracticeSessions.id })
+      .from(labPracticeSessions)
+      .where(eq(labPracticeSessions.enrollmentId, enrollmentId)),
+  ]);
+  return { completedSteps: completions.length, photos: files.length, practiceDays: sessions.length };
+}
+
+/**
+ * Permanently delete an enrollment and everything recorded under it:
+ * completions (+ photo rows and files on disk), rejections, practice sessions.
+ * Lab overrides cascade with the enrollment. Unlike unassigning, nothing is
+ * kept — use it to undo enrolling the wrong person.
+ */
+export async function deleteEnrollment(enrollment: Enrollment) {
+  const paths = await db.transaction(async (tx) => {
+    const completionIds = (
+      await tx
+        .select({ id: labPracticeStepCompletions.id })
+        .from(labPracticeStepCompletions)
+        .where(eq(labPracticeStepCompletions.enrollmentId, enrollment.id))
+    ).map((c) => c.id);
+    const filePaths = await deleteCompletions(tx, completionIds);
+    await tx.delete(labPracticeStepRejections).where(eq(labPracticeStepRejections.enrollmentId, enrollment.id));
+    await tx.delete(labPracticeSessions).where(eq(labPracticeSessions.enrollmentId, enrollment.id));
+    await tx.delete(labPracticeEnrollments).where(eq(labPracticeEnrollments.id, enrollment.id));
+    return filePaths;
+  });
+  await removeFiles(paths);
+}
+
+// ─────────────────────────────────────────────
 // Trainer rejection
 // ─────────────────────────────────────────────
 
@@ -334,7 +419,7 @@ export async function rejectStep(
   stepId: number,
   reason: string,
 ) {
-  const { tree, completions, completedIds, progress } = await treeAndProgress(enrollment);
+  const { fullTree: tree, completions, completedIds, progress } = await treeAndProgress(enrollment);
   if (!enrollment.isActive) throw new PracticeError("This enrollment has been closed.", 403);
 
   const target = completions.find((c) => c.stepId === stepId);
