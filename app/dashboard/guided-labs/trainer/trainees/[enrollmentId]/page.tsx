@@ -80,6 +80,8 @@ export default async function TrainerTraineePage({
                 writable={canPace}
                 labs={data.labs.map((l) => ({
                   id: l.id,
+                  number: l.number,
+                  day: l.day,
                   title: l.title,
                   visible: l.visible,
                   source: l.visibilitySource,

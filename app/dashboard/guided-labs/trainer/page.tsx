@@ -5,12 +5,14 @@ import Link from "next/link";
 import { AdminMotionCard } from "@/components/labs/admin/admin-motion-card";
 import { MODE_LABELS, PageTitle } from "@/components/labPractice/shared";
 import { BulkImportCard } from "@/components/labPractice/trainer/bulk-import";
+import { SchedulesCard } from "@/components/labPractice/trainer/schedule-widgets";
 import { TraineeRoster } from "@/components/labPractice/trainer/trainee-roster";
 import { CreateModuleForm, TrainerPicker } from "@/components/labPractice/trainer/trainer-widgets";
 import { Badge } from "@/components/ui/badge";
 import { db } from "@/DB/drizzle";
 import { labPracticeModules } from "@/DB/labPracticeSchema";
 import { requirePageTrainer } from "@/lib/labPractice/identity";
+import { listSchedules } from "@/lib/labPractice/schedules";
 import {
   groupByTrainee,
   listAllEnrollments,
@@ -39,10 +41,11 @@ export default async function TrainerHomePage({
         ? Number(requested)
         : "all";
 
-  const [modules, enrollments, trainers] = await Promise.all([
+  const [modules, enrollments, trainers, schedules] = await Promise.all([
     db.select().from(labPracticeModules).orderBy(asc(labPracticeModules.title)),
     selection === "all" ? listAllEnrollments() : listTrainerEnrollments(selection),
     actor.canViewAll ? listTrainers() : Promise.resolve([]),
+    listSchedules(),
   ]);
   const groups = groupByTrainee(enrollments);
   const pickerValue = selection === "all" ? "all" : selection === myId ? "me" : String(selection);
@@ -65,6 +68,12 @@ export default async function TrainerHomePage({
             <div className="relative z-10 space-y-3">
               <h2 className="text-lg font-bold text-white">New module</h2>
               <CreateModuleForm />
+            </div>
+          </AdminMotionCard>
+          <AdminMotionCard className="p-6" delay={0.02}>
+            <div className="relative z-10 space-y-3">
+              <h2 className="text-lg font-bold text-white">Day schedules</h2>
+              <SchedulesCard schedules={schedules} />
             </div>
           </AdminMotionCard>
           <AdminMotionCard className="p-6" delay={0.03}>

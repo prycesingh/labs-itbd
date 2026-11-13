@@ -78,7 +78,7 @@ async function treeAndProgress(enrollment: Enrollment) {
     loadVisibilityInput(enrollment),
   ]);
   if (!tree) throw new PracticeError("Module not found.", 404);
-  const visibility = resolveVisibility(tree.labs, inputs.batchLabIds, inputs.overrides);
+  const visibility = resolveVisibility(tree.labs, inputs.base, inputs.overrides);
   const visibleIds = new Set(visibility.filter((v) => v.visible).map((v) => v.labId));
   const fullTree = tree;
   const visibleTree: ModuleTree = { ...tree, labs: filterVisibleLabs(tree.labs, visibleIds) };
@@ -95,6 +95,8 @@ export type EnrollmentView = {
   fullTree: ModuleTree;
   visibility: LabVisibility[];
   batch: VisibilityInputs["batch"];
+  /** Schedule batches: the day each scheduled lab sits in. */
+  dayOfLab: VisibilityInputs["dayOfLab"];
   /** Progress over visible labs. */
   progress: Progress;
   completions: CompletionRow[];
@@ -143,6 +145,7 @@ export async function getEnrollmentView(enrollment: Enrollment): Promise<Enrollm
     fullTree,
     visibility,
     batch: inputs.batch,
+    dayOfLab: inputs.dayOfLab,
     progress,
     completions,
     files,

@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 const SOURCE_LABEL: Record<VisibilitySource, string> = {
   default: "Default",
   batch: "Batch",
+  day: "Day",
   override: "Individual",
 };
 
@@ -57,10 +58,14 @@ function LabNumber({ n, active }: { n: number; active: boolean }) {
 // ─────────────────────────────────────────────
 export type VisibilityLab = {
   id: number;
+  /** 1-based position among the module's active labs. */
+  number: number;
   title: string;
   visible: boolean;
   source: VisibilitySource;
   baseVisible: boolean;
+  /** Set when the trainee follows a day schedule. */
+  day: { id: number; no: number; title: string | null; active: boolean } | null;
 };
 
 export function LabVisibilityPanel({
@@ -79,17 +84,81 @@ export function LabVisibilityPanel({
   const visibleCount = labs.filter((l) => l.visible).length;
   const overrides = labs.filter((l) => l.source === "override").length;
 
-  async function set(lab: VisibilityLab, visible: boolean | null) {
-    setBusy(lab.id);
-    // Toggling back to what the batch/default says just removes the override.
+  function put(lab: VisibilityLab, visible: boolean | null) {
+    // Toggling back to what the batch/day/default says just removes the override.
     const value = visible !== null && visible === lab.baseVisible ? null : visible;
-    const ok = await lpRequest(`/api/lab-practice/enrollments/${enrollmentId}/labs/${lab.id}`, {
+    return lpRequest(`/api/lab-practice/enrollments/${enrollmentId}/labs/${lab.id}`, {
       method: "PUT",
       json: { visible: value },
     });
+  }
+
+  async function set(lab: VisibilityLab, visible: boolean | null) {
+    setBusy(lab.id);
+    const ok = await put(lab, visible);
     setBusy(null);
     if (ok) router.refresh();
   }
+
+  /** A whole day at once (only labs whose state would change). */
+  async function setMany(group: VisibilityLab[], visible: boolean | null) {
+    setBusy(-1);
+    const targets = group.filter((l) => (visible === null ? l.source === "override" : l.visible !== visible));
+    const results = await Promise.all(targets.map((l) => put(l, visible)));
+    setBusy(null);
+    if (results.some(Boolean)) router.refresh();
+  }
+
+  // Schedule trainees: group by day (unscheduled labs last).
+  const groups = labs.some((l) => l.day)
+    ? (() => {
+        const map = new Map<string, { key: string; day: VisibilityLab["day"]; labs: VisibilityLab[] }>();
+        for (const l of labs) {
+          const key = l.day ? `d${l.day.no}` : "none";
+          const g = map.get(key) ?? { key, day: l.day, labs: [] };
+          g.labs.push(l);
+          map.set(key, g);
+        }
+        return [...map.values()].sort((a, b) => (a.day?.no ?? Infinity) - (b.day?.no ?? Infinity));
+      })()
+    : null;
+  const baseName = groups ? "day" : batchName ? "batch" : "default";
+
+  const labRow = (lab: VisibilityLab) => (
+    <li key={lab.id} className="flex items-center gap-3 px-3 py-2">
+      <LabNumber n={lab.number} active={lab.visible} />
+      <span className="min-w-0 flex-1">
+        <span className={cn("block truncate text-sm", lab.visible ? "text-white" : "text-white/50")}>{lab.title}</span>
+        <span className="text-[11px] text-white/40">
+          {SOURCE_LABEL[lab.source]}
+          {lab.source === "override" && (
+            <>
+              {" · "}
+              {baseName} would {lab.baseVisible ? "show" : "hide"} it
+            </>
+          )}
+        </span>
+      </span>
+      {writable && lab.source === "override" && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => set(lab, null)}
+          disabled={busy !== null}
+          aria-label={`Reset ${lab.title} to ${baseName}`}
+          title={`Reset to ${baseName}`}
+        >
+          <RotateCcw />
+        </Button>
+      )}
+      <Switch
+        checked={lab.visible}
+        disabled={!writable || busy !== null}
+        onCheckedChange={(v) => set(lab, v)}
+        aria-label={`${lab.title} visible to trainee`}
+      />
+    </li>
+  );
 
   return (
     <div className="space-y-3">
@@ -102,7 +171,8 @@ export function LabVisibilityPanel({
       <p className="text-xs text-white/50">
         {batchName ? (
           <>
-            Follows batch <span className="text-itbd-blue">{batchName}</span>. Changes here apply to this trainee only.
+            Follows {groups ? "the day schedule of" : "batch"} <span className="text-itbd-blue">{batchName}</span>.
+            Changes here apply to this trainee, in this module only.
           </>
         ) : (
           "Not in a batch — only the first lab is shown unless you reveal more."
@@ -111,46 +181,50 @@ export function LabVisibilityPanel({
       </p>
       {labs.length === 0 ? (
         <p className="text-sm text-white/50">This module has no active labs.</p>
-      ) : (
-        <ul className="divide-y divide-white/10 rounded-lg border border-white/10">
-          {labs.map((lab, i) => (
-            <li key={lab.id} className="flex items-center gap-3 px-3 py-2">
-              <LabNumber n={i + 1} active={lab.visible} />
-              <span className="min-w-0 flex-1">
-                <span className={cn("block truncate text-sm", lab.visible ? "text-white" : "text-white/50")}>
-                  {lab.title}
-                </span>
-                <span className="text-[11px] text-white/40">
-                  {SOURCE_LABEL[lab.source]}
-                  {lab.source === "override" && (
-                    <>
-                      {" · "}
-                      {batchName ? "batch" : "default"} would {lab.baseVisible ? "show" : "hide"} it
-                    </>
+      ) : groups ? (
+        <div className="space-y-2">
+          {groups.map((g) => {
+            const allOn = g.labs.every((l) => l.visible);
+            const someOn = g.labs.some((l) => l.visible);
+            return (
+              <div key={g.key} className="rounded-lg border border-white/10">
+                <div className="flex items-center gap-3 border-b border-white/10 bg-white/3 px-3 py-2">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-white">
+                      {g.day ? `Day ${g.day.no}` : "Not in a day"}
+                      {g.day?.title && <span className="font-normal text-white/60"> — {g.day.title}</span>}
+                    </span>
+                    <span className="text-[11px] text-white/40">
+                      {g.day ? (g.day.active ? "Open for the batch" : "Closed for the batch") : "Opens only individually"}
+                      {someOn && !allOn && " · partly shown"}
+                    </span>
+                  </span>
+                  {writable && g.labs.some((l) => l.source === "override") && (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setMany(g.labs, null)}
+                      disabled={busy !== null}
+                      aria-label={`Reset ${g.day ? `Day ${g.day.no}` : "these labs"} to the batch`}
+                      title="Reset to batch"
+                    >
+                      <RotateCcw />
+                    </Button>
                   )}
-                </span>
-              </span>
-              {writable && lab.source === "override" && (
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => set(lab, null)}
-                  disabled={busy === lab.id}
-                  aria-label={`Reset ${lab.title} to ${batchName ? "batch" : "default"}`}
-                  title={`Reset to ${batchName ? "batch" : "default"}`}
-                >
-                  <RotateCcw />
-                </Button>
-              )}
-              <Switch
-                checked={lab.visible}
-                disabled={!writable || busy === lab.id}
-                onCheckedChange={(v) => set(lab, v)}
-                aria-label={`${lab.title} visible to trainee`}
-              />
-            </li>
-          ))}
-        </ul>
+                  <Switch
+                    checked={allOn}
+                    disabled={!writable || busy !== null}
+                    onCheckedChange={(v) => setMany(g.labs, v)}
+                    aria-label={`${g.day ? `Day ${g.day.no}` : "Unscheduled labs"} visible to trainee`}
+                  />
+                </div>
+                <ul className="divide-y divide-white/5">{g.labs.map(labRow)}</ul>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <ul className="divide-y divide-white/10 rounded-lg border border-white/10">{labs.map(labRow)}</ul>
       )}
     </div>
   );
@@ -168,6 +242,8 @@ export type BatchRow = {
   memberCount: number;
   visibleLabs: number;
   avgPercent: number | null;
+  /** Schedule batches (paced by days) link to their own page. */
+  scheduleHref?: string;
 };
 
 export function BatchesPanel({
@@ -233,7 +309,7 @@ export function BatchesPanel({
           {batches.map((b) => (
             <li key={b.id}>
               <Link
-                href={`/dashboard/guided-labs/trainer/modules/${moduleId}/batches/${b.id}`}
+                href={b.scheduleHref ?? `/dashboard/guided-labs/trainer/modules/${moduleId}/batches/${b.id}`}
                 className="group flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 focus-visible:bg-white/5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               >
                 <span className="min-w-0 flex-1 space-y-1">
@@ -252,7 +328,11 @@ export function BatchesPanel({
                       <Users className="size-3" /> {b.memberCount}
                     </span>
                     <span>
-                      {b.visibleLabs > 0 ? `${b.visibleLabs}/${totalLabs} labs shown` : "First lab only"}
+                      {b.scheduleHref
+                        ? `Day schedule · ${b.visibleLabs}/${totalLabs} labs open here`
+                        : b.visibleLabs > 0
+                          ? `${b.visibleLabs}/${totalLabs} labs shown`
+                          : "First lab only"}
                     </span>
                     {b.avgPercent !== null && <span>avg {b.avgPercent}%</span>}
                     {!b.isMine && <span className="text-white/40">{b.trainerName}</span>}
@@ -628,10 +708,11 @@ export function BatchMembersPanel({
 // ─────────────────────────────────────────────
 export function BatchSettings({
   batch,
-  moduleId,
+  backHref,
 }: {
   batch: { id: number; name: string; isActive: boolean };
-  moduleId: number;
+  /** Where to go after deleting the batch. */
+  backHref: string;
 }) {
   const router = useRouter();
   const [name, setName] = useState(batch.name);
@@ -652,7 +733,7 @@ export function BatchSettings({
     setDeleting(false);
     if (ok) {
       toast.success(`Deleted batch "${batch.name}".`);
-      router.replace(`/dashboard/guided-labs/trainer/modules/${moduleId}`);
+      router.replace(backHref);
       router.refresh();
     }
   }

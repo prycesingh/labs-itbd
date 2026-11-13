@@ -32,13 +32,14 @@ export default async function BatchPage({
   const moduleId = parseId(p.moduleId);
   const batchId = parseId(p.batchId);
   const batch = batchId ? await getBatch(batchId) : null;
-  if (!batch || batch.moduleId !== moduleId || !canReadBatch(actor, batch)) notFound();
+  if (!batch || batch.moduleId == null || batch.moduleId !== moduleId || !canReadBatch(actor, batch)) notFound();
+  const batchModuleId = batch.moduleId;
 
   const [tree, members, moduleEnrollments, [batchMeta]] = await Promise.all([
-    loadModuleTree(batch.moduleId),
+    loadModuleTree(batchModuleId),
     listBatchEnrollments(batch.id),
-    listModuleEnrollments(batch.moduleId),
-    listModuleBatches(batch.moduleId, batch.trainerId).then((all) => all.filter((b) => b.id === batch.id)),
+    listModuleEnrollments(batchModuleId),
+    listModuleBatches(batchModuleId, batch.trainerId).then((all) => all.filter((b) => b.id === batch.id)),
   ]);
   if (!tree) notFound();
 
@@ -77,7 +78,7 @@ export default async function BatchPage({
     <main className="flex w-full flex-col gap-6 pb-10">
       <div className="space-y-2">
         <Link
-          href={`/dashboard/guided-labs/trainer/modules/${batch.moduleId}`}
+          href={`/dashboard/guided-labs/trainer/modules/${batchModuleId}`}
           className="inline-flex items-center gap-1.5 text-sm text-white/60 hover:text-white"
         >
           <ArrowLeft className="size-4" /> {tree.title}
@@ -143,7 +144,7 @@ export default async function BatchPage({
                 <BatchSettings
                   key={`${batch.name}-${batch.isActive}`}
                   batch={{ id: batch.id, name: batch.name, isActive: batch.isActive }}
-                  moduleId={batch.moduleId}
+                  backHref={`/dashboard/guided-labs/trainer/modules/${batchModuleId}`}
                 />
               </div>
             </AdminMotionCard>

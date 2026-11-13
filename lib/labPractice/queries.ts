@@ -38,6 +38,9 @@ export type EnrollmentSummary = {
   /** Labs the trainee can see / active labs in the module. */
   visibleLabs: number;
   totalLabs: number;
+  /** Day schedules: the latest OPEN day among this enrollment's visible labs,
+   *  with progress over that day's visible labs here. */
+  latestDay: { no: number; title: string | null; labs: number; percent: number } | null;
   /** Per visible lab (in order): progress, for batch review grids. */
   labProgress: { labId: number; percent: number; done: number; total: number }[];
   /** Progress over VISIBLE labs only. */
@@ -108,7 +111,7 @@ async function summarize(where: SQL | undefined): Promise<EnrollmentSummary[]> {
     const tree = trees.get(r.moduleId);
     const done = doneBy.get(r.id) ?? [];
     const vis = visInputs.get(r.id)!;
-    const visible = tree ? visibleLabIdSet(tree.labs, vis.batchLabIds, vis.overrides) : new Set<number>();
+    const visible = tree ? visibleLabIdSet(tree.labs, vis.base, vis.overrides) : new Set<number>();
     const progress = tree
       ? computeProgress(filterVisibleLabs(tree.labs, visible), done.map((d) => d.stepId), tree.progressionMode)
       : null;
@@ -122,6 +125,23 @@ async function summarize(where: SQL | undefined): Promise<EnrollmentSummary[]> {
       batchId: vis.batch?.id ?? null,
       visibleLabs: visible.size,
       totalLabs: tree ? tree.labs.filter((l) => l.isActive).length : 0,
+      latestDay: (() => {
+        let best: { no: number; title: string | null } | null = null;
+        for (const labId of visible) {
+          const d = vis.dayOfLab.get(labId);
+          if (d && (!best || d.no > best.no)) best = { no: d.no, title: d.title };
+        }
+        if (!best) return null;
+        const dayLabs = [...visible].filter((id) => vis.dayOfLab.get(id)?.no === best!.no);
+        let dDone = 0;
+        let dTotal = 0;
+        for (const id of dayLabs) {
+          const ru = progress?.labRollup.get(id);
+          dDone += ru?.done ?? 0;
+          dTotal += ru?.total ?? 0;
+        }
+        return { ...best, labs: dayLabs.length, percent: dTotal ? Math.round((dDone / dTotal) * 100) : 0 };
+      })(),
       labProgress: tree
         ? tree.labs
             .filter((l) => l.isActive && visible.has(l.id))

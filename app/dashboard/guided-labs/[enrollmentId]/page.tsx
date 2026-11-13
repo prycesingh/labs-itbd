@@ -6,6 +6,7 @@ import {
   SessionHistory,
   TodayPanel,
 } from "@/components/labPractice/practice/practice-view";
+import { LabFocus } from "@/components/labPractice/practice/lab-focus";
 import { PageTitle } from "@/components/labPractice/shared";
 import {
   enrollmentAccessFor,
@@ -49,7 +50,7 @@ export default async function TraineeEnrollmentPage({
       <div className="grid items-start gap-6 lg:grid-cols-[1.4fr_0.6fr]">
         <AdminMotionCard className="p-6">
           <div className="relative z-10">
-            <PracticeTree data={data} role={isTrainee ? "trainee" : "admin"} />
+            {isTrainee ? <LabFocus data={data} /> : <PracticeTree data={data} role="admin" />}
           </div>
         </AdminMotionCard>
         <div className="flex flex-col gap-6">

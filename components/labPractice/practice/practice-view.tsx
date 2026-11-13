@@ -271,13 +271,15 @@ const STATUS_ICON = {
   locked: <Lock className="size-4 text-white/30" aria-label="Locked" />,
 };
 
-function StepRow({
+export function StepRow({
   step,
   index,
   role,
   writable,
   enrollmentId,
   titleOf,
+  defaultOpen = false,
+  highlight = false,
 }: {
   step: StepDTO;
   index: number;
@@ -285,9 +287,13 @@ function StepRow({
   writable: boolean;
   enrollmentId: number;
   titleOf: Map<number, string>;
+  /** Start with instructions showing. */
+  defaultOpen?: boolean;
+  /** The trainee's "up next" step — gets the accent treatment. */
+  highlight?: boolean;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useTreeOpen(false);
+  const [open, setOpen] = useTreeOpen(defaultOpen);
   const [completing, setCompleting] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [undoing, setUndoing] = useState(false);
@@ -308,12 +314,18 @@ function StepRow({
         className={cn(
           "flex items-center gap-2 rounded-lg px-2 py-2",
           step.status === "locked" ? "opacity-60" : "hover:bg-white/5",
+          highlight && "bg-itbd-blue/8 ring-1 ring-itbd-blue/40 hover:bg-itbd-blue/10",
         )}
       >
         {STATUS_ICON[step.status]}
         <CollapsibleTrigger asChild>
           <button type="button" className="flex min-w-0 flex-1 items-center gap-1 text-left">
-            <span className="truncate text-sm text-white">
+            {highlight && (
+              <span className="mr-1 shrink-0 rounded bg-itbd-blue/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-itbd-blue uppercase">
+                Up next
+              </span>
+            )}
+            <span className={cn("truncate text-sm", step.status === "done" ? "text-white/60" : "text-white")}>
               <span className="mr-1 text-white/40">{index + 1}.</span>
               {step.title}
             </span>
@@ -347,7 +359,7 @@ function StepRow({
           )}
         </div>
       </div>
-      <CollapsibleContent className="ml-8 space-y-3 pb-3 text-sm">
+      <CollapsibleContent className={cn("ml-8 space-y-3 pb-3 text-sm", highlight && "pt-2")}>
         {step.instructions ? (
           <p className="whitespace-pre-wrap text-white/70">{step.instructions}</p>
         ) : (
@@ -485,7 +497,7 @@ export function SessionHistory({ data }: { data: EnrollmentDTO }) {
   );
 }
 
-function useStepTitles(data: EnrollmentDTO) {
+export function useStepTitles(data: EnrollmentDTO) {
   return useMemo(
     () =>
       new Map(

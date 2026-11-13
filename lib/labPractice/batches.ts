@@ -8,9 +8,10 @@ import {
   labPracticeEnrollmentLabOverrides,
   labPracticeEnrollments,
   labPracticeLabs,
+  labPracticeScheduleDayLabs,
   labPracticeTrainers,
 } from "@/DB/labPracticeSchema";
-import { enrollTrainees } from "@/lib/labPractice/enroll";
+import { enrollTrainees, type EnrollResult } from "@/lib/labPractice/enroll";
 import type { Enrollment, PracticeActor } from "@/lib/labPractice/identity";
 import { PracticeError } from "@/lib/labPractice/practice";
 
@@ -98,6 +99,7 @@ async function assertModuleLabs(moduleId: number, labIds: number[]) {
 
 /** Replace the batch's visible-lab selection. */
 export async function setBatchLabs(batch: Batch, rawLabIds: number[]) {
+  if (batch.moduleId == null) throw new PracticeError("Schedule batches are paced by days, not labs.", 409);
   const labIds = [...new Set(rawLabIds)];
   await assertModuleLabs(batch.moduleId, labIds);
   await db.transaction(async (tx) => {
@@ -113,7 +115,48 @@ export async function setBatchLabs(batch: Batch, rawLabIds: number[]) {
  *  reported as conflicts, never moved. */
 export async function addBatchMembers(batch: Batch, traineeIds: number[]) {
   if (!batch.isActive) throw new PracticeError("This batch is archived.", 409);
-  return enrollTrainees(batch.trainerId, batch.moduleId, traineeIds, batch.id);
+  if (batch.moduleId != null) return enrollTrainees(batch.trainerId, batch.moduleId, traineeIds, batch.id);
+  if (batch.scheduleId == null) throw new PracticeError("This batch has no module or schedule.", 409);
+
+  // Schedule batch: enroll in EVERY active module that has labs in the schedule.
+  const moduleIds = await scheduleModuleIds(batch.scheduleId);
+  if (!moduleIds.length) throw new PracticeError("Add labs to the schedule's days before adding trainees.", 409);
+  const total: EnrollResult = { enrolled: 0, reactivated: 0, unchanged: 0, conflicts: [], invalid: [], enrollmentIds: [] };
+  for (const moduleId of moduleIds) {
+    const r = await enrollTrainees(batch.trainerId, moduleId, traineeIds, batch.id).catch((err) => {
+      // An inactive module is skipped rather than failing the whole batch.
+      if (err instanceof PracticeError && err.status === 404) return null;
+      throw err;
+    });
+    if (!r) continue;
+    total.enrolled += r.enrolled;
+    total.reactivated += r.reactivated;
+    total.unchanged += r.unchanged;
+    total.conflicts.push(...r.conflicts);
+    total.invalid.push(...r.invalid);
+    total.enrollmentIds.push(...r.enrollmentIds);
+  }
+  total.conflicts = [...new Set(total.conflicts)];
+  total.invalid = [...new Set(total.invalid)];
+  return total;
+}
+
+/** Modules (in title order) that have at least one lab in the schedule. */
+export async function scheduleModuleIds(scheduleId: number): Promise<number[]> {
+  const rows = await db
+    .selectDistinct({ moduleId: labPracticeLabs.moduleId })
+    .from(labPracticeScheduleDayLabs)
+    .innerJoin(labPracticeLabs, eq(labPracticeLabs.id, labPracticeScheduleDayLabs.labId))
+    .where(eq(labPracticeScheduleDayLabs.scheduleId, scheduleId));
+  return rows.map((r) => r.moduleId).sort((a, b) => a - b);
+}
+
+/** Take a trainee out of a schedule batch (every module enrollment). */
+export async function removeScheduleBatchTrainee(batch: Batch, traineeId: number) {
+  await db
+    .update(labPracticeEnrollments)
+    .set({ batchId: null })
+    .where(and(eq(labPracticeEnrollments.batchId, batch.id), eq(labPracticeEnrollments.traineeId, traineeId)));
 }
 
 /** Take one enrollment out of the batch (back to individual / default). */

@@ -266,12 +266,94 @@ export const labPracticeEnrollments = mysqlTable(
 // Hidden labs are excluded from the trainee's tree, progress and write
 // guards exactly like inactive curriculum — completions are kept, not deleted.
 
-/** A pacing group of trainees enrolled in ONE module, owned by a trainer. */
+// ─────────────────────────────────────────────
+// Day schedules (e.g. a 30-day bootcamp) — span modules
+// ─────────────────────────────────────────────
+
+/** A day-by-day plan over labs from any modules. Shared across trainers
+ *  (like curriculum); `created_by` records authorship only. */
+export const labPracticeSchedules = mysqlTable(
+  "lab_practice_schedules",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    name: varchar("name", { length: 120 }).notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    createdBy: int("created_by").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("lp_schedule_name_uq").on(t.name),
+    foreignKey({
+      name: "lp_schedule_created_by_fk",
+      columns: [t.createdBy],
+      foreignColumns: [labPracticeTrainers.id],
+    }).onDelete("restrict"),
+  ],
+);
+
+/** Day N of a schedule. `day_no` is kept contiguous (1..n) by the app. */
+export const labPracticeScheduleDays = mysqlTable(
+  "lab_practice_schedule_days",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    scheduleId: int("schedule_id").notNull(),
+    dayNo: int("day_no").notNull(),
+    title: varchar("title", { length: 200 }),
+  },
+  (t) => [
+    uniqueIndex("lp_sched_day_no_uq").on(t.scheduleId, t.dayNo),
+    foreignKey({
+      name: "lp_sched_day_schedule_fk",
+      columns: [t.scheduleId],
+      foreignColumns: [labPracticeSchedules.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/** Labs placed in a day. A lab sits in at most ONE day per schedule. */
+export const labPracticeScheduleDayLabs = mysqlTable(
+  "lab_practice_schedule_day_labs",
+  {
+    scheduleId: int("schedule_id").notNull(),
+    dayId: int("day_id").notNull(),
+    labId: int("lab_id").notNull(),
+    sequenceNo: int("sequence_no").notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex("lp_sched_lab_uq").on(t.scheduleId, t.labId),
+    index("lp_sched_day_lab_day_idx").on(t.dayId),
+    index("lp_sched_day_lab_lab_idx").on(t.labId),
+    foreignKey({
+      name: "lp_sched_day_lab_sched_fk",
+      columns: [t.scheduleId],
+      foreignColumns: [labPracticeSchedules.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "lp_sched_day_lab_day_fk",
+      columns: [t.dayId],
+      foreignColumns: [labPracticeScheduleDays.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "lp_sched_day_lab_lab_fk",
+      columns: [t.labId],
+      foreignColumns: [labPracticeLabs.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/**
+ * A pacing group of trainees, owned by a trainer. Two kinds:
+ *   module batch   — `module_id` set: one module; visible labs = batch_labs.
+ *   schedule batch — `schedule_id` set (module_id null): spans every module
+ *                    of the schedule; visible labs = labs in its ACTIVE days
+ *                    (lab_practice_batch_days).
+ */
 export const labPracticeBatches = mysqlTable(
   "lab_practice_batches",
   {
     id: int("id").autoincrement().primaryKey(),
-    moduleId: int("module_id").notNull(),
+    moduleId: int("module_id"),
+    scheduleId: int("schedule_id"),
     trainerId: int("trainer_id").notNull(),
     name: varchar("name", { length: 120 }).notNull(),
     isActive: boolean("is_active").notNull().default(true),
@@ -290,6 +372,35 @@ export const labPracticeBatches = mysqlTable(
       columns: [t.trainerId],
       foreignColumns: [labPracticeTrainers.id],
     }).onDelete("restrict"),
+    index("lp_batch_schedule_idx").on(t.scheduleId),
+    foreignKey({
+      name: "lp_batch_schedule_fk",
+      columns: [t.scheduleId],
+      foreignColumns: [labPracticeSchedules.id],
+    }).onDelete("restrict"),
+  ],
+);
+
+/** A schedule batch's ACTIVE days (one row per switched-on day). */
+export const labPracticeBatchDays = mysqlTable(
+  "lab_practice_batch_days",
+  {
+    batchId: int("batch_id").notNull(),
+    dayId: int("day_id").notNull(),
+  },
+  (t) => [
+    uniqueIndex("lp_batch_day_uq").on(t.batchId, t.dayId),
+    index("lp_batch_day_day_idx").on(t.dayId),
+    foreignKey({
+      name: "lp_batch_day_batch_fk",
+      columns: [t.batchId],
+      foreignColumns: [labPracticeBatches.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "lp_batch_day_day_fk",
+      columns: [t.dayId],
+      foreignColumns: [labPracticeScheduleDays.id],
+    }).onDelete("cascade"),
   ],
 );
 

@@ -47,6 +47,28 @@ export default async function TrainerModulePage({
         : null,
     };
   });
+  // Schedule batches whose trainees are enrolled in this module (paced by days).
+  const moduleBatchIds = new Set(batchList.map((b) => b.id));
+  const scheduleBatchMembers = new Map<number, typeof moduleEnrollments>();
+  for (const e of moduleEnrollments) {
+    if (e.batchId == null || moduleBatchIds.has(e.batchId)) continue;
+    if (!actor.canViewAll && e.trainerId !== actor.trainer.id) continue;
+    scheduleBatchMembers.set(e.batchId, [...(scheduleBatchMembers.get(e.batchId) ?? []), e]);
+  }
+  for (const [batchId, members] of scheduleBatchMembers) {
+    const active = members.filter((m) => m.isActive);
+    batches.push({
+      id: batchId,
+      name: members[0].batchName ?? "Batch",
+      isActive: true,
+      trainerName: members[0].trainerName,
+      isMine: members[0].trainerId === actor.trainer.id,
+      memberCount: active.length,
+      visibleLabs: Math.max(0, ...members.map((m) => m.visibleLabs)),
+      avgPercent: active.length ? Math.round(active.reduce((s, m) => s + m.percent, 0) / active.length) : null,
+      scheduleHref: `/dashboard/guided-labs/trainer/batches/${batchId}`,
+    });
+  }
 
   // Plain, serialisable shape for the client builder.
   const mod: BuilderModule = {

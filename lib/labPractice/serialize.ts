@@ -50,8 +50,10 @@ export type LabDTO = {
   /** Can the trainee see this lab? (Trainee DTOs only ever contain visible labs.) */
   visible: boolean;
   visibilitySource: VisibilitySource;
-  /** Visibility without the individual override (batch / default). */
+  /** Visibility without the individual override (batch / day / default). */
   baseVisible: boolean;
+  /** Schedule batches: which day this lab belongs to (null if unscheduled). */
+  day: { id: number; no: number; title: string | null; active: boolean } | null;
 };
 export type SessionDTO = {
   id: number;
@@ -74,7 +76,7 @@ export type EnrollmentDTO = {
   labs: LabDTO[];
   /** Active labs the trainee can't see yet (count only — never their content). */
   hiddenLabCount: number;
-  batch: { id: number; name: string } | null;
+  batch: { id: number; name: string; kind: "module" | "schedule"; scheduleId: number | null } | null;
   sessions: SessionDTO[];
 };
 
@@ -173,6 +175,7 @@ export function serializeEnrollment(
       visible: !hidden,
       visibilitySource: vis?.source ?? "default",
       baseVisible: vis?.baseVisible ?? false,
+      day: view.dayOfLab.get(lab.id) ?? null,
     };
   });
   const visibleLabs = labs.filter((l) => l.visible);

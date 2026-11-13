@@ -84,5 +84,35 @@ export const batchMembersSchema = z.object({ traineeIds: z.array(id).min(1).max(
 /** true = show, false = hide, null = reset to batch / default. */
 export const labOverrideSchema = z.object({ visible: z.boolean().nullable() });
 
+// ─────────────────────────────────────────────
+// Day schedules
+// ─────────────────────────────────────────────
+const scheduleName = z.string().trim().min(1, "Schedule name is required").max(120);
+const dayTitle = z.string().trim().max(200).nullable().optional();
+
+export const scheduleSchema = z.object({ name: scheduleName });
+export const scheduleUpdateSchema = z.object({ name: scheduleName.optional(), isActive: z.boolean().optional() });
+export const dayCreateSchema = z.object({ title: dayTitle });
+export const dayUpdateSchema = z.object({
+  title: dayTitle,
+  /** Move the day one place earlier (-1) or later (1). */
+  move: z.union([z.literal(-1), z.literal(1)]).optional(),
+});
+/** Replace a day's labs (`labIds`) or append (`add`). */
+export const dayLabsSchema = z.object({
+  labIds: z.array(id).max(500).optional(),
+  add: z.array(id).max(500).optional(),
+  remove: z.array(id).max(500).optional(),
+});
+export const generateSchema = z.object({
+  moduleIds: z.array(id).min(1, "Pick at least one module").max(50),
+  strategy: z.enum(["fromTitles", "perDay"]),
+  perDay: z.coerce.number().int().min(1).max(50).optional(),
+  replace: z.boolean().default(false),
+  dryRun: z.boolean().default(true),
+});
+export const batchDaysSchema = z.object({ dayIds: z.array(id).max(500) });
+export const traineeDaySchema = z.object({ visible: z.boolean().nullable() });
+
 // Photo limits (shared by API + client dialog)
 export { PHOTO_MAX_BYTES, PHOTO_MAX_FILES, PHOTO_MIME_TYPES } from "@/lib/labPractice/constants";
