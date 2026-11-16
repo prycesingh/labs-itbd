@@ -57,7 +57,7 @@ import { cn } from "@/lib/utils";
  *   SchedulesCard      — list / create schedules (trainer workspace)
  *   ScheduleBuilder    — days ⇄ labs editor + generator (schedule page)
  *   ScheduleBatches    — create / list batches following a schedule
- *   BatchDaysPanel     — switch days on/off, "Activate next day" (batch page)
+ *   (day pointer lives in batch-widgets.tsx → DayPointerPanel)
  *   ScheduleBatchRoster— members, trainee × day grid, per-trainee day overrides
  */
 
@@ -731,8 +731,7 @@ export type ScheduleBatchItem = {
   isActive: boolean;
   trainerName: string;
   memberCount: number;
-  activeDays: number;
-  lastActiveDay: number | null;
+  currentDay: number;
 };
 
 export function ScheduleBatches({
@@ -803,9 +802,7 @@ export function ScheduleBatches({
                     <span className="inline-flex items-center gap-1">
                       <Users className="size-3" /> {b.memberCount}
                     </span>
-                    <span>
-                      {b.activeDays}/{totalDays} days on{b.lastActiveDay ? ` · up to Day ${b.lastActiveDay}` : ""}
-                    </span>
+                    <span>{b.currentDay ? `On Day ${b.currentDay} of ${totalDays}` : `Not started · ${totalDays} days`}</span>
                     <span className="text-white/40">{b.trainerName}</span>
                   </span>
                 </span>
@@ -815,88 +812,6 @@ export function ScheduleBatches({
           ))}
         </ul>
       )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────
-// Schedule batch → days on/off
-// ─────────────────────────────────────────────
-export type BatchDayItem = { id: number; dayNo: number; title: string | null; labCount: number; active: boolean };
-
-export function BatchDaysPanel({ batchId, days, writable }: { batchId: number; days: BatchDayItem[]; writable: boolean }) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const active = days.filter((d) => d.active);
-  const openLabs = active.reduce((n, d) => n + d.labCount, 0);
-  const nextOff = days.find((d) => !d.active);
-
-  async function setDays(ids: number[]) {
-    setBusy(true);
-    const ok = await lpRequest(`/api/lab-practice/batches/${batchId}/days`, { method: "PUT", json: { dayIds: ids } });
-    setBusy(false);
-    if (ok) router.refresh();
-  }
-
-  async function activateNext() {
-    setBusy(true);
-    const res = await lpRequest<{ dayNo: number | null }>(`/api/lab-practice/batches/${batchId}/days`, { method: "POST" });
-    setBusy(false);
-    if (res) {
-      toast.success(res.dayNo ? `Day ${res.dayNo} is now open.` : "Every day is already open.");
-      router.refresh();
-    }
-  }
-
-  function toggle(day: BatchDayItem) {
-    const ids = new Set(active.map((d) => d.id));
-    if (day.active) ids.delete(day.id);
-    else ids.add(day.id);
-    setDays([...ids]);
-  }
-
-  if (days.length === 0) {
-    return <p className="text-sm text-white/50">This schedule has no days yet. Build them on the schedule page.</p>;
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="space-y-1">
-        <p className="text-sm text-white">
-          <span className="font-semibold tabular-nums">{active.length}</span>
-          <span className="text-white/60"> of {days.length} days open · {openLabs} labs</span>
-        </p>
-        {nextOff && <p className="text-xs text-white/50">Next up: Day {nextOff.dayNo}{nextOff.title ? ` — ${nextOff.title}` : ""}</p>}
-      </div>
-      {writable && (
-        <DefaultButton size="sm" className="w-full" onClick={activateNext} loading={busy} disabled={!nextOff}>
-          <CalendarPlus className="size-4" />
-          {nextOff ? `Activate Day ${nextOff.dayNo}` : "All days open"}
-        </DefaultButton>
-      )}
-      <div role="group" aria-label="Days" className="grid grid-cols-6 gap-1.5 sm:grid-cols-8 xl:grid-cols-6">
-        {days.map((d) => (
-          <button
-            key={d.id}
-            type="button"
-            disabled={!writable || busy}
-            onClick={() => toggle(d)}
-            aria-pressed={d.active}
-            title={`Day ${d.dayNo}${d.title ? ` — ${d.title}` : ""} · ${d.labCount} labs · ${d.active ? "open (click to close)" : "closed (click to open)"}`}
-            className={cn(
-              "flex aspect-square flex-col items-center justify-center rounded-lg text-sm font-semibold tabular-nums transition-colors",
-              "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed",
-              d.active
-                ? "bg-itbd-blue text-black hover:bg-itbd-blue/85"
-                : "bg-white/5 text-white/50 ring-1 ring-white/10 hover:bg-white/10 hover:text-white",
-            )}
-          >
-            {d.dayNo}
-            <span className={cn("text-[9px] font-normal", d.active ? "text-black/60" : "text-white/30")}>{d.labCount}</span>
-          </button>
-        ))}
-      </div>
-      <p className="text-[11px] text-white/40">Click a day to open or close it. The small number is its lab count.</p>
     </div>
   );
 }
@@ -1063,6 +978,14 @@ function TraineeRow({
   );
 }
 
+type MemberConflict = { traineeId: number; traineeName: string; batchId: number; batchName: string; canMove: boolean };
+type AddMembersResponse = {
+  added: number;
+  moved: number;
+  conflicts: number[];
+  batchConflicts: MemberConflict[];
+};
+
 export function ScheduleBatchRoster({
   batchId,
   writable,
@@ -1079,6 +1002,7 @@ export function ScheduleBatchRoster({
   const router = useRouter();
   const [picked, setPicked] = useState<EmployeeOption[]>([]);
   const [busy, setBusy] = useState(false);
+  const [conflicts, setConflicts] = useState<MemberConflict[] | null>(null);
 
   // Columns: days open for the batch or for anyone individually.
   const columns = useMemo(
@@ -1086,17 +1010,25 @@ export function ScheduleBatchRoster({
     [days, trainees],
   );
 
-  async function add() {
+  async function add(traineeIds: number[], move: boolean) {
     setBusy(true);
-    const res = await lpRequest<{ enrolled: number; reactivated: number; unchanged: number; conflicts: number[] }>(
-      `/api/lab-practice/batches/${batchId}/members`,
-      { method: "POST", json: { traineeIds: picked.map((p) => p.id) } },
-    );
+    const res = await lpRequest<AddMembersResponse>(`/api/lab-practice/batches/${batchId}/members`, {
+      method: "POST",
+      json: { traineeIds, move },
+    });
     setBusy(false);
     if (!res) return;
-    toast.success(`${picked.length} trainee${picked.length === 1 ? "" : "s"} added — enrolled in the schedule's modules.`);
-    if (res.conflicts.length) toast.warning(`${res.conflicts.length} already with another trainer in some modules — skipped there.`);
+    const joined = res.added;
+    if (joined) {
+      toast.success(
+        `${joined} trainee${joined === 1 ? "" : "s"} ${res.moved ? `added (${res.moved} moved from another batch)` : "added"} — enrolled in the schedule's modules.`,
+      );
+    }
+    if (res.conflicts.length) {
+      toast.warning(`${res.conflicts.length} already with another trainer in some modules — those modules stay with that trainer.`);
+    }
     setPicked([]);
+    setConflicts(res.batchConflicts.length ? res.batchConflicts : null);
     router.refresh();
   }
 
@@ -1119,15 +1051,54 @@ export function ScheduleBatchRoster({
                   </button>
                 </Badge>
               ))}
-              <DefaultButton size="sm" onClick={add} loading={busy}>
+              <DefaultButton size="sm" onClick={() => add(picked.map((p) => p.id), false)} loading={busy}>
                 Add {picked.length} to batch
               </DefaultButton>
             </div>
           )}
           <p className="text-xs text-white/40">
-            Adding a trainee enrolls them in every module this schedule uses. They only see labs from open days.
+            Adding a trainee enrolls them in every module this schedule uses. They only see labs from open days. A
+            trainee belongs to one batch at a time.
           </p>
         </div>
+      )}
+
+      {conflicts && (
+        <Dialog open onOpenChange={(v) => !v && !busy && setConflicts(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Already in another batch</DialogTitle>
+              <DialogDescription>
+                A trainee follows one batch at a time, so the same lab never reaches them twice. Moving keeps all their
+                progress — only which batch paces them changes.
+              </DialogDescription>
+            </DialogHeader>
+            <ul className="divide-y divide-white/10 rounded-lg border border-white/10 text-sm">
+              {conflicts.map((c) => (
+                <li key={c.traineeId} className="flex items-center justify-between gap-3 px-3 py-2">
+                  <span className="min-w-0 truncate text-white">{c.traineeName}</span>
+                  <span className="shrink-0 text-xs text-white/50">
+                    in {c.batchName}
+                    {!c.canMove && " · not yours to move"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConflicts(null)} disabled={busy}>
+                Leave them
+              </Button>
+              {conflicts.some((c) => c.canMove) && (
+                <DefaultButton
+                  loading={busy}
+                  onClick={() => add(conflicts.filter((c) => c.canMove).map((c) => c.traineeId), true)}
+                >
+                  Move {conflicts.filter((c) => c.canMove).length} here
+                </DefaultButton>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
 
       {trainees.length === 0 ? (
@@ -1190,7 +1161,7 @@ export function ScheduleSettings({
     setBusy(false);
     if (ok) {
       toast.success(`Deleted "${schedule.name}".`);
-      router.replace("/dashboard/guided-labs/trainer");
+      router.replace("/dashboard/guided-labs/trainer/curriculum");
       router.refresh();
     }
   }

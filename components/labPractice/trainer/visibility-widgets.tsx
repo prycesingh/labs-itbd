@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Eye, EyeOff, Plus, RotateCcw, Trash2, Users, X } from "lucide-react";
+import { Eye, EyeOff, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -27,10 +27,10 @@ import { cn } from "@/lib/utils";
 /**
  * Lab pacing UI: which labs of a module a trainee can see.
  *   - LabVisibilityPanel  — per-trainee Show/Hide (trainee review page)
- *   - BatchesPanel        — create / list a module's batches (module page)
- *   - BatchLabsEditor     — pick the labs a batch shows (batch page)
- *   - BatchMembersPanel   — add / remove trainees + review grid (batch page)
- *   - BatchSettings       — rename / archive / delete (batch page)
+ *   - BatchSettings       — rename / archive / delete (any batch page)
+ *   LEGACY module batches (until converted to schedule batches):
+ *   - BatchLabsEditor     — pick the labs a module batch shows
+ *   - BatchMembersPanel   — add / remove trainees + review grid
  */
 
 const SOURCE_LABEL: Record<VisibilitySource, string> = {
@@ -225,124 +225,6 @@ export function LabVisibilityPanel({
         </div>
       ) : (
         <ul className="divide-y divide-white/10 rounded-lg border border-white/10">{labs.map(labRow)}</ul>
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────
-// Module → batches
-// ─────────────────────────────────────────────
-export type BatchRow = {
-  id: number;
-  name: string;
-  isActive: boolean;
-  trainerName: string;
-  isMine: boolean;
-  memberCount: number;
-  visibleLabs: number;
-  avgPercent: number | null;
-  /** Schedule batches (paced by days) link to their own page. */
-  scheduleHref?: string;
-};
-
-export function BatchesPanel({
-  moduleId,
-  totalLabs,
-  batches,
-  canCreate,
-}: {
-  moduleId: number;
-  totalLabs: number;
-  batches: BatchRow[];
-  canCreate: boolean;
-}) {
-  const router = useRouter();
-  const [name, setName] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function create() {
-    if (!name.trim()) return;
-    setBusy(true);
-    const res = await lpRequest<{ id: number }>(`/api/lab-practice/modules/${moduleId}/batches`, {
-      method: "POST",
-      json: { name: name.trim() },
-    });
-    setBusy(false);
-    if (res) {
-      setName("");
-      router.push(`/dashboard/guided-labs/trainer/modules/${moduleId}/batches/${res.id}`);
-    }
-  }
-
-  return (
-    <div className="space-y-3">
-      <p className="text-xs text-white/50">
-        Group trainees and reveal labs to them together. Trainees outside a batch see only the first lab until
-        you reveal more on their page.
-      </p>
-      {canCreate && (
-        <form
-          className="flex gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            create();
-          }}
-        >
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Batch name, e.g. Nov 2026 cohort"
-            maxLength={120}
-            aria-label="New batch name"
-            className="h-8"
-          />
-          <DefaultButton type="submit" size="sm" loading={busy} disabled={!name.trim()}>
-            <Plus className="size-4" /> Create
-          </DefaultButton>
-        </form>
-      )}
-      {batches.length === 0 ? (
-        <p className="text-sm text-white/50">No batches yet.</p>
-      ) : (
-        <ul className="divide-y divide-white/10 rounded-lg border border-white/10">
-          {batches.map((b) => (
-            <li key={b.id}>
-              <Link
-                href={b.scheduleHref ?? `/dashboard/guided-labs/trainer/modules/${moduleId}/batches/${b.id}`}
-                className="group flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 focus-visible:bg-white/5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-              >
-                <span className="min-w-0 flex-1 space-y-1">
-                  <span className="flex items-center gap-2">
-                    <span className={cn("truncate text-sm font-medium", b.isActive ? "text-white" : "text-white/50")}>
-                      {b.name}
-                    </span>
-                    {!b.isActive && (
-                      <Badge variant="outline" className="px-1.5 py-0 text-[10px] text-white/60">
-                        Archived
-                      </Badge>
-                    )}
-                  </span>
-                  <span className="flex flex-wrap gap-x-3 text-xs text-white/50 tabular-nums">
-                    <span className="inline-flex items-center gap-1">
-                      <Users className="size-3" /> {b.memberCount}
-                    </span>
-                    <span>
-                      {b.scheduleHref
-                        ? `Day schedule · ${b.visibleLabs}/${totalLabs} labs open here`
-                        : b.visibleLabs > 0
-                          ? `${b.visibleLabs}/${totalLabs} labs shown`
-                          : "First lab only"}
-                    </span>
-                    {b.avgPercent !== null && <span>avg {b.avgPercent}%</span>}
-                    {!b.isMine && <span className="text-white/40">{b.trainerName}</span>}
-                  </span>
-                </span>
-                <ArrowRight className="size-4 shrink-0 text-white/30 transition-colors group-hover:text-itbd-blue" />
-              </Link>
-            </li>
-          ))}
-        </ul>
       )}
     </div>
   );

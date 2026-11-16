@@ -2,9 +2,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/DB/drizzle";
 import {
-  labPracticeBatchDays,
   labPracticeBatches,
-  labPracticeEmployees,
   labPracticeEnrollmentLabOverrides,
   labPracticeEnrollments,
   labPracticeLabs,
@@ -12,16 +10,17 @@ import {
   labPracticeScheduleDayLabs,
   labPracticeScheduleDays,
   labPracticeSchedules,
-  labPracticeTrainers,
 } from "@/DB/labPracticeSchema";
-import type { Batch } from "@/lib/labPractice/batches";
+import { syncScheduleBatches, type Batch } from "@/lib/labPractice/batches";
 import { PracticeError } from "@/lib/labPractice/practice";
 import { planFromTitles, planPerDay, type GenLab } from "@/lib/labPractice/scheduleGenerator";
 
 /**
  * Day schedules: Day 1..n, each holding labs from ANY module (a lab sits in at
- * most one day per schedule). Schedule batches switch days on/off; a day being
- * on makes its labs visible to the batch (see lib/labPractice/visibility.ts).
+ * most one day per schedule). A batch follows a schedule with a day pointer:
+ * days 1..current_day are open and their labs are visible to the batch's
+ * members (see lib/labPractice/visibility.ts). Editing a schedule's days
+ * re-syncs its batches so members are enrolled in any newly used module.
  *
  * Schedules are shared curriculum (any trainer edits them); batches keep their
  * owner rules (lib/labPractice/batches.ts).
@@ -275,6 +274,7 @@ export async function setDayLabs(day: ScheduleDay, rawLabIds: number[]) {
       labIds.map((labId, i) => ({ scheduleId: day.scheduleId, dayId: day.id, labId, sequenceNo: i + 1 })),
     );
   });
+  await syncScheduleBatches(day.scheduleId);
 }
 
 /** Append labs to a day (moving them from other days if needed). */
@@ -383,11 +383,12 @@ export async function generateDays(scheduleId: number, opts: GenerateOptions): P
       await tx.insert(labPracticeScheduleDayLabs).values(rows.slice(i, i + 200));
     }
   });
+  await syncScheduleBatches(scheduleId);
   return preview;
 }
 
 // ─────────────────────────────────────────────
-// Schedule batches: active days + individual day overrides
+// Schedule batches: day pointer + individual day overrides
 // ─────────────────────────────────────────────
 
 export async function createScheduleBatch(trainerId: number, scheduleId: number, name: string) {
@@ -395,45 +396,49 @@ export async function createScheduleBatch(trainerId: number, scheduleId: number,
   return res.insertId;
 }
 
+/**
+ * "Teach this module": a batch following a day schedule made from ONE module.
+ * The schedule is named after the module and reused if it already exists, so
+ * several batches of the same module share one plan. A new plan takes its
+ * days from the lab titles ("Day 03.1 — …") when every lab has one, else one
+ * lab per day.
+ */
+export async function createModuleBatch(trainerId: number, moduleId: number, name: string) {
+  const [mod] = await db.select().from(labPracticeModules).where(eq(labPracticeModules.id, moduleId)).limit(1);
+  if (!mod || !mod.isActive) throw new PracticeError("Module not found or inactive.", 404);
+  const scheduleName = mod.title.slice(0, 120);
+  const [existing] = await db
+    .select()
+    .from(labPracticeSchedules)
+    .where(eq(labPracticeSchedules.name, scheduleName))
+    .limit(1);
+
+  let scheduleId = existing?.id;
+  if (!scheduleId) {
+    scheduleId = await createSchedule(trainerId, scheduleName);
+    const base = { moduleIds: [moduleId], replace: true };
+    const fromTitles = await generateDays(scheduleId, { ...base, strategy: "fromTitles", dryRun: true });
+    const strategy: GenerateOptions["strategy"] =
+      fromTitles.placed > 0 && fromTitles.unplaced === 0 ? "fromTitles" : "perDay";
+    await generateDays(scheduleId, { ...base, strategy, perDay: 1, dryRun: false });
+  }
+  const batchId = await createScheduleBatch(trainerId, scheduleId, name);
+  return { batchId, scheduleId, createdSchedule: !existing };
+}
+
 function assertScheduleBatch(batch: Batch): number {
   if (batch.scheduleId == null) throw new PracticeError("This batch doesn't follow a day schedule.", 409);
   return batch.scheduleId;
 }
 
-export async function setBatchDays(batch: Batch, rawDayIds: number[]) {
+/** Open days 1..dayNo for the batch (0 closes everything). Clamped to the
+ *  schedule's length. Returns the new pointer. */
+export async function setCurrentDay(batch: Batch, dayNo: number): Promise<number> {
   const scheduleId = assertScheduleBatch(batch);
-  const dayIds = [...new Set(rawDayIds)];
-  if (dayIds.length) {
-    const found = await db
-      .select({ id: labPracticeScheduleDays.id })
-      .from(labPracticeScheduleDays)
-      .where(and(eq(labPracticeScheduleDays.scheduleId, scheduleId), inArray(labPracticeScheduleDays.id, dayIds)));
-    if (found.length !== dayIds.length) throw new PracticeError("Some days aren't in this schedule.");
-  }
-  await db.transaction(async (tx) => {
-    await tx.delete(labPracticeBatchDays).where(eq(labPracticeBatchDays.batchId, batch.id));
-    if (dayIds.length) await tx.insert(labPracticeBatchDays).values(dayIds.map((dayId) => ({ batchId: batch.id, dayId })));
-  });
-}
-
-/** Switch on the earliest day that's still off. Returns its day number, or null. */
-export async function activateNextDay(batch: Batch): Promise<number | null> {
-  const scheduleId = assertScheduleBatch(batch);
-  const [days, active] = await Promise.all([
-    db
-      .select()
-      .from(labPracticeScheduleDays)
-      .where(eq(labPracticeScheduleDays.scheduleId, scheduleId))
-      .orderBy(asc(labPracticeScheduleDays.dayNo)),
-    db.select().from(labPracticeBatchDays).where(eq(labPracticeBatchDays.batchId, batch.id)),
-  ]);
-  const on = new Set(active.map((a) => a.dayId));
-  const next = days.find((d) => !on.has(d.id));
-  if (!next) return null;
-  await db.insert(labPracticeBatchDays).values({ batchId: batch.id, dayId: next.id }).onDuplicateKeyUpdate({
-    set: { dayId: next.id },
-  });
-  return next.dayNo;
+  const total = await maxDayNo(scheduleId);
+  const next = Math.max(0, Math.min(total, Math.trunc(dayNo)));
+  await db.update(labPracticeBatches).set({ currentDay: next }).where(eq(labPracticeBatches.id, batch.id));
+  return next;
 }
 
 /**
@@ -444,6 +449,8 @@ export async function activateNextDay(batch: Batch): Promise<number | null> {
 export async function setTraineeDay(batch: Batch, traineeId: number, day: ScheduleDay, visible: boolean | null) {
   const scheduleId = assertScheduleBatch(batch);
   if (day.scheduleId !== scheduleId) throw new PracticeError("That day isn't in this batch's schedule.");
+  // Matching the batch again just clears the individual change.
+  if (visible !== null && visible === day.dayNo <= batch.currentDay) visible = null;
   const [enrollments, dayLabs] = await Promise.all([
     db
       .select({ id: labPracticeEnrollments.id, moduleId: labPracticeEnrollments.moduleId })
@@ -486,53 +493,6 @@ export async function setTraineeDay(batch: Batch, traineeId: number, day: Schedu
 // ─────────────────────────────────────────────
 // Read models for schedule batches
 // ─────────────────────────────────────────────
-
-export type ScheduleBatchRow = {
-  id: number;
-  name: string;
-  isActive: boolean;
-  trainerId: number;
-  trainerName: string;
-  memberCount: number;
-  activeDays: number;
-  lastActiveDay: number | null;
-};
-
-/** Batches following a schedule (optionally only one trainer's). */
-export async function listScheduleBatches(scheduleId: number, trainerId?: number): Promise<ScheduleBatchRow[]> {
-  const rows = await db
-    .select({
-      id: labPracticeBatches.id,
-      name: labPracticeBatches.name,
-      isActive: labPracticeBatches.isActive,
-      trainerId: labPracticeBatches.trainerId,
-      trainerName: labPracticeEmployees.fullName,
-      memberCount: sql<number>`(select count(distinct ${labPracticeEnrollments.traineeId}) from ${labPracticeEnrollments} where ${labPracticeEnrollments.batchId} = ${labPracticeBatches.id})`,
-      activeDays: sql<number>`(select count(*) from ${labPracticeBatchDays} where ${labPracticeBatchDays.batchId} = ${labPracticeBatches.id})`,
-      lastActiveDay: sql<number | null>`(select max(${labPracticeScheduleDays.dayNo}) from ${labPracticeBatchDays} join ${labPracticeScheduleDays} on ${labPracticeScheduleDays.id} = ${labPracticeBatchDays.dayId} where ${labPracticeBatchDays.batchId} = ${labPracticeBatches.id})`,
-    })
-    .from(labPracticeBatches)
-    .innerJoin(labPracticeTrainers, eq(labPracticeTrainers.id, labPracticeBatches.trainerId))
-    .innerJoin(labPracticeEmployees, eq(labPracticeEmployees.id, labPracticeTrainers.employeeId))
-    .where(
-      and(
-        eq(labPracticeBatches.scheduleId, scheduleId),
-        trainerId ? eq(labPracticeBatches.trainerId, trainerId) : undefined,
-      ),
-    )
-    .orderBy(asc(labPracticeBatches.name));
-  return rows.map((r) => ({
-    ...r,
-    memberCount: Number(r.memberCount),
-    activeDays: Number(r.activeDays),
-    lastActiveDay: r.lastActiveDay == null ? null : Number(r.lastActiveDay),
-  }));
-}
-
-export async function activeDayIds(batchId: number): Promise<Set<number>> {
-  const rows = await db.select().from(labPracticeBatchDays).where(eq(labPracticeBatchDays.batchId, batchId));
-  return new Set(rows.map((r) => r.dayId));
-}
 
 /** Lab ids that carry an individual override, per enrollment. */
 export async function overriddenLabsByEnrollment(enrollmentIds: number[]): Promise<Map<number, Set<number>>> {

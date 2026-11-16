@@ -25,12 +25,16 @@ export type EnrollResult = {
  * - active, same trainer      -> unchanged
  * - active, another trainer   -> reported as a conflict (never taken over)
  * `batchId`, when given, is set on every enrollment this call owns.
+ * `reactivate: false` leaves inactive (deliberately unassigned) enrollments
+ * alone — used by background batch re-syncs, which must not undo a trainer's
+ * unassign.
  */
 export async function enrollTrainees(
   trainerId: number,
   moduleId: number,
   rawTraineeIds: number[],
   batchId: number | null = null,
+  { reactivate = true }: { reactivate?: boolean } = {},
 ): Promise<EnrollResult> {
   const [mod] = await db
     .select()
@@ -82,6 +86,8 @@ export async function enrollTrainees(
       });
       result.enrolled++;
       result.enrollmentIds.push(res.insertId);
+    } else if (!e.isActive && !reactivate) {
+      result.unchanged++;
     } else if (!e.isActive) {
       await db
         .update(labPracticeEnrollments)

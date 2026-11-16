@@ -288,7 +288,7 @@ function ModuleSettings({ mod }: { mod: BuilderModule }) {
         open={deleting}
         onOpenChange={setDeleting}
         onDeleted={() => {
-          router.replace("/dashboard/guided-labs/trainer");
+          router.replace("/dashboard/guided-labs/trainer/curriculum");
           router.refresh();
         }}
       />

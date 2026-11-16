@@ -11,7 +11,8 @@ import {
 } from "@/components/labPractice/trainer/schedule-widgets";
 import { parseId } from "@/lib/labPractice/api";
 import { requirePageTrainer } from "@/lib/labPractice/identity";
-import { getScheduleDetail, listScheduleBatches } from "@/lib/labPractice/schedules";
+import { listBatches } from "@/lib/labPractice/batches";
+import { getScheduleDetail } from "@/lib/labPractice/schedules";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ sched
 
   // Every trainer's batches (the delete warning counts them all); the list
   // shows your own unless you have oversight.
-  const allBatches = await listScheduleBatches(detail.schedule.id);
+  const allBatches = await listBatches({ scheduleId: detail.schedule.id });
   const batches = actor.canViewAll ? allBatches : allBatches.filter((b) => b.trainerId === actor.trainer.id);
   const labCount = detail.days.reduce((n, d) => n + d.labs.length, 0);
 
@@ -32,10 +33,10 @@ export default async function SchedulePage({ params }: { params: Promise<{ sched
     <main className="flex w-full flex-col gap-6 pb-10">
       <div className="space-y-2">
         <Link
-          href="/dashboard/guided-labs/trainer"
+          href="/dashboard/guided-labs/trainer/curriculum"
           className="inline-flex items-center gap-1.5 text-sm text-white/60 hover:text-white"
         >
-          <ArrowLeft className="size-4" /> Trainer workspace
+          <ArrowLeft className="size-4" /> Curriculum
         </Link>
         <PageTitle
           title={detail.schedule.name}
@@ -63,7 +64,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ sched
           <div className="relative z-10 space-y-3">
             <h2 className="text-lg font-bold text-white">Batches</h2>
             <p className="text-xs text-white/50">
-              A batch follows this schedule: switch days on and every lab in those days opens for its trainees.
+              A batch follows this schedule. Move a batch to Day N and every lab in days 1..N opens for its trainees.
             </p>
             <ScheduleBatches
               scheduleId={detail.schedule.id}
@@ -74,8 +75,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ sched
                 isActive: b.isActive,
                 trainerName: b.trainerName,
                 memberCount: b.memberCount,
-                activeDays: b.activeDays,
-                lastActiveDay: b.lastActiveDay,
+                currentDay: b.currentDay,
               }))}
             />
           </div>

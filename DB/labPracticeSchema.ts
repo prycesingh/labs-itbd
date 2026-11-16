@@ -342,11 +342,19 @@ export const labPracticeScheduleDayLabs = mysqlTable(
 );
 
 /**
- * A pacing group of trainees, owned by a trainer. Two kinds:
- *   module batch   — `module_id` set: one module; visible labs = batch_labs.
- *   schedule batch — `schedule_id` set (module_id null): spans every module
- *                    of the schedule; visible labs = labs in its ACTIVE days
- *                    (lab_practice_batch_days).
+ * A group of trainees, owned by a trainer, that follows ONE day schedule.
+ *
+ *   Members      — lab_practice_batch_members (a trainee is in at most ONE
+ *                  batch: unique on trainee_id). Each member is enrolled in
+ *                  every module the schedule uses; those enrollments carry
+ *                  `batch_id` as a derived link (kept in sync by
+ *                  lib/labPractice/batches.ts — never edit it by hand).
+ *   Pacing       — `current_day`: days 1..current_day are open, so their labs
+ *                  are visible. 0 = nothing open yet.
+ *
+ * Legacy kinds still readable until scripts/lab-practice-convert-batches.mjs
+ * runs: module batches (`module_id` set, visible labs = batch_labs) and the
+ * per-day toggles in lab_practice_batch_days (superseded by current_day).
  */
 export const labPracticeBatches = mysqlTable(
   "lab_practice_batches",
@@ -357,6 +365,8 @@ export const labPracticeBatches = mysqlTable(
     trainerId: int("trainer_id").notNull(),
     name: varchar("name", { length: 120 }).notNull(),
     isActive: boolean("is_active").notNull().default(true),
+    // Schedule batches: days 1..current_day are open.
+    currentDay: int("current_day").notNull().default(0),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [
@@ -381,7 +391,34 @@ export const labPracticeBatches = mysqlTable(
   ],
 );
 
-/** A schedule batch's ACTIVE days (one row per switched-on day). */
+/** Batch membership — the source of truth for "who is in which batch".
+ *  Unique on trainee_id: one batch per trainee, so two batches can never
+ *  pace the same person differently. Moving a trainee deletes the old row. */
+export const labPracticeBatchMembers = mysqlTable(
+  "lab_practice_batch_members",
+  {
+    batchId: int("batch_id").notNull(),
+    traineeId: int("trainee_id").notNull(), // lab_practice_employees.id
+    addedAt: timestamp("added_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("lp_batch_member_trainee_uq").on(t.traineeId),
+    index("lp_batch_member_batch_idx").on(t.batchId),
+    foreignKey({
+      name: "lp_batch_member_batch_fk",
+      columns: [t.batchId],
+      foreignColumns: [labPracticeBatches.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "lp_batch_member_trainee_fk",
+      columns: [t.traineeId],
+      foreignColumns: [labPracticeEmployees.id],
+    }).onDelete("restrict"),
+  ],
+);
+
+/** LEGACY: a schedule batch's switched-on days. Superseded by
+ *  batches.current_day (migration 0024); kept until the conversion runs. */
 export const labPracticeBatchDays = mysqlTable(
   "lab_practice_batch_days",
   {
@@ -463,6 +500,9 @@ export const labPracticeSessions = mysqlTable(
     // Calendar date practiced, computed server-side in LAB_PRACTICE_TZ.
     practiceDate: date("practice_date", { mode: "string" }).notNull(),
     additionalComments: text("additional_comments"), // one comment per day
+    // Trainer review queue: set when the trainer has read the comment; editing
+    // the comment clears it so the new text comes back to the queue.
+    commentReviewedAt: timestamp("comment_reviewed_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").onUpdateNow(),
   },
@@ -495,9 +535,20 @@ export const labPracticeStepCompletions = mysqlTable(
     sessionId: int("session_id").notNull(), // which day it was done
     stepId: int("step_id").notNull(),
     completedAt: timestamp("completed_at").notNull().defaultNow(),
+    // Trainer review queue — NON-blocking: a completion counts the moment it
+    // is made; this only records that the trainer has looked at it. Rejection
+    // still deletes the row (see lab_practice_step_rejections).
+    reviewedAt: timestamp("reviewed_at"),
+    reviewedBy: int("reviewed_by"),
   },
   (t) => [
     uniqueIndex("uq_step_once_per_enrollment").on(t.enrollmentId, t.stepId),
+    index("lp_completion_reviewed_idx").on(t.reviewedAt),
+    foreignKey({
+      name: "lp_completion_reviewed_by_fk",
+      columns: [t.reviewedBy],
+      foreignColumns: [labPracticeTrainers.id],
+    }).onDelete("set null"),
     index("lp_completion_session_idx").on(t.sessionId),
     index("lp_completion_step_idx").on(t.stepId),
     foreignKey({

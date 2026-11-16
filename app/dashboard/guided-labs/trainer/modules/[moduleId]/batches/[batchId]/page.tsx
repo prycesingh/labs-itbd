@@ -13,15 +13,16 @@ import {
 import { db } from "@/DB/drizzle";
 import { labPracticeEnrollmentLabOverrides } from "@/DB/labPracticeSchema";
 import { parseId } from "@/lib/labPractice/api";
-import { canManageBatch, canReadBatch, getBatch, listModuleBatches } from "@/lib/labPractice/batches";
+import { batchLabIds, canManageBatch, canReadBatch, getBatch, listBatches } from "@/lib/labPractice/batches";
 import { loadModuleTree } from "@/lib/labPractice/curriculum";
 import { requirePageTrainer } from "@/lib/labPractice/identity";
 import { listBatchEnrollments, listModuleEnrollments } from "@/lib/labPractice/queries";
 
 export const dynamic = "force-dynamic";
 
-/** One pacing batch: which labs its trainees see, its members, and a
- *  trainee × lab progress grid for reviewing the batch at a glance. */
+/** LEGACY module batch (pre-0024): which labs its trainees see, its members
+ *  and a trainee × lab grid. New batches always follow a day schedule;
+ *  scripts/lab-practice-convert-batches.mjs turns these into schedule batches. */
 export default async function BatchPage({
   params,
 }: {
@@ -35,11 +36,12 @@ export default async function BatchPage({
   if (!batch || batch.moduleId == null || batch.moduleId !== moduleId || !canReadBatch(actor, batch)) notFound();
   const batchModuleId = batch.moduleId;
 
-  const [tree, members, moduleEnrollments, [batchMeta]] = await Promise.all([
+  const [tree, members, moduleEnrollments, labIds, [batchMeta]] = await Promise.all([
     loadModuleTree(batchModuleId),
     listBatchEnrollments(batch.id),
     listModuleEnrollments(batchModuleId),
-    listModuleBatches(batchModuleId, batch.trainerId).then((all) => all.filter((b) => b.id === batch.id)),
+    batchLabIds(batch.id),
+    listBatches({ trainerId: batch.trainerId }).then((all) => all.filter((b) => b.id === batch.id)),
   ]);
   if (!tree) notFound();
 
@@ -49,7 +51,7 @@ export default async function BatchPage({
     .sort((a, b) => a.sequenceNo - b.sequenceNo)
     .map((l) => ({ id: l.id, title: l.title }));
   const activeIds = new Set(labs.map((l) => l.id));
-  const selected = (batchMeta?.labIds ?? []).filter((id) => activeIds.has(id));
+  const selected = labIds.filter((id) => activeIds.has(id));
 
   const overrideRows = members.length
     ? await db

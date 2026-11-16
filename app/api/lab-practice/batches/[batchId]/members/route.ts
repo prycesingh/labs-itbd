@@ -7,15 +7,16 @@ import { batchMembersSchema } from "@/lib/validation/labPractice";
 
 type Ctx = { params: Promise<{ batchId: string }> };
 
-/** POST { traineeIds } — add trainees (employee ids), enrolling them in the
- *  batch's module under the batch's trainer when needed. */
+/** POST { traineeIds, move? } — add trainees (employee ids) and enroll them in
+ *  every module the batch's schedule uses. Trainees already in another batch
+ *  come back as `batchConflicts`; resend with `move: true` to move them. */
 export async function POST(request: Request, context: Ctx) {
-  const { batch, response } = await loadManagedBatch((await context.params).batchId);
+  const { batch, actor, response } = await loadManagedBatch((await context.params).batchId);
   if (response) return response;
   const { data, response: bad } = await parseBody(request, batchMembersSchema);
   if (bad) return bad;
   try {
-    return NextResponse.json(await addBatchMembers(batch, data.traineeIds), { status: 201 });
+    return NextResponse.json(await addBatchMembers(actor, batch, data.traineeIds, data.move), { status: 201 });
   } catch (err) {
     return handleError(err);
   }

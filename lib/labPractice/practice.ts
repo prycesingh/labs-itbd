@@ -205,7 +205,12 @@ export async function saveComment(enrollment: Enrollment, practiceDate: string, 
     const session = await getOrCreateSession(tx, enrollment.id, date);
     await tx
       .update(labPracticeSessions)
-      .set({ additionalComments: comment || null })
+      // A CHANGED comment goes back to the trainer's review queue.
+      .set(
+        session.additionalComments === (comment || null)
+          ? { additionalComments: comment || null }
+          : { additionalComments: comment || null, commentReviewedAt: null },
+      )
       .where(eq(labPracticeSessions.id, session.id));
     return { ...session, additionalComments: comment || null };
   });

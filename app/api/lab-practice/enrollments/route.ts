@@ -8,6 +8,7 @@ import {
   labPracticeModules,
 } from "@/DB/labPracticeSchema";
 import { handleError, parseBody } from "@/lib/labPractice/api";
+import { linkEnrollmentsToMemberBatch } from "@/lib/labPractice/batches";
 import { enrollTrainees } from "@/lib/labPractice/enroll";
 import { requireApiTrainer } from "@/lib/labPractice/identity";
 import { enrollSchema } from "@/lib/validation/labPractice";
@@ -52,6 +53,8 @@ export async function POST(request: Request) {
   if (bad) return bad;
   try {
     const result = await enrollTrainees(actor.trainer.id, data.moduleId, data.traineeIds);
+    // A trainee whose batch (same trainer) uses this module is paced by it.
+    await linkEnrollmentsToMemberBatch(result.enrollmentIds);
     return NextResponse.json(result, { status: 201 });
   } catch (err) {
     return handleError(err);
