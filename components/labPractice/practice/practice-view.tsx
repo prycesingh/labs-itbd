@@ -79,7 +79,7 @@ function CompleteDialog({
   const previews = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files]);
   useEffect(() => () => previews.forEach((u) => URL.revokeObjectURL(u)), [previews]);
 
-  function addFiles(list: FileList | null) {
+  function addFiles(list: FileList | File[] | null) {
     if (!list) return;
     const next = [...files];
     for (const f of Array.from(list)) {
@@ -98,6 +98,46 @@ function CompleteDialog({
       next.push(f);
     }
     setFiles(next);
+  }
+
+  /** Clipboard images all arrive as "image.png" — give each a unique,
+   *  readable name so previews/keys and the stored filename stay distinct. */
+  function nameClipboardImages(images: File[]) {
+    const stamp = Date.now();
+    return images.map((f, i) => {
+      const ext = f.type.split("/")[1] ?? "png";
+      return new File([f], `screenshot-${stamp}-${i + 1}.${ext}`, { type: f.type });
+    });
+  }
+
+  /** Ctrl/Cmd+V anywhere inside the dialog. */
+  function onPaste(e: React.ClipboardEvent) {
+    const images = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith("image/"));
+    if (images.length === 0) return; // let normal text paste through
+    e.preventDefault();
+    addFiles(nameClipboardImages(images));
+  }
+
+  /** Button fallback via the async Clipboard API (browser may ask permission). */
+  async function pasteFromClipboard() {
+    if (!navigator.clipboard?.read) {
+      toast.error("Your browser can't read the clipboard here — press Ctrl+V instead.");
+      return;
+    }
+    try {
+      const images: File[] = [];
+      for (const item of await navigator.clipboard.read()) {
+        const type = item.types.find((t) => t.startsWith("image/"));
+        if (type) images.push(new File([await item.getType(type)], "image", { type }));
+      }
+      if (images.length === 0) {
+        toast.error("No image on the clipboard. Take a screenshot (Win+Shift+S) first.");
+        return;
+      }
+      addFiles(nameClipboardImages(images));
+    } catch {
+      toast.error("Clipboard access was blocked — press Ctrl+V instead.");
+    }
   }
 
   async function submit() {
@@ -122,7 +162,7 @@ function CompleteDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent onPaste={onPaste}>
         <DialogHeader>
           <DialogTitle>Complete “{step.title}”</DialogTitle>
           <DialogDescription>
@@ -145,6 +185,15 @@ function CompleteDialog({
               }}
             />
           </label>
+          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span>
+              Or paste a screenshot with <kbd className="rounded border border-white/20 px-1">Ctrl</kbd>+
+              <kbd className="rounded border border-white/20 px-1">V</kbd>
+            </span>
+            <Button type="button" variant="outline" size="sm" onClick={pasteFromClipboard}>
+              <Camera className="size-4" /> Paste from clipboard
+            </Button>
+          </div>
           {files.length > 0 && (
             <div className="grid grid-cols-4 gap-2">
               {files.map((f, i) => (
