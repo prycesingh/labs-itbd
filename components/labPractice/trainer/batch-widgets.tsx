@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarCheck2, CalendarMinus, CalendarPlus, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -8,7 +8,6 @@ import { toast } from "sonner";
 
 import DefaultButton from "@/components/app_componentes/customButtons";
 import { lpRequest } from "@/components/labPractice/shared";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -230,107 +229,3 @@ export function ModuleBatchesPanel({
   );
 }
 
-// ─────────────────────────────────────────────
-// Day pointer
-// ─────────────────────────────────────────────
-export type PointerDay = { dayNo: number; title: string | null; labCount: number };
-
-/** "The batch is on Day N": days 1..N are open. One button moves forward;
- *  clicking a day jumps there (earlier days stay open, later ones close). */
-export function DayPointerPanel({
-  batchId,
-  currentDay,
-  days,
-  writable,
-}: {
-  batchId: number;
-  currentDay: number;
-  days: PointerDay[];
-  writable: boolean;
-}) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const total = days.length;
-  const current = days.find((d) => d.dayNo === currentDay);
-  const next = days.find((d) => d.dayNo === currentDay + 1);
-  const openLabs = days.filter((d) => d.dayNo <= currentDay).reduce((n, d) => n + d.labCount, 0);
-
-  async function move(json: { day?: number; step?: 1 | -1 }) {
-    setBusy(true);
-    const res = await lpRequest<{ currentDay: number }>(`/api/lab-practice/batches/${batchId}/days`, { method: "PUT", json });
-    setBusy(false);
-    if (!res) return;
-    toast.success(res.currentDay ? `Batch is on Day ${res.currentDay}.` : "Every day is closed.");
-    router.refresh();
-  }
-
-  if (total === 0) {
-    return <p className="text-sm text-white/50">This schedule has no days yet. Build them on the schedule page.</p>;
-  }
-
-  return (
-    <div className="space-y-4">
-      <div>
-        <p className="text-3xl font-bold text-white tabular-nums">
-          {currentDay === 0 ? "Not started" : `Day ${currentDay}`}
-          <span className="ml-2 text-sm font-normal text-white/50">of {total}</span>
-        </p>
-        <p className="mt-0.5 text-xs text-white/50">
-          {current?.title ? `${current.title} · ` : ""}
-          {openLabs} {openLabs === 1 ? "lab" : "labs"} open
-        </p>
-      </div>
-
-      {writable && (
-        <div className="flex gap-2">
-          <DefaultButton className="flex-1" onClick={() => move({ step: 1 })} loading={busy} disabled={!next}>
-            {next ? <CalendarPlus className="size-4" /> : <CalendarCheck2 className="size-4" />}
-            {next ? `Open Day ${next.dayNo}` : "All days open"}
-          </DefaultButton>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => move({ step: -1 })}
-            disabled={busy || currentDay === 0}
-            aria-label={currentDay ? `Close Day ${currentDay}` : "Nothing to close"}
-            title={currentDay ? `Close Day ${currentDay}` : undefined}
-          >
-            <CalendarMinus />
-          </Button>
-        </div>
-      )}
-      {next && (
-        <p className="text-xs text-white/50">
-          Next: Day {next.dayNo}
-          {next.title ? ` — ${next.title}` : ""} · {next.labCount} {next.labCount === 1 ? "lab" : "labs"}
-        </p>
-      )}
-
-      <div role="group" aria-label="Jump to day" className="grid grid-cols-7 gap-1">
-        {days.map((d) => {
-          const open = d.dayNo <= currentDay;
-          return (
-            <button
-              key={d.dayNo}
-              type="button"
-              disabled={!writable || busy || d.dayNo === currentDay}
-              onClick={() => move({ day: d.dayNo })}
-              aria-current={d.dayNo === currentDay ? "step" : undefined}
-              title={`Day ${d.dayNo}${d.title ? ` — ${d.title}` : ""} · ${d.labCount} labs${writable && d.dayNo !== currentDay ? ` · click to set the batch to Day ${d.dayNo}` : ""}`}
-              className={cn(
-                "flex aspect-square items-center justify-center rounded-md text-xs font-semibold tabular-nums transition-colors",
-                "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-default",
-                open ? "bg-itbd-blue/80 text-black" : "bg-white/5 text-white/45 ring-1 ring-white/10",
-                d.dayNo === currentDay && "bg-itbd-blue ring-2 ring-white/70",
-                writable && !open && "hover:bg-white/10 hover:text-white",
-              )}
-            >
-              {d.dayNo}
-            </button>
-          );
-        })}
-      </div>
-      <p className="text-[11px] text-white/40">Days up to the current one are open. Click a day to move the batch there.</p>
-    </div>
-  );
-}

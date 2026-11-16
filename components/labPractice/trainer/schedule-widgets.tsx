@@ -7,6 +7,8 @@ import {
   CalendarDays,
   CalendarPlus,
   Check,
+  Eye,
+  EyeOff,
   ChevronRight,
   Pencil,
   Plus,
@@ -49,6 +51,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { usePacing } from "@/components/labPractice/trainer/pacing-widgets";
 import { formatEt } from "@/lib/labPractice/dates";
 import { cn } from "@/lib/utils";
 
@@ -57,7 +60,8 @@ import { cn } from "@/lib/utils";
  *   SchedulesCard      — list / create schedules (trainer workspace)
  *   ScheduleBuilder    — days ⇄ labs editor + generator (schedule page)
  *   ScheduleBatches    — create / list batches following a schedule
- *   (day pointer lives in batch-widgets.tsx → DayPointerPanel)
+ *   (batch pacing lives in pacing-widgets.tsx; the builder also opens / hides
+ *    days for one picked batch and switches days on / off for every batch)
  *   ScheduleBatchRoster— members, trainee × day grid, per-trainee day overrides
  */
 
@@ -175,9 +179,18 @@ export function SchedulesCard({ schedules }: { schedules: ScheduleCardItem[] }) 
 // Builder
 // ─────────────────────────────────────────────
 export type BuilderLabItem = { labId: number; title: string; moduleId: number; moduleTitle: string; isActive: boolean };
-export type BuilderDay = { id: number; dayNo: number; title: string | null; labs: BuilderLabItem[] };
+export type BuilderDay = { id: number; dayNo: number; title: string | null; isActive: boolean; labs: BuilderLabItem[] };
+/** A batch the viewer can pace from the schedule page. */
+export type PacingBatchItem = {
+  id: number;
+  name: string;
+  currentDay: number;
+  /** dayId -> this batch's state for the day. */
+  days: Record<number, { open: boolean; exception: "early" | "closed" | null }>;
+};
 export type BuilderData = {
   scheduleId: number;
+  pacing: PacingBatchItem[];
   days: BuilderDay[];
   unscheduled: { moduleId: number; moduleTitle: string; labs: BuilderLabItem[] }[];
   modules: { id: number; title: string; labCount: number }[];
@@ -189,18 +202,53 @@ function moduleMix(labs: BuilderLabItem[]) {
   return [...counts.entries()];
 }
 
+/** Open / hide one day for the picked batch (doesn't move its day pointer). */
+function BatchDayToggle({ batch, day }: { batch: PacingBatchItem; day: BuilderDay }) {
+  const { busy, change } = usePacing(batch.id);
+  const state = batch.days[day.id] ?? { open: false, exception: null };
+  const open = state.open;
+  const note = state.exception === "early" ? " (opened early)" : state.exception === "closed" ? " (closed on purpose)" : "";
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      disabled={busy || !day.isActive}
+      onClick={() =>
+        change({ dayId: day.id, open: !open }, `Day ${day.dayNo} is ${open ? "hidden from" : "open for"} ${batch.name}.`)
+      }
+      aria-pressed={open}
+      aria-label={`${open ? "Hide" : "Open"} Day ${day.dayNo} for ${batch.name}`}
+      title={
+        day.isActive
+          ? `${open ? "Open" : "Hidden"} for ${batch.name}${note} · click to ${open ? "hide" : "open"}`
+          : "Switched off for every batch"
+      }
+      className={cn(
+        "h-7 w-[5.75rem] justify-start gap-1.5 px-2 text-xs",
+        open ? "text-itbd-blue hover:text-itbd-blue" : "text-white/45",
+      )}
+    >
+      {open ? <Eye /> : <EyeOff />}
+      {open ? "Open" : "Hidden"}
+      {state.exception && <span className="size-1.5 rounded-full bg-itbd-blue" aria-hidden />}
+    </Button>
+  );
+}
+
 function DayRow({
   day,
   days,
   isFirst,
   isLast,
   query,
+  batch,
 }: {
   day: BuilderDay;
   days: BuilderDay[];
   isFirst: boolean;
   isLast: boolean;
   query: string;
+  batch: PacingBatchItem | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useTreeOpen(false);
@@ -231,7 +279,14 @@ function DayRow({
               <ChevronRight
                 className={cn("size-4 shrink-0 text-white/40 transition-transform", isOpen && "rotate-90 text-itbd-blue")}
               />
-              <span className="w-14 shrink-0 text-sm font-semibold text-itbd-blue tabular-nums">Day {day.dayNo}</span>
+              <span
+                className={cn(
+                  "w-14 shrink-0 text-sm font-semibold tabular-nums",
+                  day.isActive ? "text-itbd-blue" : "text-white/35 line-through",
+                )}
+              >
+                Day {day.dayNo}
+              </span>
               <span className="min-w-0 flex-1">
                 <span className={cn("block truncate text-sm", day.title ? "text-white" : "text-white/40 italic")}>
                   {day.title || "Untitled day"}
@@ -250,6 +305,18 @@ function DayRow({
             </button>
           </CollapsibleTrigger>
           <div className="flex shrink-0 items-center">
+            {batch && <BatchDayToggle batch={batch} day={day} />}
+            <Switch
+              checked={day.isActive}
+              disabled={busy}
+              onCheckedChange={async (v) => {
+                const ok = await call(`/api/lab-practice/schedule-days/${day.id}`, { method: "PATCH", json: { isActive: v } });
+                if (ok) toast.success(`Day ${day.dayNo} switched ${v ? "on" : "off"} for every batch.`);
+              }}
+              aria-label={`Day ${day.dayNo} on for every batch`}
+              title={day.isActive ? "On for every batch · switch off to close it everywhere" : "Off for every batch · switch on to allow opening it"}
+              className="mx-2"
+            />
             <Button
               variant="ghost"
               size="icon-sm"
@@ -643,6 +710,8 @@ export function ScheduleBuilder({ data }: { data: BuilderData }) {
   const [search, setSearch] = useState("");
   const [generating, setGenerating] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [batchId, setBatchId] = useState<string>(data.pacing[0] ? String(data.pacing[0].id) : "none");
+  const batch = data.pacing.find((b) => String(b.id) === batchId) ?? null;
   const query = search.trim().toLowerCase();
   const labCount = data.days.reduce((n, d) => n + d.labs.length, 0);
   const visibleDays = query ? data.days.filter((d) => d.labs.some((l) => l.title.toLowerCase().includes(query))) : data.days;
@@ -685,6 +754,30 @@ export function ScheduleBuilder({ data }: { data: BuilderData }) {
           </div>
         </div>
 
+        {data.days.length > 0 && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
+            <span className="text-xs text-white/60">Open / hide days for</span>
+            {data.pacing.length === 0 ? (
+              <span className="text-xs text-white/40">no batch of yours follows this schedule</span>
+            ) : (
+              <Select value={batchId} onValueChange={setBatchId}>
+                <SelectTrigger size="sm" className="h-7 w-56" aria-label="Batch to open or hide days for">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No batch (schedule only)</SelectItem>
+                  {data.pacing.map((b) => (
+                    <SelectItem key={b.id} value={String(b.id)}>
+                      {b.name} · {b.currentDay ? `Day ${b.currentDay}` : "not started"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <span className="ml-auto text-[11px] text-white/40">Switch: day on / off for every batch</span>
+          </div>
+        )}
+
         {data.days.length === 0 ? (
           <div className="rounded-lg border border-dashed border-white/15 px-4 py-10 text-center">
             <p className="text-sm text-white/70">No days yet.</p>
@@ -705,6 +798,7 @@ export function ScheduleBuilder({ data }: { data: BuilderData }) {
                   isFirst={d.dayNo === 1}
                   isLast={d.dayNo === data.days.length}
                   query={query}
+                  batch={batch}
                 />
               ))}
             </ul>

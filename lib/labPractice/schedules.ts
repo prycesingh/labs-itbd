@@ -12,14 +12,16 @@ import {
   labPracticeSchedules,
 } from "@/DB/labPracticeSchema";
 import { syncScheduleBatches, type Batch } from "@/lib/labPractice/batches";
+import { isDayOpen, loadDayExceptions } from "@/lib/labPractice/pacing";
 import { PracticeError } from "@/lib/labPractice/practice";
 import { planFromTitles, planPerDay, type GenLab } from "@/lib/labPractice/scheduleGenerator";
 
 /**
  * Day schedules: Day 1..n, each holding labs from ANY module (a lab sits in at
- * most one day per schedule). A batch follows a schedule with a day pointer:
- * days 1..current_day are open and their labs are visible to the batch's
- * members (see lib/labPractice/visibility.ts). Editing a schedule's days
+ * most one day per schedule). A batch follows a schedule with a day pointer
+ * plus single-day exceptions (lib/labPractice/pacing.ts); open days' labs are
+ * visible to the batch's members (see lib/labPractice/visibility.ts). A day
+ * can be switched off in the schedule, closing it for every batch. Editing a schedule's days
  * re-syncs its batches so members are enrolled in any newly used module.
  *
  * Schedules are shared curriculum (any trainer edits them); batches keep their
@@ -214,6 +216,11 @@ export async function addDay(scheduleId: number, title: string | null) {
 
 export async function renameDay(dayId: number, title: string | null) {
   await db.update(labPracticeScheduleDays).set({ title }).where(eq(labPracticeScheduleDays.id, dayId));
+}
+
+/** Switch a day on / off for every batch following the schedule. */
+export async function setDayActive(dayId: number, isActive: boolean) {
+  await db.update(labPracticeScheduleDays).set({ isActive }).where(eq(labPracticeScheduleDays.id, dayId));
 }
 
 /** Delete a day (its labs become unscheduled) and close the numbering gap. */
@@ -431,16 +438,6 @@ function assertScheduleBatch(batch: Batch): number {
   return batch.scheduleId;
 }
 
-/** Open days 1..dayNo for the batch (0 closes everything). Clamped to the
- *  schedule's length. Returns the new pointer. */
-export async function setCurrentDay(batch: Batch, dayNo: number): Promise<number> {
-  const scheduleId = assertScheduleBatch(batch);
-  const total = await maxDayNo(scheduleId);
-  const next = Math.max(0, Math.min(total, Math.trunc(dayNo)));
-  await db.update(labPracticeBatches).set({ currentDay: next }).where(eq(labPracticeBatches.id, batch.id));
-  return next;
-}
-
 /**
  * Individual Show / Hide / reset of one day for one trainee in a schedule
  * batch — written as per-lab overrides on each of the trainee's enrollments
@@ -450,7 +447,8 @@ export async function setTraineeDay(batch: Batch, traineeId: number, day: Schedu
   const scheduleId = assertScheduleBatch(batch);
   if (day.scheduleId !== scheduleId) throw new PracticeError("That day isn't in this batch's schedule.");
   // Matching the batch again just clears the individual change.
-  if (visible !== null && visible === day.dayNo <= batch.currentDay) visible = null;
+  const exceptions = (await loadDayExceptions([batch.id])).get(batch.id) ?? new Map<number, boolean>();
+  if (visible !== null && visible === isDayOpen(day, batch.currentDay, exceptions)) visible = null;
   const [enrollments, dayLabs] = await Promise.all([
     db
       .select({ id: labPracticeEnrollments.id, moduleId: labPracticeEnrollments.moduleId })
