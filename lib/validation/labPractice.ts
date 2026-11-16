@@ -104,6 +104,8 @@ export const dayUpdateSchema = z.object({
   title: dayTitle,
   /** Move the day one place earlier (-1) or later (1). */
   move: z.union([z.literal(-1), z.literal(1)]).optional(),
+  /** Switch the day on / off for every batch following the schedule. */
+  isActive: z.boolean().optional(),
 });
 /** Replace a day's labs (`labIds`) or append (`add`). */
 export const dayLabsSchema = z.object({
@@ -118,13 +120,12 @@ export const generateSchema = z.object({
   replace: z.boolean().default(false),
   dryRun: z.boolean().default(true),
 });
-/** Day pointer: an absolute day (0 = nothing open) or a relative step. */
-export const batchDaySchema = z
-  .object({
-    day: z.coerce.number().int().min(0).max(1000).optional(),
-    step: z.union([z.literal(1), z.literal(-1)]).optional(),
-  })
-  .refine((v) => v.day !== undefined || v.step !== undefined, "Give a day or a step.");
+/** Batch pacing change — see lib/labPractice/pacing.ts → PacingChange. */
+export const batchDaySchema = z.union([
+  z.object({ step: z.union([z.literal(1), z.literal(-1)]) }),
+  z.object({ through: z.coerce.number().int().min(0).max(1000) }),
+  z.object({ dayId: id, open: z.boolean() }),
+]);
 
 // ─────────────────────────────────────────────
 // Review queue

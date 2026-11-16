@@ -8,13 +8,15 @@ import {
   labPracticeScheduleDayLabs,
   labPracticeScheduleDays,
 } from "@/DB/labPracticeSchema";
+import { dayStates, loadDayExceptions } from "@/lib/labPractice/pacing";
 import type { VisibilityBase } from "@/lib/labPractice/visibility";
 
 /**
  * Loads the inputs of the pure visibility rule (lib/labPractice/visibility.ts)
  * for many enrollments at once — a fixed number of queries regardless of how
  * many enrollments are passed. An INACTIVE batch is treated as no batch.
- * Schedule batches open days 1..current_day (the batch's day pointer).
+ * Schedule batches open days 1..current_day (the batch's day pointer) plus /
+ * minus single-day exceptions — see lib/labPractice/pacing.ts.
  */
 
 export type DayInfo = { id: number; no: number; title: string | null; active: boolean };
@@ -61,7 +63,7 @@ export async function loadVisibilityInputs(
   const moduleBatchIds = batches.filter((b) => b.scheduleId == null).map((b) => b.id);
   const scheduleIds = [...new Set(batches.map((b) => b.scheduleId).filter((s): s is number => s != null))];
 
-  const [batchLabs, scheduleLabs] = await Promise.all([
+  const [batchLabs, scheduleLabs, exceptions] = await Promise.all([
     moduleBatchIds.length
       ? db.select().from(labPracticeBatchLabs).where(inArray(labPracticeBatchLabs.batchId, moduleBatchIds))
       : Promise.resolve([]),
@@ -73,11 +75,13 @@ export async function loadVisibilityInputs(
             dayId: labPracticeScheduleDays.id,
             dayNo: labPracticeScheduleDays.dayNo,
             title: labPracticeScheduleDays.title,
+            dayActive: labPracticeScheduleDays.isActive,
           })
           .from(labPracticeScheduleDayLabs)
           .innerJoin(labPracticeScheduleDays, eq(labPracticeScheduleDays.id, labPracticeScheduleDayLabs.dayId))
           .where(inArray(labPracticeScheduleDayLabs.scheduleId, scheduleIds))
       : Promise.resolve([]),
+    loadDayExceptions(batches.filter((b) => b.scheduleId != null).map((b) => b.id)),
   ]);
 
   const labsByBatch = new Map<number, number[]>();
@@ -100,11 +104,16 @@ export async function loadVisibilityInputs(
       const dayOfLab = new Map<number, DayInfo>();
       if (b?.scheduleId != null) {
         const rows = labsBySchedule.get(b.scheduleId) ?? [];
-        const open = (dayNo: number) => dayNo <= b.currentDay;
+        const states = dayStates(
+          rows.map((r) => ({ id: r.dayId, dayNo: r.dayNo, isActive: Boolean(r.dayActive) })),
+          b.currentDay,
+          exceptions.get(b.id) ?? new Map(),
+        );
+        const open = (dayId: number) => states.get(dayId)?.open ?? false;
         for (const r of rows) {
-          dayOfLab.set(r.labId, { id: r.dayId, no: r.dayNo, title: r.title, active: open(r.dayNo) });
+          dayOfLab.set(r.labId, { id: r.dayId, no: r.dayNo, title: r.title, active: open(r.dayId) });
         }
-        base = { kind: "days", labIds: rows.filter((r) => open(r.dayNo)).map((r) => r.labId) };
+        base = { kind: "days", labIds: rows.filter((r) => open(r.dayId)).map((r) => r.labId) };
       } else if (b) {
         base = { kind: "batch", labIds: labsByBatch.get(b.id) ?? [] };
       }

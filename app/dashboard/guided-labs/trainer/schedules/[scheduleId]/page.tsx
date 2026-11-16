@@ -12,6 +12,7 @@ import {
 import { parseId } from "@/lib/labPractice/api";
 import { requirePageTrainer } from "@/lib/labPractice/identity";
 import { listBatches } from "@/lib/labPractice/batches";
+import { dayStates, loadDayExceptions } from "@/lib/labPractice/pacing";
 import { getScheduleDetail } from "@/lib/labPractice/schedules";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,17 @@ export default async function SchedulePage({ params }: { params: Promise<{ sched
   const allBatches = await listBatches({ scheduleId: detail.schedule.id });
   const batches = actor.canViewAll ? allBatches : allBatches.filter((b) => b.trainerId === actor.trainer.id);
   const labCount = detail.days.reduce((n, d) => n + d.labs.length, 0);
+
+  // Batches this viewer may open / hide days for from here: active, and their
+  // own (or any, with manageAll) — the same rule the API enforces.
+  const paceable = allBatches.filter((b) => b.isActive && (actor.canManageAll || b.trainerId === actor.trainer.id));
+  const exceptions = await loadDayExceptions(paceable.map((b) => b.id));
+  const pacing = paceable.map((b) => ({
+    id: b.id,
+    name: b.name,
+    currentDay: b.currentDay,
+    days: Object.fromEntries(dayStates(detail.days, b.currentDay, exceptions.get(b.id) ?? new Map())),
+  }));
 
   return (
     <main className="flex w-full flex-col gap-6 pb-10">
@@ -51,7 +63,8 @@ export default async function SchedulePage({ params }: { params: Promise<{ sched
           <ScheduleBuilder
             data={{
               scheduleId: detail.schedule.id,
-              days: detail.days.map((d) => ({ id: d.id, dayNo: d.dayNo, title: d.title, labs: d.labs })),
+              pacing,
+              days: detail.days.map((d) => ({ id: d.id, dayNo: d.dayNo, title: d.title, isActive: d.isActive, labs: d.labs })),
               unscheduled: detail.unscheduled,
               modules: detail.modules,
             }}
@@ -64,7 +77,8 @@ export default async function SchedulePage({ params }: { params: Promise<{ sched
           <div className="relative z-10 space-y-3">
             <h2 className="text-lg font-bold text-white">Batches</h2>
             <p className="text-xs text-white/50">
-              A batch follows this schedule. Move a batch to Day N and every lab in days 1..N opens for its trainees.
+              A batch follows this schedule. Move a batch to Day N and every lab in days 1..N opens for its trainees;
+              single days can be opened early or hidden from the Days list above or the batch page.
             </p>
             <ScheduleBatches
               scheduleId={detail.schedule.id}

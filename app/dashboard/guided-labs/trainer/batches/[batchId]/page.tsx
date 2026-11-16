@@ -4,13 +4,14 @@ import { notFound, redirect } from "next/navigation";
 
 import { AdminMotionCard } from "@/components/labs/admin/admin-motion-card";
 import { PageTitle } from "@/components/labPractice/shared";
-import { DayPointerPanel } from "@/components/labPractice/trainer/batch-widgets";
+import { DayPointerPanel } from "@/components/labPractice/trainer/pacing-widgets";
 import { ScheduleBatchRoster, type RosterTrainee } from "@/components/labPractice/trainer/schedule-widgets";
 import { BatchSettings } from "@/components/labPractice/trainer/visibility-widgets";
 import { parseId } from "@/lib/labPractice/api";
 import { canManageBatch, canReadBatch, getBatch, listBatches, listMembers } from "@/lib/labPractice/batches";
 import { requirePageTrainer } from "@/lib/labPractice/identity";
 import { listBatchEnrollments } from "@/lib/labPractice/queries";
+import { dayStates, loadDayExceptions } from "@/lib/labPractice/pacing";
 import { countPending } from "@/lib/labPractice/review";
 import { getScheduleDetail, overriddenLabsByEnrollment } from "@/lib/labPractice/schedules";
 
@@ -27,16 +28,18 @@ export default async function BatchPage({ params }: { params: Promise<{ batchId:
     notFound();
   }
 
-  const [detail, members, enrollments, [meta], pending] = await Promise.all([
+  const [detail, members, enrollments, [meta], pending, exceptions] = await Promise.all([
     getScheduleDetail(batch.scheduleId),
     listMembers(batch.id),
     listBatchEnrollments(batch.id),
     listBatches({ scheduleId: batch.scheduleId }).then((all) => all.filter((b) => b.id === batch.id)),
     countPending({ trainerId: batch.trainerId, batchId: batch.id }),
+    loadDayExceptions([batch.id]).then((m) => m.get(batch.id) ?? new Map<number, boolean>()),
   ]);
   if (!detail) notFound();
   const overridden = await overriddenLabsByEnrollment(enrollments.map((m) => m.id));
   const writable = canManageBatch(actor, batch);
+  const states = dayStates(detail.days, batch.currentDay, exceptions);
 
   // Trainee × day view built from per-enrollment, per-visible-lab progress.
   // Membership is the roster; a member with no linked enrollment yet (e.g.
@@ -128,7 +131,7 @@ export default async function BatchPage({ params }: { params: Promise<{ batchId:
                 id: d.id,
                 dayNo: d.dayNo,
                 title: d.title,
-                batchActive: d.dayNo <= batch.currentDay,
+                batchActive: states.get(d.id)?.open ?? false,
               }))}
               trainees={trainees}
             />
@@ -151,7 +154,15 @@ export default async function BatchPage({ params }: { params: Promise<{ batchId:
                 batchId={batch.id}
                 currentDay={batch.currentDay}
                 writable={writable && batch.isActive}
-                days={detail.days.map((d) => ({ dayNo: d.dayNo, title: d.title, labCount: d.labs.length }))}
+                days={detail.days.map((d) => ({
+                  id: d.id,
+                  dayNo: d.dayNo,
+                  title: d.title,
+                  labCount: d.labs.length,
+                  isActive: d.isActive,
+                  open: states.get(d.id)?.open ?? false,
+                  exception: states.get(d.id)?.exception ?? null,
+                }))}
               />
             </div>
           </AdminMotionCard>

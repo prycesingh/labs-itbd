@@ -299,6 +299,9 @@ export const labPracticeScheduleDays = mysqlTable(
     scheduleId: int("schedule_id").notNull(),
     dayNo: int("day_no").notNull(),
     title: varchar("title", { length: 200 }),
+    // Switched off in the plan: closed for EVERY batch, whatever its pacing
+    // (individual trainee overrides still win). Migration 0025.
+    isActive: boolean("is_active").notNull().default(true),
   },
   (t) => [
     uniqueIndex("lp_sched_day_no_uq").on(t.scheduleId, t.dayNo),
@@ -350,7 +353,9 @@ export const labPracticeScheduleDayLabs = mysqlTable(
  *                  `batch_id` as a derived link (kept in sync by
  *                  lib/labPractice/batches.ts — never edit it by hand).
  *   Pacing       — `current_day`: days 1..current_day are open, so their labs
- *                  are visible. 0 = nothing open yet.
+ *                  are visible. 0 = nothing open yet. Single days can be
+ *                  opened early / closed in range via
+ *                  lab_practice_batch_day_overrides (lib/labPractice/pacing.ts).
  *
  * Legacy kinds still readable until scripts/lab-practice-convert-batches.mjs
  * runs: module batches (`module_id` set, visible labs = batch_labs) and the
@@ -414,6 +419,33 @@ export const labPracticeBatchMembers = mysqlTable(
       columns: [t.traineeId],
       foreignColumns: [labPracticeEmployees.id],
     }).onDelete("restrict"),
+  ],
+);
+
+/** A batch's exception to its day pointer for ONE day: `is_open` true opens a
+ *  day beyond current_day ("open only Day 23"), false closes a day at or below
+ *  it. Rows that agree with the pointer are deleted, so every row is a real
+ *  exception (lib/labPractice/pacing.ts). Migration 0025. */
+export const labPracticeBatchDayOverrides = mysqlTable(
+  "lab_practice_batch_day_overrides",
+  {
+    batchId: int("batch_id").notNull(),
+    dayId: int("day_id").notNull(),
+    isOpen: boolean("is_open").notNull(),
+  },
+  (t) => [
+    uniqueIndex("lp_batch_day_ovr_uq").on(t.batchId, t.dayId),
+    index("lp_batch_day_ovr_day_idx").on(t.dayId),
+    foreignKey({
+      name: "lp_batch_day_ovr_batch_fk",
+      columns: [t.batchId],
+      foreignColumns: [labPracticeBatches.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "lp_batch_day_ovr_day_fk",
+      columns: [t.dayId],
+      foreignColumns: [labPracticeScheduleDays.id],
+    }).onDelete("cascade"),
   ],
 );
 
