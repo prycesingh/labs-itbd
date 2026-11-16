@@ -2,31 +2,21 @@ import { NextResponse } from "next/server";
 
 import { handleError, parseBody } from "@/lib/labPractice/api";
 import { loadManagedBatch } from "@/lib/labPractice/batchRoutes";
-import { activateNextDay, setBatchDays } from "@/lib/labPractice/schedules";
-import { batchDaysSchema } from "@/lib/validation/labPractice";
+import { setCurrentDay } from "@/lib/labPractice/schedules";
+import { batchDaySchema } from "@/lib/validation/labPractice";
 
 type Ctx = { params: Promise<{ batchId: string }> };
 
-/** PUT { dayIds } — set which days are switched on for this schedule batch. */
+/** PUT { day } | { step: 1 | -1 } — move the batch's day pointer: days
+ *  1..day are open. `step` opens the next day / closes the latest one. */
 export async function PUT(request: Request, context: Ctx) {
   const { batch, response } = await loadManagedBatch((await context.params).batchId);
   if (response) return response;
-  const { data, response: bad } = await parseBody(request, batchDaysSchema);
+  const { data, response: bad } = await parseBody(request, batchDaySchema);
   if (bad) return bad;
   try {
-    await setBatchDays(batch, data.dayIds);
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    return handleError(err);
-  }
-}
-
-/** POST — switch on the next day that's still off. */
-export async function POST(_req: Request, context: Ctx) {
-  const { batch, response } = await loadManagedBatch((await context.params).batchId);
-  if (response) return response;
-  try {
-    return NextResponse.json({ dayNo: await activateNextDay(batch) });
+    const target = data.day ?? batch.currentDay + (data.step ?? 0);
+    return NextResponse.json({ currentDay: await setCurrentDay(batch, target) });
   } catch (err) {
     return handleError(err);
   }

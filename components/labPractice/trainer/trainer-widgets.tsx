@@ -40,7 +40,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { ProgressionMode } from "@/DB/labPracticeSchema";
 
 /**
- * Oversight trainer picker (guidedLabs.viewAll): "all" | "me" | a trainer id,
+ * Oversight trainer picker (guidedLabs.viewAll): "me" (default) | "all" | a trainer id,
  * kept in the `?trainer=` search param so the server page filters the roster.
  */
 export function TrainerPicker({
@@ -62,7 +62,7 @@ export function TrainerPicker({
     <Select
       value={value}
       onValueChange={(v) =>
-        startTransition(() => router.replace(v === "all" ? pathname : `${pathname}?trainer=${v}`, { scroll: false }))
+        startTransition(() => router.replace(v === "me" ? pathname : `${pathname}?trainer=${v}`, { scroll: false }))
       }
     >
       <SelectTrigger

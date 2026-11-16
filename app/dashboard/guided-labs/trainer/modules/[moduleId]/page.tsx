@@ -8,8 +8,8 @@ import {
   type BuilderModule,
 } from "@/components/labPractice/trainer/module-builder";
 import { EnrollmentPanel } from "@/components/labPractice/trainer/trainer-widgets";
-import { BatchesPanel, type BatchRow } from "@/components/labPractice/trainer/visibility-widgets";
-import { listModuleBatches } from "@/lib/labPractice/batches";
+import { ModuleBatchesPanel } from "@/components/labPractice/trainer/batch-widgets";
+import { listBatchesUsingModule } from "@/lib/labPractice/batches";
 import { loadModuleTree } from "@/lib/labPractice/curriculum";
 import { requirePageTrainer } from "@/lib/labPractice/identity";
 import { listModuleEnrollments } from "@/lib/labPractice/queries";
@@ -28,47 +28,9 @@ export default async function TrainerModulePage({
 
   const [moduleEnrollments, batchList] = await Promise.all([
     listModuleEnrollments(tree.id),
-    listModuleBatches(tree.id, actor.canViewAll ? undefined : actor.trainer.id),
+    listBatchesUsingModule(tree.id, actor.canViewAll ? undefined : actor.trainer.id),
   ]);
   const enrollments = moduleEnrollments.filter((e) => e.trainerId === actor.trainer.id);
-  const activeLabIds = new Set(tree.labs.filter((l) => l.isActive).map((l) => l.id));
-  const batches: BatchRow[] = batchList.map((b) => {
-    const members = moduleEnrollments.filter((e) => e.batchId === b.id && e.isActive);
-    return {
-      id: b.id,
-      name: b.name,
-      isActive: b.isActive,
-      trainerName: b.trainerName,
-      isMine: b.trainerId === actor.trainer.id,
-      memberCount: b.memberCount,
-      visibleLabs: b.labIds.filter((id) => activeLabIds.has(id)).length,
-      avgPercent: members.length
-        ? Math.round(members.reduce((sum, m) => sum + m.percent, 0) / members.length)
-        : null,
-    };
-  });
-  // Schedule batches whose trainees are enrolled in this module (paced by days).
-  const moduleBatchIds = new Set(batchList.map((b) => b.id));
-  const scheduleBatchMembers = new Map<number, typeof moduleEnrollments>();
-  for (const e of moduleEnrollments) {
-    if (e.batchId == null || moduleBatchIds.has(e.batchId)) continue;
-    if (!actor.canViewAll && e.trainerId !== actor.trainer.id) continue;
-    scheduleBatchMembers.set(e.batchId, [...(scheduleBatchMembers.get(e.batchId) ?? []), e]);
-  }
-  for (const [batchId, members] of scheduleBatchMembers) {
-    const active = members.filter((m) => m.isActive);
-    batches.push({
-      id: batchId,
-      name: members[0].batchName ?? "Batch",
-      isActive: true,
-      trainerName: members[0].trainerName,
-      isMine: members[0].trainerId === actor.trainer.id,
-      memberCount: active.length,
-      visibleLabs: Math.max(0, ...members.map((m) => m.visibleLabs)),
-      avgPercent: active.length ? Math.round(active.reduce((s, m) => s + m.percent, 0) / active.length) : null,
-      scheduleHref: `/dashboard/guided-labs/trainer/batches/${batchId}`,
-    });
-  }
 
   // Plain, serialisable shape for the client builder.
   const mod: BuilderModule = {
@@ -119,11 +81,20 @@ export default async function TrainerModulePage({
           <AdminMotionCard className="p-6" delay={0.08}>
             <div className="relative z-10 space-y-3">
               <h2 className="text-lg font-bold text-white">Batches</h2>
-              <BatchesPanel
+              <ModuleBatchesPanel
                 moduleId={tree.id}
-                totalLabs={activeLabIds.size}
-                batches={batches}
-                canCreate={tree.isActive}
+                moduleActive={tree.isActive}
+                batches={batchList.map((b) => ({
+                  id: b.id,
+                  name: b.name,
+                  isActive: b.isActive,
+                  scheduleName: b.scheduleName,
+                  trainerName: b.trainerName,
+                  memberCount: b.memberCount,
+                  currentDay: b.currentDay,
+                  totalDays: b.totalDays,
+                  legacy: b.scheduleId == null,
+                }))}
               />
             </div>
           </AdminMotionCard>

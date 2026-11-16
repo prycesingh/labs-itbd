@@ -80,7 +80,14 @@ export const batchSchema = z.object({
 });
 export const batchUpdateSchema = batchSchema.partial().extend({ isActive: z.boolean().optional() });
 export const batchLabsSchema = z.object({ labIds: z.array(id).max(500) });
-export const batchMembersSchema = z.object({ traineeIds: z.array(id).min(1).max(200) });
+export const batchMembersSchema = z.object({
+  traineeIds: z.array(id).min(1).max(200),
+  /** Move trainees who are already in another batch (one batch per trainee). */
+  move: z.boolean().default(false),
+});
+export const moduleBatchSchema = z.object({
+  name: z.string().trim().min(1, "Batch name is required").max(120),
+});
 /** true = show, false = hide, null = reset to batch / default. */
 export const labOverrideSchema = z.object({ visible: z.boolean().nullable() });
 
@@ -111,7 +118,23 @@ export const generateSchema = z.object({
   replace: z.boolean().default(false),
   dryRun: z.boolean().default(true),
 });
-export const batchDaysSchema = z.object({ dayIds: z.array(id).max(500) });
+/** Day pointer: an absolute day (0 = nothing open) or a relative step. */
+export const batchDaySchema = z
+  .object({
+    day: z.coerce.number().int().min(0).max(1000).optional(),
+    step: z.union([z.literal(1), z.literal(-1)]).optional(),
+  })
+  .refine((v) => v.day !== undefined || v.step !== undefined, "Give a day or a step.");
+
+// ─────────────────────────────────────────────
+// Review queue
+// ─────────────────────────────────────────────
+export const reviewSchema = z
+  .object({
+    completionIds: z.array(id).max(1000).default([]),
+    sessionIds: z.array(id).max(1000).default([]),
+  })
+  .refine((v) => v.completionIds.length + v.sessionIds.length > 0, "Nothing to review.");
 export const traineeDaySchema = z.object({ visible: z.boolean().nullable() });
 
 // Photo limits (shared by API + client dialog)
